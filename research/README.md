@@ -80,18 +80,31 @@ sequenceDiagram
 
 Requires the `data-axiom-440223-j1` GCP project.
 
-> **Note:** If using the provided image `confidential-space-debug-cavan-test-image-1764789757`, the contract is already deployed and the image is registered. You can skip to the "Run" step.
+#### Quick Start
+
+Use the pre-built custom image `confidential-space-debug-cavan-test-image-1764789757` which is already registered in the deployed allowlist.
 
 ```bash
-# Deploy contract (Skip if using provided image)
+# Setup configuration
 cp research/config.env.example research/config.env
+
+# Run the demo
+./research/scripts/run.sh
+```
+
+#### Building Your Own Image
+
+If you modify the source code to build your own custom image (different from the provided one), you must deploy your own allowlist contract and register the new measurements.
+
+```bash
+# Deploy contract
 export PRIVATE_KEY="0x..."
 ./research/scripts/setup.sh deploy --rpc-url https://sepolia.infura.io/v3/YOUR_KEY
 
-# Add base image measurements (Skip if using provided image)
+# Add base image measurements
 ./research/scripts/setup.sh add-image --mrtd 0x... --rtmr0 0x... --rtmr1 0x...
 
-# Run
+# Run the demo
 ./research/scripts/run.sh
 ```
 
