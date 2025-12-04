@@ -17,10 +17,10 @@ import (
 
 // RawAttestationRequest is the JSON request body for attestation verification.
 type RawAttestationRequest struct {
-	TdQuote     []byte   `json:"td_quote"`
-	CEL         []byte   `json:"cel"`
-	AkCertChain [][]byte `json:"ak_cert_chain"`
-	Nonce       []byte   `json:"nonce"`
+	TdQuote      []byte   `json:"td_quote"`
+	CEL          []byte   `json:"cel"`
+	AkCertChain  [][]byte `json:"ak_cert_chain"`
+	RSAPublicKey string   `json:"rsa_public_key"` // PEM-encoded ephemeral RSA public key for response encryption
 }
 
 // BaseImageMeasurements contains the TDX measurements for the base image.
@@ -57,7 +57,9 @@ type VerifiedAttestation struct {
 }
 
 // VerifyAttestation verifies a raw TDX attestation and returns verified claims.
-func VerifyAttestation(req *RawAttestationRequest) (*VerifiedAttestation, error) {
+// The expectedRSAKeyHash should be SHA256(RSA public key PEM) - this binds the attestation
+// to the client's ephemeral key, preventing replay and key substitution attacks.
+func VerifyAttestation(req *RawAttestationRequest, expectedRSAKeyHash []byte) (*VerifiedAttestation, error) {
 	// Step 1: Parse the TDX quote
 	quoteAny, err := abi.QuoteToProto(req.TdQuote)
 	if err != nil {
@@ -77,11 +79,12 @@ func VerifyAttestation(req *RawAttestationRequest) (*VerifiedAttestation, error)
 		return nil, fmt.Errorf("quote signature verification failed: %w", err)
 	}
 
-	// Step 3: Verify nonce hash in ReportData[0:32]
+	// Step 3: Verify RSA key hash in ReportData[0:32]
+	// This proves the attestation was generated with this specific RSA public key,
+	// binding the attestation to the client's ephemeral key.
 	reportData := quote.GetTdQuoteBody().GetReportData()
-	expectedNonceHash := sha256.Sum256(req.Nonce)
-	if !bytes.Equal(reportData[0:32], expectedNonceHash[:]) {
-		return nil, fmt.Errorf("nonce hash mismatch in ReportData")
+	if !bytes.Equal(reportData[0:32], expectedRSAKeyHash) {
+		return nil, fmt.Errorf("RSA key hash mismatch in ReportData - attestation not bound to provided key")
 	}
 
 	// Step 4: Validate quote fields

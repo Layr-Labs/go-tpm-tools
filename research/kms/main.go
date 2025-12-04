@@ -5,14 +5,15 @@ package main
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"log"
 	"math/big"
 	"net/http"
 	"os"
-	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -24,7 +25,6 @@ type Config struct {
 	ListenAddr   string
 	ContractAddr string
 	EthRPCURL    string
-	NonceExpiry  time.Duration
 }
 
 // Server is the KMS HTTP server.
@@ -32,21 +32,14 @@ type Server struct {
 	config   Config
 	client   *ethclient.Client
 	contract *BaseImageAllowlist
-	nonces   map[string]time.Time
-	mu       sync.RWMutex
-}
-
-// NonceResponse is returned by GET /v1/nonce.
-type NonceResponse struct {
-	Nonce string `json:"nonce"`
 }
 
 // AttestResponse is returned by POST /v1/attest.
 type AttestResponse struct {
-	Success bool                 `json:"success"`
-	Secret  string               `json:"secret,omitempty"`
-	Error   string               `json:"error,omitempty"`
-	Claims  *VerifiedAttestation `json:"claims,omitempty"`
+	Success         bool                 `json:"success"`
+	EncryptedSecret []byte               `json:"encrypted_secret,omitempty"`
+	Error           string               `json:"error,omitempty"`
+	Claims          *VerifiedAttestation `json:"claims,omitempty"`
 }
 
 func main() {
@@ -54,7 +47,6 @@ func main() {
 		ListenAddr:   getEnv("LISTEN_ADDR", ":8080"),
 		ContractAddr: getEnv("CONTRACT_ADDR", ""),
 		EthRPCURL:    getEnv("ETH_RPC_URL", "http://127.0.0.1:8545"),
-		NonceExpiry:  5 * time.Minute,
 	}
 
 	if config.ContractAddr == "" {
@@ -78,13 +70,8 @@ func main() {
 		config:   config,
 		client:   client,
 		contract: contract,
-		nonces:   make(map[string]time.Time),
 	}
 
-	// Start nonce cleanup goroutine
-	go server.cleanupNonces()
-
-	http.HandleFunc("/v1/nonce", server.handleNonce)
 	http.HandleFunc("/v1/attest", server.handleAttest)
 	http.HandleFunc("/health", server.handleHealth)
 
@@ -102,31 +89,6 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("ok"))
 }
 
-func (s *Server) handleNonce(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Generate random nonce
-	nonceBytes := make([]byte, 32)
-	if _, err := rand.Read(nonceBytes); err != nil {
-		http.Error(w, "Failed to generate nonce", http.StatusInternalServerError)
-		return
-	}
-	nonce := hex.EncodeToString(nonceBytes)
-
-	// Store nonce with expiry
-	s.mu.Lock()
-	s.nonces[nonce] = time.Now().Add(s.config.NonceExpiry)
-	s.mu.Unlock()
-
-	log.Printf("Generated nonce: %s", nonce)
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(NonceResponse{Nonce: nonce})
-}
-
 func (s *Server) handleAttest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -139,28 +101,36 @@ func (s *Server) handleAttest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify nonce was issued by us and hasn't expired
-	nonceHex := hex.EncodeToString(req.Nonce)
-	s.mu.Lock()
-	expiry, exists := s.nonces[nonceHex]
-	if exists {
-		delete(s.nonces, nonceHex) // One-time use
-	}
-	s.mu.Unlock()
-
-	if !exists {
-		s.sendError(w, "Invalid or unknown nonce")
-		return
-	}
-	if time.Now().After(expiry) {
-		s.sendError(w, "Nonce expired")
+	// Parse the client's RSA public key
+	if req.RSAPublicKey == "" {
+		s.sendError(w, "RSA public key required")
 		return
 	}
 
-	log.Printf("Verifying attestation with nonce: %s", nonceHex)
+	block, _ := pem.Decode([]byte(req.RSAPublicKey))
+	if block == nil {
+		s.sendError(w, "Invalid RSA public key PEM")
+		return
+	}
 
-	// Verify the attestation
-	claims, err := VerifyAttestation(&req)
+	pubKeyInterface, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		s.sendError(w, "Failed to parse RSA public key: "+err.Error())
+		return
+	}
+
+	rsaPubKey, ok := pubKeyInterface.(*rsa.PublicKey)
+	if !ok {
+		s.sendError(w, "Public key is not RSA")
+		return
+	}
+
+	// Calculate expected RSA key hash = SHA256(RSA public key PEM)
+	expectedRSAKeyHash := sha256.Sum256([]byte(req.RSAPublicKey))
+	log.Printf("Verifying attestation with RSA key hash: %x", expectedRSAKeyHash)
+
+	// Verify the attestation (including RSA key binding)
+	claims, err := VerifyAttestation(&req, expectedRSAKeyHash[:])
 	if err != nil {
 		log.Printf("Attestation verification failed: %v", err)
 		s.sendError(w, "Attestation verification failed: "+err.Error())
@@ -168,6 +138,10 @@ func (s *Server) handleAttest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Attestation verified successfully")
+
+	// WARNING: INSECURE CONFIGURATION
+	// This demo only logs the container and GCE claims for visibility.
+	// The real implementations MUST validate these claims as the existing KMS does.
 	log.Printf("  MRTD:  %x", claims.BaseImage.MRTD)
 	log.Printf("  RTMR0: %x", claims.BaseImage.RTMR0)
 	log.Printf("  RTMR1: %x", claims.BaseImage.RTMR1)
@@ -198,12 +172,23 @@ func (s *Server) handleAttest(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Base image allowed! Releasing secret...")
 
-	// Return test secret
+	// Generate and encrypt the secret with the client's RSA public key
+	secret := []byte("test-secret-" + generateRandomString(8))
+	encryptedSecret, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, rsaPubKey, secret, nil)
+	if err != nil {
+		log.Printf("Failed to encrypt secret: %v", err)
+		s.sendError(w, "Failed to encrypt secret")
+		return
+	}
+
+	log.Printf("Secret encrypted with client's RSA public key")
+
+	// Return encrypted secret
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(AttestResponse{
-		Success: true,
-		Secret:  "test-secret-" + generateRandomString(8),
-		Claims:  claims,
+		Success:         true,
+		EncryptedSecret: encryptedSecret,
+		Claims:          claims,
 	})
 }
 
@@ -224,20 +209,6 @@ func (s *Server) sendErrorWithClaims(w http.ResponseWriter, msg string, claims *
 		Error:   msg,
 		Claims:  claims,
 	})
-}
-
-func (s *Server) cleanupNonces() {
-	ticker := time.NewTicker(1 * time.Minute)
-	for range ticker.C {
-		s.mu.Lock()
-		now := time.Now()
-		for nonce, expiry := range s.nonces {
-			if now.After(expiry) {
-				delete(s.nonces, nonce)
-			}
-		}
-		s.mu.Unlock()
-	}
 }
 
 func getEnv(key, defaultVal string) string {

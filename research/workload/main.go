@@ -4,8 +4,12 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net"
@@ -20,16 +24,19 @@ const (
 	maxRetries      = 30
 )
 
-// NonceResponse from KMS /v1/nonce
-type NonceResponse struct {
-	Nonce string `json:"nonce"`
+// AttestRequest sent to KMS /v1/attest
+type AttestRequest struct {
+	TdQuote      []byte   `json:"td_quote"`
+	CEL          []byte   `json:"cel"`
+	AkCertChain  [][]byte `json:"ak_cert_chain"`
+	RSAPublicKey string   `json:"rsa_public_key"` // PEM-encoded RSA public key
 }
 
 // AttestResponse from KMS /v1/attest
 type AttestResponse struct {
-	Success bool   `json:"success"`
-	Secret  string `json:"secret,omitempty"`
-	Error   string `json:"error,omitempty"`
+	Success         bool   `json:"success"`
+	EncryptedSecret []byte `json:"encrypted_secret,omitempty"` // RSA-OAEP encrypted
+	Error           string `json:"error,omitempty"`
 }
 
 func main() {
@@ -66,32 +73,44 @@ func main() {
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		log("\n=== Attempt %d/%d ===", attempt, maxRetries)
 
-		// Step 1: Get nonce from KMS
-		log("Step 1: Getting nonce from KMS...")
-		nonce, err := getNonce(kmsClient, kmsURL)
+		// Step 1: Generate ephemeral RSA key pair
+		log("Step 1: Generating ephemeral RSA key pair...")
+		privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
 		if err != nil {
-			log("ERROR getting nonce: %v", err)
+			log("ERROR generating RSA key: %v", err)
 			log("Retrying in %v...", retryInterval)
 			time.Sleep(retryInterval)
 			continue
 		}
-		log("Got nonce: %s", nonce)
 
-		// Step 2: Request attestation from TEE server with nonce
+		// Encode public key to PEM
+		pubKeyDER, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
+		if err != nil {
+			log("ERROR marshaling public key: %v", err)
+			log("Retrying in %v...", retryInterval)
+			time.Sleep(retryInterval)
+			continue
+		}
+		pubKeyPEM := pem.EncodeToMemory(&pem.Block{
+			Type:  "PUBLIC KEY",
+			Bytes: pubKeyDER,
+		})
+		log("Generated RSA public key")
+
+		// Step 2: Request attestation from TEE server with RSA public key PEM
 		log("Step 2: Requesting attestation from TEE server...")
-		nonceBytes, _ := hex.DecodeString(nonce)
-		attestation, err := getAttestation(teeClient, nonceBytes)
+		attestation, err := getAttestation(teeClient, pubKeyPEM)
 		if err != nil {
 			log("ERROR getting attestation: %v", err)
 			log("Retrying in %v...", retryInterval)
 			time.Sleep(retryInterval)
 			continue
 		}
-		log("Got attestation (quote size: %d bytes)", len(attestation))
+		log("Got attestation (quote size: %d bytes)", len(attestation.TdQuote))
 
-		// Step 3: Send attestation to KMS
-		log("Step 3: Sending attestation to KMS...")
-		resp, err := sendAttestation(kmsClient, kmsURL, attestation)
+		// Step 3: Send attestation + RSA public key to KMS
+		log("Step 3: Sending attestation + RSA public key to KMS...")
+		resp, err := sendAttestation(kmsClient, kmsURL, attestation, string(pubKeyPEM))
 		if err != nil {
 			log("ERROR sending attestation: %v", err)
 			log("Retrying in %v...", retryInterval)
@@ -100,8 +119,18 @@ func main() {
 		}
 
 		if resp.Success {
+			// Step 4: Decrypt the response with our ephemeral private key
+			log("Step 4: Decrypting response with ephemeral private key...")
+			secret, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, privateKey, resp.EncryptedSecret, nil)
+			if err != nil {
+				log("ERROR decrypting secret: %v", err)
+				log("Retrying in %v...", retryInterval)
+				time.Sleep(retryInterval)
+				continue
+			}
+
 			log("\n=== SUCCESS ===")
-			log("Received secret: %s", resp.Secret)
+			log("Received secret: %s", string(secret))
 			log("Attestation verified and secret released!")
 			break
 		} else {
@@ -126,28 +155,15 @@ func waitForSocket(path string) error {
 	return fmt.Errorf("socket %s not available after 60 seconds", path)
 }
 
-func getNonce(client *http.Client, kmsURL string) (string, error) {
-	resp, err := client.Get(kmsURL + "/v1/nonce")
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("KMS returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var nonceResp NonceResponse
-	if err := json.NewDecoder(resp.Body).Decode(&nonceResp); err != nil {
-		return "", err
-	}
-	return nonceResp.Nonce, nil
+// RawAttestationResponse from the TEE server /v1/raw-attestation endpoint
+type RawAttestationResponse struct {
+	TdQuote     []byte   `json:"td_quote"`
+	CEL         []byte   `json:"cel"`
+	AkCertChain [][]byte `json:"ak_cert_chain"`
 }
 
-func getAttestation(client *http.Client, nonce []byte) ([]byte, error) {
-	// The TEE server expects nonce in JSON body for POST requests
-	reqBody, _ := json.Marshal(map[string][]byte{"nonce": nonce})
+func getAttestation(client *http.Client, rsaPubKeyPEM []byte) (*RawAttestationResponse, error) {
+	reqBody, _ := json.Marshal(map[string][]byte{"nonce": rsaPubKeyPEM})
 	resp, err := client.Post("http://localhost/v1/raw-attestation", "application/json", bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, err
@@ -159,11 +175,27 @@ func getAttestation(client *http.Client, nonce []byte) ([]byte, error) {
 		return nil, fmt.Errorf("TEE server returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	return io.ReadAll(resp.Body)
+	var attestResp RawAttestationResponse
+	if err := json.NewDecoder(resp.Body).Decode(&attestResp); err != nil {
+		return nil, err
+	}
+	return &attestResp, nil
 }
 
-func sendAttestation(client *http.Client, kmsURL string, attestation []byte) (*AttestResponse, error) {
-	resp, err := client.Post(kmsURL+"/v1/attest", "application/json", bytes.NewReader(attestation))
+func sendAttestation(client *http.Client, kmsURL string, attestation *RawAttestationResponse, rsaPubKeyPEM string) (*AttestResponse, error) {
+	req := AttestRequest{
+		TdQuote:      attestation.TdQuote,
+		CEL:          attestation.CEL,
+		AkCertChain:  attestation.AkCertChain,
+		RSAPublicKey: rsaPubKeyPEM,
+	}
+
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	resp, err := client.Post(kmsURL+"/v1/attest", "application/json", bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, err
 	}

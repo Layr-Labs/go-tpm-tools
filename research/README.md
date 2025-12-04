@@ -21,11 +21,11 @@ Similarly with ITA:
 
 The proposed architecture consists of three parts:
 
-1.  **Custom Base Images:** We customize the Confidential Space stack—modifying both the Launcher and the underlying Container-Optimized OS (COS)—while continuing to pull in upstream security patches and updates.
+1.  **Custom Base Images:** We customize the Confidential Space stack - modifying both the Launcher and the underlying Container-Optimized OS (COS) - while continuing to pull in upstream security patches and updates.
 2.  **Self-Managed Allowlist:** We maintain a smart contract of valid measurements for these images.
 3.  **Direct Verification:** The KMS (Relying Party) verifies the workload directly using **Raw TDX Attestation**.
 
-Instead of requesting a signed JWT from Google, the code running in the user workload queries the `/v1/raw-attestation` endpoint to retrieve the raw TDX quote, Canonical Event Log (CEL), and AK certificates. The workload then sends this evidence to the KMS, which performs verification before releasing any secrets:
+Instead of requesting a signed JWT from Google, the code running in the user workload queries a `/v1/raw-attestation` endpoint to retrieve the raw TDX quote (hardware proof), Canonical Event Log (container measurements), and AK certificates (platform identity). The workload then sends this evidence to the KMS, which performs verification before releasing any secrets:
 
 1. Verify the TDX quote against Intel's root CA.
 2. Verify the AK certificate against Google's GCE EK root CA.
@@ -34,7 +34,7 @@ Instead of requesting a signed JWT from Google, the code running in the user wor
 
 ### Parity with Managed Attestation
 
-By verifying the raw attestation evidence directly, we maintain the same trust guarantees as the managed services:
+By verifying the raw attestation evidence directly, we rely on the same cryptographic roots of trust as the managed services:
 
 - **Hardware Root of Trust:** The **TDX Quote** is signed by Intel's root CA, proving the integrity of the hardware and the base image measurements (MRTD, RTMRs).
 - **Platform Root of Trust:** The **AK Certificate** is signed by Google's GCE EK root CA, proving the instance is a genuine GCE VM and providing claims like Project ID, Zone, and Instance ID.
@@ -46,7 +46,7 @@ This allows the Relying Party to validate the same hardware, platform, and workl
 
 This approach fundamentally changes the trust model. Previously, Google determined trustworthiness via their RIM database. Now, **we** determine trustworthiness via our allowlist.
 
-We gain full control over the software stack but inherit significant maintenance responsibilities:
+We gain full control over the software stack but inherit additional maintenance responsibilities:
 - **Build & Patch:** We must build and patch the base image rather than relying on Google updates (although we can incorporate patches as they appear in the upstream codebase).
 - **Allowlist Management:** We must maintain the database of valid image measurements.
 - **Verification Logic:** Instead of simply checking a Google JWT signature, we must implement and maintain the full TDX verification protocol (checking Intel/Google root CAs, replaying event logs, etc).
