@@ -1,6 +1,8 @@
 # Custom Confidential Space Images
 
-Out-of-the-box, Google Confidential Space (GCS) simplifies attestation by abstracting the complexity of multiple CVMs (e.g., TDX, SEV-SNP), acting as the verifier, and issuing a standard OIDC token. However, this convenience comes at the cost of flexibility. We are currently blocked on the Google roadmap for features like instance-level rate limiting and Docker Compose.
+## Problem
+
+Out-of-the-box, Google Confidential Space (GCS) simplifies attestation by abstracting the complexity of multiple CVMs (e.g., TDX, SEV-SNP), acting as the verifier, and issuing a standard OIDC token. However, this convenience comes at the cost of flexibility. We are currently blocked on the Google roadmap for features like instance-level rate limiting, Docker Compose, and persistent disk encryption.
 
 To obtain the necessary flexibility, we must modify the base image (Launcher + Container-Optimized OS). However, modifying the base image breaks compatibility with hosted attestation services (Google Cloud Attestation and Intel Trust Authority) because they validate against Google's Reference Integrity Measurements (RIM).
 
@@ -100,3 +102,7 @@ These files are a rough demonstration to illustrate the architecture:
 - `launcher/agent/agent.go`: `GetRawAttestation()` implementation.
 - `research/kms/verifier.go`: Verification logic (handling Intel and Google root CAs).
 - `research/contracts/src/BaseImageAllowlist.sol`: Smart contract replacing the RIM database.
+
+### Building Custom Images
+
+We can modify the Launcher code directly. For deeper OS-level customizations, we use Google's [COS Customizer](https://cos.googlesource.com/cos/tools). This tool simplifies tasks like installing GPU drivers, sealing the OEM partition (`dm-verity`), and disabling auto-updates to ensure measurement stability.
