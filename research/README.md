@@ -12,7 +12,7 @@ googleapi: Error 400: unable to validate with image RIMS: failed to get golden v
 kernel command line "..." is not in the golden values
 ```
 
-Similarly with ITA:
+Similarly, Intel Trust Authority (ITA) fails because its "Confidential Space Adapter" enforces a strict policy against Google's RIMs. We can use a custom ITA policy to allowlist our measurements, but this bypasses the adapter's parsing logic, meaning the resulting token lacks the rich container claims (args, env vars) found in standard Confidential Space tokens:
 ```
 {"error":"claims policy apply failed ... GCPCS policy failed to meet requirements"}
 ```
