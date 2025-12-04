@@ -1,23 +1,50 @@
 #!/bin/bash
 # Run the script: ./run_cloudbuild.sh
-set -euxo pipefail
+# Builds a debug Confidential Space image using your local source code.
+set -euo pipefail
 
 # Append a timestamp, as there is a check in finish-image-build that checks if
 # the image already exists.
-IMAGE_SUFFIX="$USER-test-image-`date +%s`"
+IMAGE_SUFFIX="$USER-test-image-$(date +%s)"
+IMAGE_NAME="confidential-space-debug-${IMAGE_SUFFIX}"
 
+# Get the directory where this script lives
 DIR=$(dirname -- "${BASH_SOURCE[0]}")
-echo "Running Cloud Build on directory $DIR"
+cd "$DIR"
 
-# If you get the error:
-# googleapi: Error 403: Required 'compute.images.get' permission for 'foo', forbidden
-#
-# Ensure you grant Cloud Build access to Compute Images:
-# https://pantheon.corp.google.com/compute/images?referrer=search&tab=exports&project=$PROJECT_ID
-gcloud beta builds submit --config=${DIR}/cloudbuild.yaml \
-  --substitutions=_OUTPUT_IMAGE_SUFFIX="${IMAGE_SUFFIX}"
+echo "Running Cloud Build from directory: $(pwd)"
 
-echo "Image creation successful."
-echo "Create a VM using the debug image confidential-space-debug-${IMAGE_SUFFIX}"
-echo "gcloud compute instances create confidential-space-test --image=confidential-space-debug-${IMAGE_SUFFIX} --metadata ..."
-echo "Or use the hardened image confidential-space-hardened-${IMAGE_SUFFIX}"
+# Get project ID
+PROJECT_ID=$(gcloud config get-value project)
+BUCKET_NAME="${PROJECT_ID}_cloudbuild"
+
+# Get the latest base image from the cos-tdx family
+BASE_IMAGE=$(gcloud compute images describe-from-family cos-tdx-113-lts \
+  --project=confidential-vm-images --format='value(name)')
+
+echo "Using base image: ${BASE_IMAGE}"
+echo "Building image: ${IMAGE_NAME}"
+
+# Build the debug image directly (bypasses the worker pool requirement)
+gcloud beta builds submit --config=launcher/image/cloudbuild.yaml \
+  --region=us-west1 \
+  --substitutions=_BASE_IMAGE=${BASE_IMAGE},\
+_BASE_IMAGE_PROJECT=confidential-vm-images,\
+_OUTPUT_IMAGE_NAME=${IMAGE_NAME},\
+_OUTPUT_IMAGE_FAMILY=,\
+_IMAGE_ENV=debug,\
+_CS_LICENSE=projects/confidential-space-images/global/licenses/confidential-space-debug,\
+_BUCKET_NAME=${BUCKET_NAME},\
+_SHORT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+
+echo ""
+echo "Image creation successful!"
+echo ""
+echo "Create a VM using:"
+echo "  gcloud compute instances create my-cs-vm \\"
+echo "    --image=${IMAGE_NAME} \\"
+echo "    --image-project=${PROJECT_ID} \\"
+echo "    --machine-type=n2d-standard-2 \\"
+echo "    --confidential-compute \\"
+echo "    --shielded-secure-boot \\"
+echo "    --metadata=tee-image-reference=YOUR_CONTAINER_IMAGE"

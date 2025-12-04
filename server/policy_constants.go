@@ -94,8 +94,10 @@ var (
 
 // Certificates corresponding to the known CA certs for GCE.
 var (
-	GceEKRoots         []*x509.Certificate
-	GceEKIntermediates []*x509.Certificate
+	GceEKRoots            []*x509.Certificate
+	GceEKIntermediates    []*x509.Certificate
+	GcpCASEKRoots         []*x509.Certificate
+	GcpCASEKIntermediates []*x509.Certificate
 )
 
 func init() {
@@ -107,6 +109,14 @@ func init() {
 	GceEKIntermediates, err = parseCerts([][]byte{gceEKIntermediateCA2})
 	if err != nil {
 		panic(fmt.Sprintf("failed to create the intermediate cert pool: %v", err))
+	}
+	GcpCASEKRoots, err = parseCerts([][]byte{gcpCASEKRootCA})
+	if err != nil {
+		panic(fmt.Sprintf("failed to create the GCP CAS root cert pool: %v", err))
+	}
+	GcpCASEKIntermediates, err = parseCerts([][]byte{gcpCASEKIntermediateCA3})
+	if err != nil {
+		panic(fmt.Sprintf("failed to create the GCP CAS intermediate cert pool: %v", err))
 	}
 }
 

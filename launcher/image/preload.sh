@@ -109,7 +109,23 @@ main() {
   # Install container launcher entrypoint.
   configure_entrypoint "entrypoint.sh"
   # Install experiment client.
-  copy_experiment_client
+  # copy_experiment_client
+  # Create stub experiments binary that outputs EnableVerifyCS:true
+  cat > "${CS_PATH}/${EXPERIMENTS_BINARY}" << 'EXPEOF'
+#!/bin/bash
+# Parse -output= argument
+OUTPUT_FILE=""
+for arg in "$@"; do
+  case $arg in
+    -output=*) OUTPUT_FILE="${arg#*=}" ;;
+  esac
+done
+if [ -n "$OUTPUT_FILE" ]; then
+  mkdir -p "$(dirname "$OUTPUT_FILE")"
+  echo '{"EnableVerifyCS": true, "EnableItaVerifier": true}' > "$OUTPUT_FILE"
+fi
+EXPEOF
+  chmod +x "${CS_PATH}/${EXPERIMENTS_BINARY}"
   # Install container launcher.
   copy_launcher
   setup_launcher_systemd_unit

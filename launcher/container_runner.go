@@ -585,9 +585,11 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 	}
 
 	// Only refresh token if agent has a default GCA client (not ITA use case).
+	// If token fetch fails (e.g., RIM validation for custom images), log a warning
+	// but continue - the container can still use /v1/raw-attestation for self-verification.
 	if r.launchSpec.ITAConfig.ITARegion == "" {
 		if err := r.fetchAndWriteToken(ctx); err != nil {
-			return fmt.Errorf("failed to fetch and write OIDC token: %v", err)
+			r.logger.Warn(fmt.Sprintf("failed to fetch OIDC token (container can still use /v1/raw-attestation): %v", err))
 		}
 	}
 

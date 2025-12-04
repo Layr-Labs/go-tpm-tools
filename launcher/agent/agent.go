@@ -8,6 +8,8 @@ package agent
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -42,6 +44,15 @@ const (
 
 type principalIDTokenFetcher func(audience string) ([][]byte, error)
 
+// RawAttestation contains the raw TDX quote, CEL, and AK certificate chain for self-verification.
+type RawAttestation struct {
+	TdQuote       []byte   `json:"td_quote"`
+	CEL           []byte   `json:"cel"`
+	CcelAcpiTable []byte   `json:"ccel_acpi_table"`
+	CcelData      []byte   `json:"ccel_data"`
+	AkCertChain   [][]byte `json:"ak_cert_chain"` // AK cert + intermediate certs (DER encoded)
+}
+
 // AttestationAgent is an agent that interacts with GCE's Attestation Service
 // to Verify an attestation message. It is an interface instead of a concrete
 // struct to make testing easier.
@@ -51,6 +62,8 @@ type AttestationAgent interface {
 	AttestWithClient(ctx context.Context, opts AttestAgentOpts, client verifier.Client) ([]byte, error)
 	Refresh(context.Context) error
 	Close() error
+	// GetRawAttestation returns the raw TDX quote and CEL for self-verification.
+	GetRawAttestation(nonce []byte) (*RawAttestation, error)
 }
 
 type attestRoot interface {
@@ -251,12 +264,18 @@ func (a *agent) AttestWithClient(ctx context.Context, opts AttestAgentOpts, clie
 		a.logger.Info("Found container image signatures: %v\n", signatures)
 	}
 
-	resp, err := client.VerifyAttestation(ctx, req)
+	var resp *verifier.VerifyAttestationResponse
+	if a.launchSpec.Experiments.EnableVerifyCS {
+		a.logger.Info("Using VerifyConfidentialSpace API")
+		resp, err = client.VerifyConfidentialSpace(ctx, req)
+	} else {
+		resp, err = client.VerifyAttestation(ctx, req)
+	}
 	if err != nil {
 		return nil, err
 	}
 	if len(resp.PartialErrs) > 0 {
-		a.logger.Error(fmt.Sprintf("Partial errors from VerifyAttestation: %v", resp.PartialErrs))
+		a.logger.Error(fmt.Sprintf("Partial errors from attestation: %v", resp.PartialErrs))
 	}
 	return resp.ClaimsToken, nil
 }
@@ -355,6 +374,77 @@ func (a *agent) Refresh(ctx context.Context) error {
 	a.sigsCache.set(signatures)
 	a.logger.Info("Refreshed container image signature cache", "signatures", signatures)
 	return nil
+}
+
+// GetRawAttestation returns the raw TDX quote and CEL for self-verification.
+// This allows relying parties to verify the quote against Intel's root CA
+// and replay the CEL to extract container claims without requiring Google RIM validation.
+//
+// The TDX quote's ReportData (64 bytes) is structured as:
+//   - Bytes 0-31:  SHA256(nonce)           - proves freshness
+//   - Bytes 32-63: SHA256(AK public key)   - binds quote to this specific GCE VM
+//
+// This cryptographically binds the TDX quote (signed by Intel) to the AK certificate
+// (signed by Google), preventing an attacker from mixing quotes and certs from different machines.
+func (a *agent) GetRawAttestation(nonce []byte) (*RawAttestation, error) {
+	// Build AK certificate chain (AK cert + intermediates)
+	// The AK cert contains GCE instance info in an X.509 extension
+	var akCertChain [][]byte
+	if a.fetchedAK.Cert() == nil {
+		return nil, fmt.Errorf("AK certificate not available")
+	}
+
+	// Add the AK certificate itself
+	akCertChain = append(akCertChain, a.fetchedAK.CertDERBytes())
+
+	// Fetch and add intermediate certificates
+	intermediateCerts, err := internal.GetCertificateChain(a.fetchedAK.Cert(), http.DefaultClient)
+	if err != nil {
+		// Log warning but don't fail - intermediates are optional for verification
+		a.logger.Warn(fmt.Sprintf("failed to fetch intermediate certs: %v", err))
+	} else {
+		akCertChain = append(akCertChain, intermediateCerts...)
+	}
+
+	// Compute AK public key hash for binding
+	akPubKeyDER, err := x509.MarshalPKIXPublicKey(a.fetchedAK.Cert().PublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal AK public key: %w", err)
+	}
+	akPubKeyHash := sha256.Sum256(akPubKeyDER)
+
+	// Build ReportData: SHA256(nonce) || SHA256(AK public key)
+	// This binds the TDX quote to both the nonce (freshness) and the AK (GCE VM identity)
+	var reportData [64]byte
+	nonceHash := sha256.Sum256(nonce)
+	copy(reportData[0:32], nonceHash[:])
+	copy(reportData[32:64], akPubKeyHash[:])
+
+	// Get the attestation from the root of trust with the combined ReportData
+	attResult, err := a.avRot.Attest(reportData[:])
+	if err != nil {
+		return nil, fmt.Errorf("failed to get attestation: %w", err)
+	}
+
+	// Encode the CEL
+	var celBuf bytes.Buffer
+	if err := a.avRot.GetCEL().EncodeCEL(&celBuf); err != nil {
+		return nil, fmt.Errorf("failed to encode CEL: %w", err)
+	}
+
+	// Handle TDX attestation
+	switch v := attResult.(type) {
+	case *verifier.TDCCELAttestation:
+		return &RawAttestation{
+			TdQuote:       v.TdQuote,
+			CEL:           celBuf.Bytes(),
+			CcelAcpiTable: v.CcelAcpiTable,
+			CcelData:      v.CcelData,
+			AkCertChain:   akCertChain,
+		}, nil
+	default:
+		return nil, fmt.Errorf("raw attestation only supported for TDX, got %T", attResult)
+	}
 }
 
 func fetchContainerImageSignatures(ctx context.Context, fetcher signaturediscovery.Fetcher, targetRepos []string, retry func() backoff.BackOff, logger logging.Logger) []oci.Signature {

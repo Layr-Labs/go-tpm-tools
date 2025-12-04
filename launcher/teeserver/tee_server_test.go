@@ -61,6 +61,15 @@ func (f fakeAttestationAgent) Close() error {
 	return nil
 }
 
+func (f fakeAttestationAgent) GetRawAttestation(_ []byte) (*agent.RawAttestation, error) {
+	return &agent.RawAttestation{
+		TdQuote:       []byte("fake-quote"),
+		CEL:           []byte("fake-cel"),
+		CcelAcpiTable: []byte("fake-ccel-table"),
+		CcelData:      []byte("fake-ccel-data"),
+	}, nil
+}
+
 func TestGetDefaultToken(t *testing.T) {
 	testTokenContent := "test token"
 

@@ -81,6 +81,10 @@ func (f *fakeAttestationAgent) Close() error {
 	return nil
 }
 
+func (f *fakeAttestationAgent) GetRawAttestation(_ []byte) (*agent.RawAttestation, error) {
+	return nil, fmt.Errorf("unimplemented")
+}
+
 type fakeClaims struct {
 	jwt.RegisteredClaims
 	Signatures []string

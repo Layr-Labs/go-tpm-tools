@@ -4,10 +4,13 @@ package teeserver
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/google/go-tpm-tools/launcher/agent"
 	"github.com/google/go-tpm-tools/launcher/internal/logging"
@@ -19,8 +22,16 @@ import (
 )
 
 const (
-	gcaEndpoint = "/v1/token"
-	itaEndpoint = "/v1/intel/token"
+	gcaEndpoint       = "/v1/token"
+	itaEndpoint       = "/v1/intel/token"
+	rawAttestEndpoint = "/v1/raw-attestation"
+
+	// Rate limiting: max requests per window
+	maxRequestsPerWindow = 10
+	rateLimitWindow      = time.Minute
+
+	// Default nonce size for raw attestation
+	defaultNonceSize = 32
 )
 
 var clientErrorCodes = map[codes.Code]struct{}{
@@ -48,6 +59,11 @@ type attestHandler struct {
 	logger     logging.Logger
 	launchSpec spec.LaunchSpec
 	clients    AttestClients
+
+	// Rate limiting
+	rateMu       sync.Mutex
+	requestCount int
+	windowStart  time.Time
 }
 
 // TeeServer is a server that can be called from a container through a unix
@@ -90,6 +106,7 @@ func (a *attestHandler) Handler() http.Handler {
 
 	mux.HandleFunc(gcaEndpoint, a.getToken)
 	mux.HandleFunc(itaEndpoint, a.getITAToken)
+	mux.HandleFunc(rawAttestEndpoint, a.getRawAttestation)
 	return mux
 }
 
@@ -97,6 +114,27 @@ func (a *attestHandler) logAndWriteError(errStr string, status int, w http.Respo
 	a.logger.Error(errStr)
 	w.WriteHeader(status)
 	w.Write([]byte(errStr))
+}
+
+// checkRateLimit returns true if the request is allowed, false if rate limited.
+func (a *attestHandler) checkRateLimit() bool {
+	a.rateMu.Lock()
+	defer a.rateMu.Unlock()
+
+	now := time.Now()
+	if now.Sub(a.windowStart) >= rateLimitWindow {
+		// Reset window
+		a.windowStart = now
+		a.requestCount = 1
+		return true
+	}
+
+	if a.requestCount >= maxRequestsPerWindow {
+		return false
+	}
+
+	a.requestCount++
+	return true
 }
 
 // getDefaultToken handles the request to get the default OIDC token.
@@ -133,7 +171,96 @@ func (a *attestHandler) getITAToken(w http.ResponseWriter, r *http.Request) {
 	a.attest(w, r, a.clients.ITA)
 }
 
+// rawAttestRequest is the optional request body for /v1/raw-attestation
+type rawAttestRequest struct {
+	Nonce []byte `json:"nonce,omitempty"`
+}
+
+// rawAttestResponse is the response body for /v1/raw-attestation
+type rawAttestResponse struct {
+	TdQuote       []byte   `json:"td_quote"`
+	CEL           []byte   `json:"cel"`
+	CcelAcpiTable []byte   `json:"ccel_acpi_table"`
+	CcelData      []byte   `json:"ccel_data"`
+	Nonce         []byte   `json:"nonce"`
+	AkCertChain   [][]byte `json:"ak_cert_chain,omitempty"` // AK cert + intermediate certs (DER encoded)
+}
+
+// getRawAttestation returns the raw TDX quote and CEL for self-verification.
+// This allows relying parties to verify the quote against Intel's root CA
+// and replay the CEL to extract container claims without requiring Google RIM validation.
+func (a *attestHandler) getRawAttestation(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	a.logger.Info(fmt.Sprintf("%s called", rawAttestEndpoint))
+
+	if !a.checkRateLimit() {
+		a.logAndWriteHTTPError(w, http.StatusTooManyRequests, fmt.Errorf("rate limit exceeded: max %d requests per %v", maxRequestsPerWindow, rateLimitWindow))
+		return
+	}
+
+	var nonce []byte
+
+	switch r.Method {
+	case http.MethodGet:
+		// Generate random nonce
+		nonce = make([]byte, defaultNonceSize)
+		if _, err := rand.Read(nonce); err != nil {
+			a.logAndWriteHTTPError(w, http.StatusInternalServerError, fmt.Errorf("failed to generate nonce: %w", err))
+			return
+		}
+
+	case http.MethodPost:
+		var req rawAttestRequest
+		decoder := json.NewDecoder(r.Body)
+		if err := decoder.Decode(&req); err != nil {
+			a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("failed to parse request body: %w", err))
+			return
+		}
+		if len(req.Nonce) == 0 {
+			// Generate random nonce if not provided
+			nonce = make([]byte, defaultNonceSize)
+			if _, err := rand.Read(nonce); err != nil {
+				a.logAndWriteHTTPError(w, http.StatusInternalServerError, fmt.Errorf("failed to generate nonce: %w", err))
+				return
+			}
+		} else {
+			nonce = req.Nonce
+		}
+
+	default:
+		a.logAndWriteHTTPError(w, http.StatusMethodNotAllowed, fmt.Errorf("method %s not allowed", r.Method))
+		return
+	}
+
+	// Get raw attestation from the agent
+	rawAttest, err := a.attestAgent.GetRawAttestation(nonce)
+	if err != nil {
+		a.logAndWriteHTTPError(w, http.StatusInternalServerError, fmt.Errorf("failed to get raw attestation: %w", err))
+		return
+	}
+
+	resp := rawAttestResponse{
+		TdQuote:       rawAttest.TdQuote,
+		CEL:           rawAttest.CEL,
+		CcelAcpiTable: rawAttest.CcelAcpiTable,
+		CcelData:      rawAttest.CcelData,
+		Nonce:         nonce,
+		AkCertChain:   rawAttest.AkCertChain,
+	}
+
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		a.logger.Error(fmt.Sprintf("failed to encode response: %v", err))
+	}
+}
+
 func (a *attestHandler) attest(w http.ResponseWriter, r *http.Request, client verifier.Client) {
+	if !a.checkRateLimit() {
+		a.logAndWriteHTTPError(w, http.StatusTooManyRequests, fmt.Errorf("rate limit exceeded: max %d requests per %v", maxRequestsPerWindow, rateLimitWindow))
+		return
+	}
+
 	switch r.Method {
 	case http.MethodGet:
 		if err := a.attestAgent.Refresh(a.ctx); err != nil {
