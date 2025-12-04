@@ -150,23 +150,44 @@ func (s *Server) handleAttest(w http.ResponseWriter, r *http.Request) {
 		log.Printf("  GCE: %s/%s", claims.GCE.ProjectID, claims.GCE.InstanceName)
 	}
 
-	// Check if base image is allowed on-chain
-	allowed, err := s.contract.IsAllowed(&bind.CallOpts{Context: context.Background()},
-		claims.BaseImage.MRTD[:],
-		claims.BaseImage.RTMR0[:],
-		claims.BaseImage.RTMR1[:])
+	// Check if MRTD (firmware) is allowed on-chain
+	mrtdAllowed, err := s.contract.IsMRTDAllowed(&bind.CallOpts{Context: context.Background()}, claims.BaseImage.MRTD[:])
 	if err != nil {
 		log.Printf("Contract call failed: %v", err)
-		s.sendError(w, "Failed to check allowlist: "+err.Error())
+		s.sendError(w, "Failed to check MRTD allowlist: "+err.Error())
 		return
 	}
 
-	if !allowed {
-		log.Printf("Base image not in allowlist")
+	if !mrtdAllowed {
+		log.Printf("MRTD not in allowlist")
 		log.Printf("  To add, run:")
-		log.Printf("  cast send %s 'addBaseImage(bytes,bytes,bytes)' 0x%x 0x%x 0x%x --private-key $PRIVATE_KEY",
-			s.config.ContractAddr, claims.BaseImage.MRTD, claims.BaseImage.RTMR0, claims.BaseImage.RTMR1)
-		s.sendErrorWithClaims(w, "Base image not in allowlist", claims)
+		log.Printf("  cast send %s 'addMRTD(bytes)' 0x%x --private-key $PRIVATE_KEY",
+			s.config.ContractAddr, claims.BaseImage.MRTD)
+		s.sendErrorWithClaims(w, "MRTD (firmware) not in allowlist", claims)
+		return
+	}
+
+	// Check if RTMR1 (custom image) meets support level requirements
+	imageAllowed, err := s.contract.IsImageAllowed(&bind.CallOpts{Context: context.Background()}, claims.BaseImage.RTMR1[:])
+	if err != nil {
+		log.Printf("Contract call failed: %v", err)
+		s.sendError(w, "Failed to check image support level: "+err.Error())
+		return
+	}
+
+	if !imageAllowed {
+		// Get current support level for better error message
+		supportLevel, _ := s.contract.GetImageSupport(&bind.CallOpts{Context: context.Background()}, claims.BaseImage.RTMR1[:])
+		minLevel, _ := s.contract.MinimumSupportLevel(&bind.CallOpts{Context: context.Background()})
+		supportLevelNames := []string{"NONE", "EXPERIMENTAL", "USABLE", "STABLE", "LATEST"}
+
+		log.Printf("Image does not meet support level requirements")
+		log.Printf("  Image support level: %s (%d)", supportLevelNames[supportLevel], supportLevel)
+		log.Printf("  Minimum required: %s (%d)", supportLevelNames[minLevel], minLevel)
+		log.Printf("  To add as LATEST, run:")
+		log.Printf("  cast send %s 'setImageSupport(bytes,uint8)' 0x%x 4 --private-key $PRIVATE_KEY",
+			s.config.ContractAddr, claims.BaseImage.RTMR1)
+		s.sendErrorWithClaims(w, "Image does not meet support level requirements", claims)
 		return
 	}
 

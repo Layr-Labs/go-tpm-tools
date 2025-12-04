@@ -31,7 +31,7 @@ var (
 
 // BaseImageAllowlistMetaData contains all meta data concerning the BaseImageAllowlist contract.
 var BaseImageAllowlistMetaData = &bind.MetaData{
-	ABI: "[{\"type\":\"constructor\",\"inputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"addBaseImage\",\"inputs\":[{\"name\":\"mrtd\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"rtmr0\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"rtmr1\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"allowedBaseImages\",\"inputs\":[{\"name\":\"\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"computeKey\",\"inputs\":[{\"name\":\"mrtd\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"rtmr0\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"rtmr1\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"stateMutability\":\"pure\"},{\"type\":\"function\",\"name\":\"isAllowed\",\"inputs\":[{\"name\":\"mrtd\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"rtmr0\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"rtmr1\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"owner\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"address\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"removeBaseImage\",\"inputs\":[{\"name\":\"mrtd\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"rtmr0\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"rtmr1\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"transferOwnership\",\"inputs\":[{\"name\":\"newOwner\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"event\",\"name\":\"BaseImageAdded\",\"inputs\":[{\"name\":\"key\",\"type\":\"bytes32\",\"indexed\":true,\"internalType\":\"bytes32\"},{\"name\":\"mrtd\",\"type\":\"bytes\",\"indexed\":false,\"internalType\":\"bytes\"},{\"name\":\"rtmr0\",\"type\":\"bytes\",\"indexed\":false,\"internalType\":\"bytes\"},{\"name\":\"rtmr1\",\"type\":\"bytes\",\"indexed\":false,\"internalType\":\"bytes\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"BaseImageRemoved\",\"inputs\":[{\"name\":\"key\",\"type\":\"bytes32\",\"indexed\":true,\"internalType\":\"bytes32\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"OwnershipTransferred\",\"inputs\":[{\"name\":\"previousOwner\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"newOwner\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"}],\"anonymous\":false},{\"type\":\"error\",\"name\":\"NOT_OWNER\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ZERO_ADDRESS\",\"inputs\":[]}]",
+	ABI: "[{\"type\":\"constructor\",\"inputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"addMRTD\",\"inputs\":[{\"name\":\"mrtd\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"allowedMRTD\",\"inputs\":[{\"name\":\"\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"batchAddMRTD\",\"inputs\":[{\"name\":\"mrtds\",\"type\":\"bytes[]\",\"internalType\":\"bytes[]\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"batchRemoveMRTD\",\"inputs\":[{\"name\":\"mrtds\",\"type\":\"bytes[]\",\"internalType\":\"bytes[]\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"checkSVN\",\"inputs\":[{\"name\":\"svn\",\"type\":\"uint32\",\"internalType\":\"uint32\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"checkSupport\",\"inputs\":[{\"name\":\"level\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"},{\"name\":\"minimum\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"pure\"},{\"type\":\"function\",\"name\":\"getImageSupport\",\"inputs\":[{\"name\":\"rtmr1\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[{\"name\":\"\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"imageSupport\",\"inputs\":[{\"name\":\"\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"isAllowed\",\"inputs\":[{\"name\":\"mrtd\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"rtmr1\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"isImageAllowed\",\"inputs\":[{\"name\":\"rtmr1\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"isMRTDAllowed\",\"inputs\":[{\"name\":\"mrtd\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"minimumSVN\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"uint32\",\"internalType\":\"uint32\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"minimumSupportLevel\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"owner\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"address\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"removeImage\",\"inputs\":[{\"name\":\"rtmr1\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"removeMRTD\",\"inputs\":[{\"name\":\"mrtd\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"setImageSupport\",\"inputs\":[{\"name\":\"rtmr1\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"level\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"setMinimumSVN\",\"inputs\":[{\"name\":\"newSVN\",\"type\":\"uint32\",\"internalType\":\"uint32\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"setMinimumSupportLevel\",\"inputs\":[{\"name\":\"newLevel\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"transferOwnership\",\"inputs\":[{\"name\":\"newOwner\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"event\",\"name\":\"ImageSupportUpdated\",\"inputs\":[{\"name\":\"rtmr1\",\"type\":\"bytes32\",\"indexed\":true,\"internalType\":\"bytes32\"},{\"name\":\"level\",\"type\":\"uint8\",\"indexed\":false,\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"MRTDAdded\",\"inputs\":[{\"name\":\"mrtd\",\"type\":\"bytes\",\"indexed\":true,\"internalType\":\"bytes\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"MRTDRemoved\",\"inputs\":[{\"name\":\"mrtd\",\"type\":\"bytes\",\"indexed\":true,\"internalType\":\"bytes\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"MinimumSVNUpdated\",\"inputs\":[{\"name\":\"oldSVN\",\"type\":\"uint32\",\"indexed\":false,\"internalType\":\"uint32\"},{\"name\":\"newSVN\",\"type\":\"uint32\",\"indexed\":false,\"internalType\":\"uint32\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"MinimumSupportLevelUpdated\",\"inputs\":[{\"name\":\"oldLevel\",\"type\":\"uint8\",\"indexed\":false,\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"},{\"name\":\"newLevel\",\"type\":\"uint8\",\"indexed\":false,\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"OwnershipTransferred\",\"inputs\":[{\"name\":\"previousOwner\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"newOwner\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"}],\"anonymous\":false},{\"type\":\"error\",\"name\":\"NOT_OWNER\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ZERO_ADDRESS\",\"inputs\":[]}]",
 }
 
 // BaseImageAllowlistABI is the input ABI used to generate the binding from.
@@ -180,12 +180,12 @@ func (_BaseImageAllowlist *BaseImageAllowlistTransactorRaw) Transact(opts *bind.
 	return _BaseImageAllowlist.Contract.contract.Transact(opts, method, params...)
 }
 
-// AllowedBaseImages is a free data retrieval call binding the contract method 0xcb332a2d.
+// AllowedMRTD is a free data retrieval call binding the contract method 0xdc770d31.
 //
-// Solidity: function allowedBaseImages(bytes32 ) view returns(bool)
-func (_BaseImageAllowlist *BaseImageAllowlistCaller) AllowedBaseImages(opts *bind.CallOpts, arg0 [32]byte) (bool, error) {
+// Solidity: function allowedMRTD(bytes32 ) view returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistCaller) AllowedMRTD(opts *bind.CallOpts, arg0 [32]byte) (bool, error) {
 	var out []interface{}
-	err := _BaseImageAllowlist.contract.Call(opts, &out, "allowedBaseImages", arg0)
+	err := _BaseImageAllowlist.contract.Call(opts, &out, "allowedMRTD", arg0)
 
 	if err != nil {
 		return *new(bool), err
@@ -197,57 +197,26 @@ func (_BaseImageAllowlist *BaseImageAllowlistCaller) AllowedBaseImages(opts *bin
 
 }
 
-// AllowedBaseImages is a free data retrieval call binding the contract method 0xcb332a2d.
+// AllowedMRTD is a free data retrieval call binding the contract method 0xdc770d31.
 //
-// Solidity: function allowedBaseImages(bytes32 ) view returns(bool)
-func (_BaseImageAllowlist *BaseImageAllowlistSession) AllowedBaseImages(arg0 [32]byte) (bool, error) {
-	return _BaseImageAllowlist.Contract.AllowedBaseImages(&_BaseImageAllowlist.CallOpts, arg0)
+// Solidity: function allowedMRTD(bytes32 ) view returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistSession) AllowedMRTD(arg0 [32]byte) (bool, error) {
+	return _BaseImageAllowlist.Contract.AllowedMRTD(&_BaseImageAllowlist.CallOpts, arg0)
 }
 
-// AllowedBaseImages is a free data retrieval call binding the contract method 0xcb332a2d.
+// AllowedMRTD is a free data retrieval call binding the contract method 0xdc770d31.
 //
-// Solidity: function allowedBaseImages(bytes32 ) view returns(bool)
-func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) AllowedBaseImages(arg0 [32]byte) (bool, error) {
-	return _BaseImageAllowlist.Contract.AllowedBaseImages(&_BaseImageAllowlist.CallOpts, arg0)
+// Solidity: function allowedMRTD(bytes32 ) view returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) AllowedMRTD(arg0 [32]byte) (bool, error) {
+	return _BaseImageAllowlist.Contract.AllowedMRTD(&_BaseImageAllowlist.CallOpts, arg0)
 }
 
-// ComputeKey is a free data retrieval call binding the contract method 0x3d04c00c.
+// CheckSVN is a free data retrieval call binding the contract method 0xf742e62c.
 //
-// Solidity: function computeKey(bytes mrtd, bytes rtmr0, bytes rtmr1) pure returns(bytes32)
-func (_BaseImageAllowlist *BaseImageAllowlistCaller) ComputeKey(opts *bind.CallOpts, mrtd []byte, rtmr0 []byte, rtmr1 []byte) ([32]byte, error) {
+// Solidity: function checkSVN(uint32 svn) view returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistCaller) CheckSVN(opts *bind.CallOpts, svn uint32) (bool, error) {
 	var out []interface{}
-	err := _BaseImageAllowlist.contract.Call(opts, &out, "computeKey", mrtd, rtmr0, rtmr1)
-
-	if err != nil {
-		return *new([32]byte), err
-	}
-
-	out0 := *abi.ConvertType(out[0], new([32]byte)).(*[32]byte)
-
-	return out0, err
-
-}
-
-// ComputeKey is a free data retrieval call binding the contract method 0x3d04c00c.
-//
-// Solidity: function computeKey(bytes mrtd, bytes rtmr0, bytes rtmr1) pure returns(bytes32)
-func (_BaseImageAllowlist *BaseImageAllowlistSession) ComputeKey(mrtd []byte, rtmr0 []byte, rtmr1 []byte) ([32]byte, error) {
-	return _BaseImageAllowlist.Contract.ComputeKey(&_BaseImageAllowlist.CallOpts, mrtd, rtmr0, rtmr1)
-}
-
-// ComputeKey is a free data retrieval call binding the contract method 0x3d04c00c.
-//
-// Solidity: function computeKey(bytes mrtd, bytes rtmr0, bytes rtmr1) pure returns(bytes32)
-func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) ComputeKey(mrtd []byte, rtmr0 []byte, rtmr1 []byte) ([32]byte, error) {
-	return _BaseImageAllowlist.Contract.ComputeKey(&_BaseImageAllowlist.CallOpts, mrtd, rtmr0, rtmr1)
-}
-
-// IsAllowed is a free data retrieval call binding the contract method 0x86cbc80e.
-//
-// Solidity: function isAllowed(bytes mrtd, bytes rtmr0, bytes rtmr1) view returns(bool)
-func (_BaseImageAllowlist *BaseImageAllowlistCaller) IsAllowed(opts *bind.CallOpts, mrtd []byte, rtmr0 []byte, rtmr1 []byte) (bool, error) {
-	var out []interface{}
-	err := _BaseImageAllowlist.contract.Call(opts, &out, "isAllowed", mrtd, rtmr0, rtmr1)
+	err := _BaseImageAllowlist.contract.Call(opts, &out, "checkSVN", svn)
 
 	if err != nil {
 		return *new(bool), err
@@ -259,18 +228,266 @@ func (_BaseImageAllowlist *BaseImageAllowlistCaller) IsAllowed(opts *bind.CallOp
 
 }
 
-// IsAllowed is a free data retrieval call binding the contract method 0x86cbc80e.
+// CheckSVN is a free data retrieval call binding the contract method 0xf742e62c.
 //
-// Solidity: function isAllowed(bytes mrtd, bytes rtmr0, bytes rtmr1) view returns(bool)
-func (_BaseImageAllowlist *BaseImageAllowlistSession) IsAllowed(mrtd []byte, rtmr0 []byte, rtmr1 []byte) (bool, error) {
-	return _BaseImageAllowlist.Contract.IsAllowed(&_BaseImageAllowlist.CallOpts, mrtd, rtmr0, rtmr1)
+// Solidity: function checkSVN(uint32 svn) view returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistSession) CheckSVN(svn uint32) (bool, error) {
+	return _BaseImageAllowlist.Contract.CheckSVN(&_BaseImageAllowlist.CallOpts, svn)
 }
 
-// IsAllowed is a free data retrieval call binding the contract method 0x86cbc80e.
+// CheckSVN is a free data retrieval call binding the contract method 0xf742e62c.
 //
-// Solidity: function isAllowed(bytes mrtd, bytes rtmr0, bytes rtmr1) view returns(bool)
-func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) IsAllowed(mrtd []byte, rtmr0 []byte, rtmr1 []byte) (bool, error) {
-	return _BaseImageAllowlist.Contract.IsAllowed(&_BaseImageAllowlist.CallOpts, mrtd, rtmr0, rtmr1)
+// Solidity: function checkSVN(uint32 svn) view returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) CheckSVN(svn uint32) (bool, error) {
+	return _BaseImageAllowlist.Contract.CheckSVN(&_BaseImageAllowlist.CallOpts, svn)
+}
+
+// CheckSupport is a free data retrieval call binding the contract method 0x91b2aa61.
+//
+// Solidity: function checkSupport(uint8 level, uint8 minimum) pure returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistCaller) CheckSupport(opts *bind.CallOpts, level uint8, minimum uint8) (bool, error) {
+	var out []interface{}
+	err := _BaseImageAllowlist.contract.Call(opts, &out, "checkSupport", level, minimum)
+
+	if err != nil {
+		return *new(bool), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(bool)).(*bool)
+
+	return out0, err
+
+}
+
+// CheckSupport is a free data retrieval call binding the contract method 0x91b2aa61.
+//
+// Solidity: function checkSupport(uint8 level, uint8 minimum) pure returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistSession) CheckSupport(level uint8, minimum uint8) (bool, error) {
+	return _BaseImageAllowlist.Contract.CheckSupport(&_BaseImageAllowlist.CallOpts, level, minimum)
+}
+
+// CheckSupport is a free data retrieval call binding the contract method 0x91b2aa61.
+//
+// Solidity: function checkSupport(uint8 level, uint8 minimum) pure returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) CheckSupport(level uint8, minimum uint8) (bool, error) {
+	return _BaseImageAllowlist.Contract.CheckSupport(&_BaseImageAllowlist.CallOpts, level, minimum)
+}
+
+// GetImageSupport is a free data retrieval call binding the contract method 0xe0ec7e51.
+//
+// Solidity: function getImageSupport(bytes rtmr1) view returns(uint8)
+func (_BaseImageAllowlist *BaseImageAllowlistCaller) GetImageSupport(opts *bind.CallOpts, rtmr1 []byte) (uint8, error) {
+	var out []interface{}
+	err := _BaseImageAllowlist.contract.Call(opts, &out, "getImageSupport", rtmr1)
+
+	if err != nil {
+		return *new(uint8), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(uint8)).(*uint8)
+
+	return out0, err
+
+}
+
+// GetImageSupport is a free data retrieval call binding the contract method 0xe0ec7e51.
+//
+// Solidity: function getImageSupport(bytes rtmr1) view returns(uint8)
+func (_BaseImageAllowlist *BaseImageAllowlistSession) GetImageSupport(rtmr1 []byte) (uint8, error) {
+	return _BaseImageAllowlist.Contract.GetImageSupport(&_BaseImageAllowlist.CallOpts, rtmr1)
+}
+
+// GetImageSupport is a free data retrieval call binding the contract method 0xe0ec7e51.
+//
+// Solidity: function getImageSupport(bytes rtmr1) view returns(uint8)
+func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) GetImageSupport(rtmr1 []byte) (uint8, error) {
+	return _BaseImageAllowlist.Contract.GetImageSupport(&_BaseImageAllowlist.CallOpts, rtmr1)
+}
+
+// ImageSupport is a free data retrieval call binding the contract method 0x24847343.
+//
+// Solidity: function imageSupport(bytes32 ) view returns(uint8)
+func (_BaseImageAllowlist *BaseImageAllowlistCaller) ImageSupport(opts *bind.CallOpts, arg0 [32]byte) (uint8, error) {
+	var out []interface{}
+	err := _BaseImageAllowlist.contract.Call(opts, &out, "imageSupport", arg0)
+
+	if err != nil {
+		return *new(uint8), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(uint8)).(*uint8)
+
+	return out0, err
+
+}
+
+// ImageSupport is a free data retrieval call binding the contract method 0x24847343.
+//
+// Solidity: function imageSupport(bytes32 ) view returns(uint8)
+func (_BaseImageAllowlist *BaseImageAllowlistSession) ImageSupport(arg0 [32]byte) (uint8, error) {
+	return _BaseImageAllowlist.Contract.ImageSupport(&_BaseImageAllowlist.CallOpts, arg0)
+}
+
+// ImageSupport is a free data retrieval call binding the contract method 0x24847343.
+//
+// Solidity: function imageSupport(bytes32 ) view returns(uint8)
+func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) ImageSupport(arg0 [32]byte) (uint8, error) {
+	return _BaseImageAllowlist.Contract.ImageSupport(&_BaseImageAllowlist.CallOpts, arg0)
+}
+
+// IsAllowed is a free data retrieval call binding the contract method 0x484be86c.
+//
+// Solidity: function isAllowed(bytes mrtd, bytes rtmr1) view returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistCaller) IsAllowed(opts *bind.CallOpts, mrtd []byte, rtmr1 []byte) (bool, error) {
+	var out []interface{}
+	err := _BaseImageAllowlist.contract.Call(opts, &out, "isAllowed", mrtd, rtmr1)
+
+	if err != nil {
+		return *new(bool), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(bool)).(*bool)
+
+	return out0, err
+
+}
+
+// IsAllowed is a free data retrieval call binding the contract method 0x484be86c.
+//
+// Solidity: function isAllowed(bytes mrtd, bytes rtmr1) view returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistSession) IsAllowed(mrtd []byte, rtmr1 []byte) (bool, error) {
+	return _BaseImageAllowlist.Contract.IsAllowed(&_BaseImageAllowlist.CallOpts, mrtd, rtmr1)
+}
+
+// IsAllowed is a free data retrieval call binding the contract method 0x484be86c.
+//
+// Solidity: function isAllowed(bytes mrtd, bytes rtmr1) view returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) IsAllowed(mrtd []byte, rtmr1 []byte) (bool, error) {
+	return _BaseImageAllowlist.Contract.IsAllowed(&_BaseImageAllowlist.CallOpts, mrtd, rtmr1)
+}
+
+// IsImageAllowed is a free data retrieval call binding the contract method 0xbecf6dbd.
+//
+// Solidity: function isImageAllowed(bytes rtmr1) view returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistCaller) IsImageAllowed(opts *bind.CallOpts, rtmr1 []byte) (bool, error) {
+	var out []interface{}
+	err := _BaseImageAllowlist.contract.Call(opts, &out, "isImageAllowed", rtmr1)
+
+	if err != nil {
+		return *new(bool), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(bool)).(*bool)
+
+	return out0, err
+
+}
+
+// IsImageAllowed is a free data retrieval call binding the contract method 0xbecf6dbd.
+//
+// Solidity: function isImageAllowed(bytes rtmr1) view returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistSession) IsImageAllowed(rtmr1 []byte) (bool, error) {
+	return _BaseImageAllowlist.Contract.IsImageAllowed(&_BaseImageAllowlist.CallOpts, rtmr1)
+}
+
+// IsImageAllowed is a free data retrieval call binding the contract method 0xbecf6dbd.
+//
+// Solidity: function isImageAllowed(bytes rtmr1) view returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) IsImageAllowed(rtmr1 []byte) (bool, error) {
+	return _BaseImageAllowlist.Contract.IsImageAllowed(&_BaseImageAllowlist.CallOpts, rtmr1)
+}
+
+// IsMRTDAllowed is a free data retrieval call binding the contract method 0x13457f52.
+//
+// Solidity: function isMRTDAllowed(bytes mrtd) view returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistCaller) IsMRTDAllowed(opts *bind.CallOpts, mrtd []byte) (bool, error) {
+	var out []interface{}
+	err := _BaseImageAllowlist.contract.Call(opts, &out, "isMRTDAllowed", mrtd)
+
+	if err != nil {
+		return *new(bool), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(bool)).(*bool)
+
+	return out0, err
+
+}
+
+// IsMRTDAllowed is a free data retrieval call binding the contract method 0x13457f52.
+//
+// Solidity: function isMRTDAllowed(bytes mrtd) view returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistSession) IsMRTDAllowed(mrtd []byte) (bool, error) {
+	return _BaseImageAllowlist.Contract.IsMRTDAllowed(&_BaseImageAllowlist.CallOpts, mrtd)
+}
+
+// IsMRTDAllowed is a free data retrieval call binding the contract method 0x13457f52.
+//
+// Solidity: function isMRTDAllowed(bytes mrtd) view returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) IsMRTDAllowed(mrtd []byte) (bool, error) {
+	return _BaseImageAllowlist.Contract.IsMRTDAllowed(&_BaseImageAllowlist.CallOpts, mrtd)
+}
+
+// MinimumSVN is a free data retrieval call binding the contract method 0x848cf88d.
+//
+// Solidity: function minimumSVN() view returns(uint32)
+func (_BaseImageAllowlist *BaseImageAllowlistCaller) MinimumSVN(opts *bind.CallOpts) (uint32, error) {
+	var out []interface{}
+	err := _BaseImageAllowlist.contract.Call(opts, &out, "minimumSVN")
+
+	if err != nil {
+		return *new(uint32), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(uint32)).(*uint32)
+
+	return out0, err
+
+}
+
+// MinimumSVN is a free data retrieval call binding the contract method 0x848cf88d.
+//
+// Solidity: function minimumSVN() view returns(uint32)
+func (_BaseImageAllowlist *BaseImageAllowlistSession) MinimumSVN() (uint32, error) {
+	return _BaseImageAllowlist.Contract.MinimumSVN(&_BaseImageAllowlist.CallOpts)
+}
+
+// MinimumSVN is a free data retrieval call binding the contract method 0x848cf88d.
+//
+// Solidity: function minimumSVN() view returns(uint32)
+func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) MinimumSVN() (uint32, error) {
+	return _BaseImageAllowlist.Contract.MinimumSVN(&_BaseImageAllowlist.CallOpts)
+}
+
+// MinimumSupportLevel is a free data retrieval call binding the contract method 0x2d66eee5.
+//
+// Solidity: function minimumSupportLevel() view returns(uint8)
+func (_BaseImageAllowlist *BaseImageAllowlistCaller) MinimumSupportLevel(opts *bind.CallOpts) (uint8, error) {
+	var out []interface{}
+	err := _BaseImageAllowlist.contract.Call(opts, &out, "minimumSupportLevel")
+
+	if err != nil {
+		return *new(uint8), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(uint8)).(*uint8)
+
+	return out0, err
+
+}
+
+// MinimumSupportLevel is a free data retrieval call binding the contract method 0x2d66eee5.
+//
+// Solidity: function minimumSupportLevel() view returns(uint8)
+func (_BaseImageAllowlist *BaseImageAllowlistSession) MinimumSupportLevel() (uint8, error) {
+	return _BaseImageAllowlist.Contract.MinimumSupportLevel(&_BaseImageAllowlist.CallOpts)
+}
+
+// MinimumSupportLevel is a free data retrieval call binding the contract method 0x2d66eee5.
+//
+// Solidity: function minimumSupportLevel() view returns(uint8)
+func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) MinimumSupportLevel() (uint8, error) {
+	return _BaseImageAllowlist.Contract.MinimumSupportLevel(&_BaseImageAllowlist.CallOpts)
 }
 
 // Owner is a free data retrieval call binding the contract method 0x8da5cb5b.
@@ -304,46 +521,172 @@ func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) Owner() (common.Addr
 	return _BaseImageAllowlist.Contract.Owner(&_BaseImageAllowlist.CallOpts)
 }
 
-// AddBaseImage is a paid mutator transaction binding the contract method 0x164ea9ec.
+// AddMRTD is a paid mutator transaction binding the contract method 0xeabab8a6.
 //
-// Solidity: function addBaseImage(bytes mrtd, bytes rtmr0, bytes rtmr1) returns()
-func (_BaseImageAllowlist *BaseImageAllowlistTransactor) AddBaseImage(opts *bind.TransactOpts, mrtd []byte, rtmr0 []byte, rtmr1 []byte) (*types.Transaction, error) {
-	return _BaseImageAllowlist.contract.Transact(opts, "addBaseImage", mrtd, rtmr0, rtmr1)
+// Solidity: function addMRTD(bytes mrtd) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistTransactor) AddMRTD(opts *bind.TransactOpts, mrtd []byte) (*types.Transaction, error) {
+	return _BaseImageAllowlist.contract.Transact(opts, "addMRTD", mrtd)
 }
 
-// AddBaseImage is a paid mutator transaction binding the contract method 0x164ea9ec.
+// AddMRTD is a paid mutator transaction binding the contract method 0xeabab8a6.
 //
-// Solidity: function addBaseImage(bytes mrtd, bytes rtmr0, bytes rtmr1) returns()
-func (_BaseImageAllowlist *BaseImageAllowlistSession) AddBaseImage(mrtd []byte, rtmr0 []byte, rtmr1 []byte) (*types.Transaction, error) {
-	return _BaseImageAllowlist.Contract.AddBaseImage(&_BaseImageAllowlist.TransactOpts, mrtd, rtmr0, rtmr1)
+// Solidity: function addMRTD(bytes mrtd) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistSession) AddMRTD(mrtd []byte) (*types.Transaction, error) {
+	return _BaseImageAllowlist.Contract.AddMRTD(&_BaseImageAllowlist.TransactOpts, mrtd)
 }
 
-// AddBaseImage is a paid mutator transaction binding the contract method 0x164ea9ec.
+// AddMRTD is a paid mutator transaction binding the contract method 0xeabab8a6.
 //
-// Solidity: function addBaseImage(bytes mrtd, bytes rtmr0, bytes rtmr1) returns()
-func (_BaseImageAllowlist *BaseImageAllowlistTransactorSession) AddBaseImage(mrtd []byte, rtmr0 []byte, rtmr1 []byte) (*types.Transaction, error) {
-	return _BaseImageAllowlist.Contract.AddBaseImage(&_BaseImageAllowlist.TransactOpts, mrtd, rtmr0, rtmr1)
+// Solidity: function addMRTD(bytes mrtd) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistTransactorSession) AddMRTD(mrtd []byte) (*types.Transaction, error) {
+	return _BaseImageAllowlist.Contract.AddMRTD(&_BaseImageAllowlist.TransactOpts, mrtd)
 }
 
-// RemoveBaseImage is a paid mutator transaction binding the contract method 0x6d89e342.
+// BatchAddMRTD is a paid mutator transaction binding the contract method 0x3846be6d.
 //
-// Solidity: function removeBaseImage(bytes mrtd, bytes rtmr0, bytes rtmr1) returns()
-func (_BaseImageAllowlist *BaseImageAllowlistTransactor) RemoveBaseImage(opts *bind.TransactOpts, mrtd []byte, rtmr0 []byte, rtmr1 []byte) (*types.Transaction, error) {
-	return _BaseImageAllowlist.contract.Transact(opts, "removeBaseImage", mrtd, rtmr0, rtmr1)
+// Solidity: function batchAddMRTD(bytes[] mrtds) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistTransactor) BatchAddMRTD(opts *bind.TransactOpts, mrtds [][]byte) (*types.Transaction, error) {
+	return _BaseImageAllowlist.contract.Transact(opts, "batchAddMRTD", mrtds)
 }
 
-// RemoveBaseImage is a paid mutator transaction binding the contract method 0x6d89e342.
+// BatchAddMRTD is a paid mutator transaction binding the contract method 0x3846be6d.
 //
-// Solidity: function removeBaseImage(bytes mrtd, bytes rtmr0, bytes rtmr1) returns()
-func (_BaseImageAllowlist *BaseImageAllowlistSession) RemoveBaseImage(mrtd []byte, rtmr0 []byte, rtmr1 []byte) (*types.Transaction, error) {
-	return _BaseImageAllowlist.Contract.RemoveBaseImage(&_BaseImageAllowlist.TransactOpts, mrtd, rtmr0, rtmr1)
+// Solidity: function batchAddMRTD(bytes[] mrtds) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistSession) BatchAddMRTD(mrtds [][]byte) (*types.Transaction, error) {
+	return _BaseImageAllowlist.Contract.BatchAddMRTD(&_BaseImageAllowlist.TransactOpts, mrtds)
 }
 
-// RemoveBaseImage is a paid mutator transaction binding the contract method 0x6d89e342.
+// BatchAddMRTD is a paid mutator transaction binding the contract method 0x3846be6d.
 //
-// Solidity: function removeBaseImage(bytes mrtd, bytes rtmr0, bytes rtmr1) returns()
-func (_BaseImageAllowlist *BaseImageAllowlistTransactorSession) RemoveBaseImage(mrtd []byte, rtmr0 []byte, rtmr1 []byte) (*types.Transaction, error) {
-	return _BaseImageAllowlist.Contract.RemoveBaseImage(&_BaseImageAllowlist.TransactOpts, mrtd, rtmr0, rtmr1)
+// Solidity: function batchAddMRTD(bytes[] mrtds) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistTransactorSession) BatchAddMRTD(mrtds [][]byte) (*types.Transaction, error) {
+	return _BaseImageAllowlist.Contract.BatchAddMRTD(&_BaseImageAllowlist.TransactOpts, mrtds)
+}
+
+// BatchRemoveMRTD is a paid mutator transaction binding the contract method 0xa19bfa56.
+//
+// Solidity: function batchRemoveMRTD(bytes[] mrtds) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistTransactor) BatchRemoveMRTD(opts *bind.TransactOpts, mrtds [][]byte) (*types.Transaction, error) {
+	return _BaseImageAllowlist.contract.Transact(opts, "batchRemoveMRTD", mrtds)
+}
+
+// BatchRemoveMRTD is a paid mutator transaction binding the contract method 0xa19bfa56.
+//
+// Solidity: function batchRemoveMRTD(bytes[] mrtds) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistSession) BatchRemoveMRTD(mrtds [][]byte) (*types.Transaction, error) {
+	return _BaseImageAllowlist.Contract.BatchRemoveMRTD(&_BaseImageAllowlist.TransactOpts, mrtds)
+}
+
+// BatchRemoveMRTD is a paid mutator transaction binding the contract method 0xa19bfa56.
+//
+// Solidity: function batchRemoveMRTD(bytes[] mrtds) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistTransactorSession) BatchRemoveMRTD(mrtds [][]byte) (*types.Transaction, error) {
+	return _BaseImageAllowlist.Contract.BatchRemoveMRTD(&_BaseImageAllowlist.TransactOpts, mrtds)
+}
+
+// RemoveImage is a paid mutator transaction binding the contract method 0xf3cbcef3.
+//
+// Solidity: function removeImage(bytes rtmr1) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistTransactor) RemoveImage(opts *bind.TransactOpts, rtmr1 []byte) (*types.Transaction, error) {
+	return _BaseImageAllowlist.contract.Transact(opts, "removeImage", rtmr1)
+}
+
+// RemoveImage is a paid mutator transaction binding the contract method 0xf3cbcef3.
+//
+// Solidity: function removeImage(bytes rtmr1) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistSession) RemoveImage(rtmr1 []byte) (*types.Transaction, error) {
+	return _BaseImageAllowlist.Contract.RemoveImage(&_BaseImageAllowlist.TransactOpts, rtmr1)
+}
+
+// RemoveImage is a paid mutator transaction binding the contract method 0xf3cbcef3.
+//
+// Solidity: function removeImage(bytes rtmr1) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistTransactorSession) RemoveImage(rtmr1 []byte) (*types.Transaction, error) {
+	return _BaseImageAllowlist.Contract.RemoveImage(&_BaseImageAllowlist.TransactOpts, rtmr1)
+}
+
+// RemoveMRTD is a paid mutator transaction binding the contract method 0x27b7b291.
+//
+// Solidity: function removeMRTD(bytes mrtd) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistTransactor) RemoveMRTD(opts *bind.TransactOpts, mrtd []byte) (*types.Transaction, error) {
+	return _BaseImageAllowlist.contract.Transact(opts, "removeMRTD", mrtd)
+}
+
+// RemoveMRTD is a paid mutator transaction binding the contract method 0x27b7b291.
+//
+// Solidity: function removeMRTD(bytes mrtd) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistSession) RemoveMRTD(mrtd []byte) (*types.Transaction, error) {
+	return _BaseImageAllowlist.Contract.RemoveMRTD(&_BaseImageAllowlist.TransactOpts, mrtd)
+}
+
+// RemoveMRTD is a paid mutator transaction binding the contract method 0x27b7b291.
+//
+// Solidity: function removeMRTD(bytes mrtd) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistTransactorSession) RemoveMRTD(mrtd []byte) (*types.Transaction, error) {
+	return _BaseImageAllowlist.Contract.RemoveMRTD(&_BaseImageAllowlist.TransactOpts, mrtd)
+}
+
+// SetImageSupport is a paid mutator transaction binding the contract method 0x036524d9.
+//
+// Solidity: function setImageSupport(bytes rtmr1, uint8 level) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistTransactor) SetImageSupport(opts *bind.TransactOpts, rtmr1 []byte, level uint8) (*types.Transaction, error) {
+	return _BaseImageAllowlist.contract.Transact(opts, "setImageSupport", rtmr1, level)
+}
+
+// SetImageSupport is a paid mutator transaction binding the contract method 0x036524d9.
+//
+// Solidity: function setImageSupport(bytes rtmr1, uint8 level) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistSession) SetImageSupport(rtmr1 []byte, level uint8) (*types.Transaction, error) {
+	return _BaseImageAllowlist.Contract.SetImageSupport(&_BaseImageAllowlist.TransactOpts, rtmr1, level)
+}
+
+// SetImageSupport is a paid mutator transaction binding the contract method 0x036524d9.
+//
+// Solidity: function setImageSupport(bytes rtmr1, uint8 level) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistTransactorSession) SetImageSupport(rtmr1 []byte, level uint8) (*types.Transaction, error) {
+	return _BaseImageAllowlist.Contract.SetImageSupport(&_BaseImageAllowlist.TransactOpts, rtmr1, level)
+}
+
+// SetMinimumSVN is a paid mutator transaction binding the contract method 0x9a99c501.
+//
+// Solidity: function setMinimumSVN(uint32 newSVN) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistTransactor) SetMinimumSVN(opts *bind.TransactOpts, newSVN uint32) (*types.Transaction, error) {
+	return _BaseImageAllowlist.contract.Transact(opts, "setMinimumSVN", newSVN)
+}
+
+// SetMinimumSVN is a paid mutator transaction binding the contract method 0x9a99c501.
+//
+// Solidity: function setMinimumSVN(uint32 newSVN) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistSession) SetMinimumSVN(newSVN uint32) (*types.Transaction, error) {
+	return _BaseImageAllowlist.Contract.SetMinimumSVN(&_BaseImageAllowlist.TransactOpts, newSVN)
+}
+
+// SetMinimumSVN is a paid mutator transaction binding the contract method 0x9a99c501.
+//
+// Solidity: function setMinimumSVN(uint32 newSVN) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistTransactorSession) SetMinimumSVN(newSVN uint32) (*types.Transaction, error) {
+	return _BaseImageAllowlist.Contract.SetMinimumSVN(&_BaseImageAllowlist.TransactOpts, newSVN)
+}
+
+// SetMinimumSupportLevel is a paid mutator transaction binding the contract method 0x810280fe.
+//
+// Solidity: function setMinimumSupportLevel(uint8 newLevel) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistTransactor) SetMinimumSupportLevel(opts *bind.TransactOpts, newLevel uint8) (*types.Transaction, error) {
+	return _BaseImageAllowlist.contract.Transact(opts, "setMinimumSupportLevel", newLevel)
+}
+
+// SetMinimumSupportLevel is a paid mutator transaction binding the contract method 0x810280fe.
+//
+// Solidity: function setMinimumSupportLevel(uint8 newLevel) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistSession) SetMinimumSupportLevel(newLevel uint8) (*types.Transaction, error) {
+	return _BaseImageAllowlist.Contract.SetMinimumSupportLevel(&_BaseImageAllowlist.TransactOpts, newLevel)
+}
+
+// SetMinimumSupportLevel is a paid mutator transaction binding the contract method 0x810280fe.
+//
+// Solidity: function setMinimumSupportLevel(uint8 newLevel) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistTransactorSession) SetMinimumSupportLevel(newLevel uint8) (*types.Transaction, error) {
+	return _BaseImageAllowlist.Contract.SetMinimumSupportLevel(&_BaseImageAllowlist.TransactOpts, newLevel)
 }
 
 // TransferOwnership is a paid mutator transaction binding the contract method 0xf2fde38b.
@@ -367,9 +710,9 @@ func (_BaseImageAllowlist *BaseImageAllowlistTransactorSession) TransferOwnershi
 	return _BaseImageAllowlist.Contract.TransferOwnership(&_BaseImageAllowlist.TransactOpts, newOwner)
 }
 
-// BaseImageAllowlistBaseImageAddedIterator is returned from FilterBaseImageAdded and is used to iterate over the raw logs and unpacked data for BaseImageAdded events raised by the BaseImageAllowlist contract.
-type BaseImageAllowlistBaseImageAddedIterator struct {
-	Event *BaseImageAllowlistBaseImageAdded // Event containing the contract specifics and raw log
+// BaseImageAllowlistImageSupportUpdatedIterator is returned from FilterImageSupportUpdated and is used to iterate over the raw logs and unpacked data for ImageSupportUpdated events raised by the BaseImageAllowlist contract.
+type BaseImageAllowlistImageSupportUpdatedIterator struct {
+	Event *BaseImageAllowlistImageSupportUpdated // Event containing the contract specifics and raw log
 
 	contract *bind.BoundContract // Generic contract to use for unpacking event data
 	event    string              // Event name to use for unpacking event data
@@ -383,7 +726,7 @@ type BaseImageAllowlistBaseImageAddedIterator struct {
 // Next advances the iterator to the subsequent event, returning whether there
 // are any more events found. In case of a retrieval or parsing error, false is
 // returned and Error() can be queried for the exact failure.
-func (it *BaseImageAllowlistBaseImageAddedIterator) Next() bool {
+func (it *BaseImageAllowlistImageSupportUpdatedIterator) Next() bool {
 	// If the iterator failed, stop iterating
 	if it.fail != nil {
 		return false
@@ -392,7 +735,7 @@ func (it *BaseImageAllowlistBaseImageAddedIterator) Next() bool {
 	if it.done {
 		select {
 		case log := <-it.logs:
-			it.Event = new(BaseImageAllowlistBaseImageAdded)
+			it.Event = new(BaseImageAllowlistImageSupportUpdated)
 			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
 				it.fail = err
 				return false
@@ -407,7 +750,7 @@ func (it *BaseImageAllowlistBaseImageAddedIterator) Next() bool {
 	// Iterator still in progress, wait for either a data or an error event
 	select {
 	case log := <-it.logs:
-		it.Event = new(BaseImageAllowlistBaseImageAdded)
+		it.Event = new(BaseImageAllowlistImageSupportUpdated)
 		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
 			it.fail = err
 			return false
@@ -423,54 +766,52 @@ func (it *BaseImageAllowlistBaseImageAddedIterator) Next() bool {
 }
 
 // Error returns any retrieval or parsing error occurred during filtering.
-func (it *BaseImageAllowlistBaseImageAddedIterator) Error() error {
+func (it *BaseImageAllowlistImageSupportUpdatedIterator) Error() error {
 	return it.fail
 }
 
 // Close terminates the iteration process, releasing any pending underlying
 // resources.
-func (it *BaseImageAllowlistBaseImageAddedIterator) Close() error {
+func (it *BaseImageAllowlistImageSupportUpdatedIterator) Close() error {
 	it.sub.Unsubscribe()
 	return nil
 }
 
-// BaseImageAllowlistBaseImageAdded represents a BaseImageAdded event raised by the BaseImageAllowlist contract.
-type BaseImageAllowlistBaseImageAdded struct {
-	Key   [32]byte
-	Mrtd  []byte
-	Rtmr0 []byte
-	Rtmr1 []byte
+// BaseImageAllowlistImageSupportUpdated represents a ImageSupportUpdated event raised by the BaseImageAllowlist contract.
+type BaseImageAllowlistImageSupportUpdated struct {
+	Rtmr1 [32]byte
+	Level uint8
 	Raw   types.Log // Blockchain specific contextual infos
 }
 
-// FilterBaseImageAdded is a free log retrieval operation binding the contract event 0xed30e352379a0bbaf6f2cd2c93ec2353aa210c21771120a15243792968f04127.
+// FilterImageSupportUpdated is a free log retrieval operation binding the contract event 0xa9429306c6cf78170deae6f62921eac8b8b241d54b589ea585abbb221193e008.
 //
-// Solidity: event BaseImageAdded(bytes32 indexed key, bytes mrtd, bytes rtmr0, bytes rtmr1)
-func (_BaseImageAllowlist *BaseImageAllowlistFilterer) FilterBaseImageAdded(opts *bind.FilterOpts, key [][32]byte) (*BaseImageAllowlistBaseImageAddedIterator, error) {
+// Solidity: event ImageSupportUpdated(bytes32 indexed rtmr1, uint8 level)
+func (_BaseImageAllowlist *BaseImageAllowlistFilterer) FilterImageSupportUpdated(opts *bind.FilterOpts, rtmr1 [][32]byte) (*BaseImageAllowlistImageSupportUpdatedIterator, error) {
 
-	var keyRule []interface{}
-	for _, keyItem := range key {
-		keyRule = append(keyRule, keyItem)
+	var rtmr1Rule []interface{}
+	for _, rtmr1Item := range rtmr1 {
+		rtmr1Rule = append(rtmr1Rule, rtmr1Item)
 	}
 
-	logs, sub, err := _BaseImageAllowlist.contract.FilterLogs(opts, "BaseImageAdded", keyRule)
+	logs, sub, err := _BaseImageAllowlist.contract.FilterLogs(opts, "ImageSupportUpdated", rtmr1Rule)
 	if err != nil {
 		return nil, err
 	}
-	return &BaseImageAllowlistBaseImageAddedIterator{contract: _BaseImageAllowlist.contract, event: "BaseImageAdded", logs: logs, sub: sub}, nil
+	return &BaseImageAllowlistImageSupportUpdatedIterator{contract: _BaseImageAllowlist.contract, event: "ImageSupportUpdated", logs: logs, sub: sub}, nil
 }
 
-// WatchBaseImageAdded is a free log subscription operation binding the contract event 0xed30e352379a0bbaf6f2cd2c93ec2353aa210c21771120a15243792968f04127.
+// WatchImageSupportUpdated is a free log subscription operation binding the contract event 0xa9429306c6cf78170deae6f62921eac8b8b241d54b589ea585abbb221193e008.
 //
-// Solidity: event BaseImageAdded(bytes32 indexed key, bytes mrtd, bytes rtmr0, bytes rtmr1)
-func (_BaseImageAllowlist *BaseImageAllowlistFilterer) WatchBaseImageAdded(opts *bind.WatchOpts, sink chan<- *BaseImageAllowlistBaseImageAdded, key [][32]byte) (event.Subscription, error) {
+// Solidity: event ImageSupportUpdated(bytes32 indexed rtmr1, uint8 level)
+func (_BaseImageAllowlist *BaseImageAllowlistFilterer) WatchImageSupportUpdated(opts *bind.WatchOpts, sink chan<- *BaseImageAllowlistImageSupportUpdated, rtmr1 [][32]byte) (event.Subscription, error) {
 
-	var keyRule []interface{}
-	for _, keyItem := range key {
-		keyRule = append(keyRule, keyItem)
+	var rtmr1Rule []interface{}
+	for _, rtmr1Item := range rtmr1 {
+		rtmr1Rule = append(rtmr1Rule, rtmr1Item)
 	}
 
-	logs, sub, err := _BaseImageAllowlist.contract.WatchLogs(opts, "BaseImageAdded", keyRule)
+	logs, sub, err := _BaseImageAllowlist.contract.WatchLogs(opts, "ImageSupportUpdated", rtmr1Rule)
 	if err != nil {
 		return nil, err
 	}
@@ -480,8 +821,8 @@ func (_BaseImageAllowlist *BaseImageAllowlistFilterer) WatchBaseImageAdded(opts 
 			select {
 			case log := <-logs:
 				// New log arrived, parse the event and forward to the user
-				event := new(BaseImageAllowlistBaseImageAdded)
-				if err := _BaseImageAllowlist.contract.UnpackLog(event, "BaseImageAdded", log); err != nil {
+				event := new(BaseImageAllowlistImageSupportUpdated)
+				if err := _BaseImageAllowlist.contract.UnpackLog(event, "ImageSupportUpdated", log); err != nil {
 					return err
 				}
 				event.Raw = log
@@ -502,21 +843,21 @@ func (_BaseImageAllowlist *BaseImageAllowlistFilterer) WatchBaseImageAdded(opts 
 	}), nil
 }
 
-// ParseBaseImageAdded is a log parse operation binding the contract event 0xed30e352379a0bbaf6f2cd2c93ec2353aa210c21771120a15243792968f04127.
+// ParseImageSupportUpdated is a log parse operation binding the contract event 0xa9429306c6cf78170deae6f62921eac8b8b241d54b589ea585abbb221193e008.
 //
-// Solidity: event BaseImageAdded(bytes32 indexed key, bytes mrtd, bytes rtmr0, bytes rtmr1)
-func (_BaseImageAllowlist *BaseImageAllowlistFilterer) ParseBaseImageAdded(log types.Log) (*BaseImageAllowlistBaseImageAdded, error) {
-	event := new(BaseImageAllowlistBaseImageAdded)
-	if err := _BaseImageAllowlist.contract.UnpackLog(event, "BaseImageAdded", log); err != nil {
+// Solidity: event ImageSupportUpdated(bytes32 indexed rtmr1, uint8 level)
+func (_BaseImageAllowlist *BaseImageAllowlistFilterer) ParseImageSupportUpdated(log types.Log) (*BaseImageAllowlistImageSupportUpdated, error) {
+	event := new(BaseImageAllowlistImageSupportUpdated)
+	if err := _BaseImageAllowlist.contract.UnpackLog(event, "ImageSupportUpdated", log); err != nil {
 		return nil, err
 	}
 	event.Raw = log
 	return event, nil
 }
 
-// BaseImageAllowlistBaseImageRemovedIterator is returned from FilterBaseImageRemoved and is used to iterate over the raw logs and unpacked data for BaseImageRemoved events raised by the BaseImageAllowlist contract.
-type BaseImageAllowlistBaseImageRemovedIterator struct {
-	Event *BaseImageAllowlistBaseImageRemoved // Event containing the contract specifics and raw log
+// BaseImageAllowlistMRTDAddedIterator is returned from FilterMRTDAdded and is used to iterate over the raw logs and unpacked data for MRTDAdded events raised by the BaseImageAllowlist contract.
+type BaseImageAllowlistMRTDAddedIterator struct {
+	Event *BaseImageAllowlistMRTDAdded // Event containing the contract specifics and raw log
 
 	contract *bind.BoundContract // Generic contract to use for unpacking event data
 	event    string              // Event name to use for unpacking event data
@@ -530,7 +871,7 @@ type BaseImageAllowlistBaseImageRemovedIterator struct {
 // Next advances the iterator to the subsequent event, returning whether there
 // are any more events found. In case of a retrieval or parsing error, false is
 // returned and Error() can be queried for the exact failure.
-func (it *BaseImageAllowlistBaseImageRemovedIterator) Next() bool {
+func (it *BaseImageAllowlistMRTDAddedIterator) Next() bool {
 	// If the iterator failed, stop iterating
 	if it.fail != nil {
 		return false
@@ -539,7 +880,7 @@ func (it *BaseImageAllowlistBaseImageRemovedIterator) Next() bool {
 	if it.done {
 		select {
 		case log := <-it.logs:
-			it.Event = new(BaseImageAllowlistBaseImageRemoved)
+			it.Event = new(BaseImageAllowlistMRTDAdded)
 			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
 				it.fail = err
 				return false
@@ -554,7 +895,7 @@ func (it *BaseImageAllowlistBaseImageRemovedIterator) Next() bool {
 	// Iterator still in progress, wait for either a data or an error event
 	select {
 	case log := <-it.logs:
-		it.Event = new(BaseImageAllowlistBaseImageRemoved)
+		it.Event = new(BaseImageAllowlistMRTDAdded)
 		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
 			it.fail = err
 			return false
@@ -570,51 +911,51 @@ func (it *BaseImageAllowlistBaseImageRemovedIterator) Next() bool {
 }
 
 // Error returns any retrieval or parsing error occurred during filtering.
-func (it *BaseImageAllowlistBaseImageRemovedIterator) Error() error {
+func (it *BaseImageAllowlistMRTDAddedIterator) Error() error {
 	return it.fail
 }
 
 // Close terminates the iteration process, releasing any pending underlying
 // resources.
-func (it *BaseImageAllowlistBaseImageRemovedIterator) Close() error {
+func (it *BaseImageAllowlistMRTDAddedIterator) Close() error {
 	it.sub.Unsubscribe()
 	return nil
 }
 
-// BaseImageAllowlistBaseImageRemoved represents a BaseImageRemoved event raised by the BaseImageAllowlist contract.
-type BaseImageAllowlistBaseImageRemoved struct {
-	Key [32]byte
-	Raw types.Log // Blockchain specific contextual infos
+// BaseImageAllowlistMRTDAdded represents a MRTDAdded event raised by the BaseImageAllowlist contract.
+type BaseImageAllowlistMRTDAdded struct {
+	Mrtd common.Hash
+	Raw  types.Log // Blockchain specific contextual infos
 }
 
-// FilterBaseImageRemoved is a free log retrieval operation binding the contract event 0xf4713b228d42c646654f1bd87ae0fc23334bc998c67d2bca232a36bafc4e74cd.
+// FilterMRTDAdded is a free log retrieval operation binding the contract event 0x3968fe9edac08949225b0db5fc8763d4cf7fefaddb4723a8d4b6201fd56e6a0c.
 //
-// Solidity: event BaseImageRemoved(bytes32 indexed key)
-func (_BaseImageAllowlist *BaseImageAllowlistFilterer) FilterBaseImageRemoved(opts *bind.FilterOpts, key [][32]byte) (*BaseImageAllowlistBaseImageRemovedIterator, error) {
+// Solidity: event MRTDAdded(bytes indexed mrtd)
+func (_BaseImageAllowlist *BaseImageAllowlistFilterer) FilterMRTDAdded(opts *bind.FilterOpts, mrtd [][]byte) (*BaseImageAllowlistMRTDAddedIterator, error) {
 
-	var keyRule []interface{}
-	for _, keyItem := range key {
-		keyRule = append(keyRule, keyItem)
+	var mrtdRule []interface{}
+	for _, mrtdItem := range mrtd {
+		mrtdRule = append(mrtdRule, mrtdItem)
 	}
 
-	logs, sub, err := _BaseImageAllowlist.contract.FilterLogs(opts, "BaseImageRemoved", keyRule)
+	logs, sub, err := _BaseImageAllowlist.contract.FilterLogs(opts, "MRTDAdded", mrtdRule)
 	if err != nil {
 		return nil, err
 	}
-	return &BaseImageAllowlistBaseImageRemovedIterator{contract: _BaseImageAllowlist.contract, event: "BaseImageRemoved", logs: logs, sub: sub}, nil
+	return &BaseImageAllowlistMRTDAddedIterator{contract: _BaseImageAllowlist.contract, event: "MRTDAdded", logs: logs, sub: sub}, nil
 }
 
-// WatchBaseImageRemoved is a free log subscription operation binding the contract event 0xf4713b228d42c646654f1bd87ae0fc23334bc998c67d2bca232a36bafc4e74cd.
+// WatchMRTDAdded is a free log subscription operation binding the contract event 0x3968fe9edac08949225b0db5fc8763d4cf7fefaddb4723a8d4b6201fd56e6a0c.
 //
-// Solidity: event BaseImageRemoved(bytes32 indexed key)
-func (_BaseImageAllowlist *BaseImageAllowlistFilterer) WatchBaseImageRemoved(opts *bind.WatchOpts, sink chan<- *BaseImageAllowlistBaseImageRemoved, key [][32]byte) (event.Subscription, error) {
+// Solidity: event MRTDAdded(bytes indexed mrtd)
+func (_BaseImageAllowlist *BaseImageAllowlistFilterer) WatchMRTDAdded(opts *bind.WatchOpts, sink chan<- *BaseImageAllowlistMRTDAdded, mrtd [][]byte) (event.Subscription, error) {
 
-	var keyRule []interface{}
-	for _, keyItem := range key {
-		keyRule = append(keyRule, keyItem)
+	var mrtdRule []interface{}
+	for _, mrtdItem := range mrtd {
+		mrtdRule = append(mrtdRule, mrtdItem)
 	}
 
-	logs, sub, err := _BaseImageAllowlist.contract.WatchLogs(opts, "BaseImageRemoved", keyRule)
+	logs, sub, err := _BaseImageAllowlist.contract.WatchLogs(opts, "MRTDAdded", mrtdRule)
 	if err != nil {
 		return nil, err
 	}
@@ -624,8 +965,8 @@ func (_BaseImageAllowlist *BaseImageAllowlistFilterer) WatchBaseImageRemoved(opt
 			select {
 			case log := <-logs:
 				// New log arrived, parse the event and forward to the user
-				event := new(BaseImageAllowlistBaseImageRemoved)
-				if err := _BaseImageAllowlist.contract.UnpackLog(event, "BaseImageRemoved", log); err != nil {
+				event := new(BaseImageAllowlistMRTDAdded)
+				if err := _BaseImageAllowlist.contract.UnpackLog(event, "MRTDAdded", log); err != nil {
 					return err
 				}
 				event.Raw = log
@@ -646,12 +987,426 @@ func (_BaseImageAllowlist *BaseImageAllowlistFilterer) WatchBaseImageRemoved(opt
 	}), nil
 }
 
-// ParseBaseImageRemoved is a log parse operation binding the contract event 0xf4713b228d42c646654f1bd87ae0fc23334bc998c67d2bca232a36bafc4e74cd.
+// ParseMRTDAdded is a log parse operation binding the contract event 0x3968fe9edac08949225b0db5fc8763d4cf7fefaddb4723a8d4b6201fd56e6a0c.
 //
-// Solidity: event BaseImageRemoved(bytes32 indexed key)
-func (_BaseImageAllowlist *BaseImageAllowlistFilterer) ParseBaseImageRemoved(log types.Log) (*BaseImageAllowlistBaseImageRemoved, error) {
-	event := new(BaseImageAllowlistBaseImageRemoved)
-	if err := _BaseImageAllowlist.contract.UnpackLog(event, "BaseImageRemoved", log); err != nil {
+// Solidity: event MRTDAdded(bytes indexed mrtd)
+func (_BaseImageAllowlist *BaseImageAllowlistFilterer) ParseMRTDAdded(log types.Log) (*BaseImageAllowlistMRTDAdded, error) {
+	event := new(BaseImageAllowlistMRTDAdded)
+	if err := _BaseImageAllowlist.contract.UnpackLog(event, "MRTDAdded", log); err != nil {
+		return nil, err
+	}
+	event.Raw = log
+	return event, nil
+}
+
+// BaseImageAllowlistMRTDRemovedIterator is returned from FilterMRTDRemoved and is used to iterate over the raw logs and unpacked data for MRTDRemoved events raised by the BaseImageAllowlist contract.
+type BaseImageAllowlistMRTDRemovedIterator struct {
+	Event *BaseImageAllowlistMRTDRemoved // Event containing the contract specifics and raw log
+
+	contract *bind.BoundContract // Generic contract to use for unpacking event data
+	event    string              // Event name to use for unpacking event data
+
+	logs chan types.Log        // Log channel receiving the found contract events
+	sub  ethereum.Subscription // Subscription for errors, completion and termination
+	done bool                  // Whether the subscription completed delivering logs
+	fail error                 // Occurred error to stop iteration
+}
+
+// Next advances the iterator to the subsequent event, returning whether there
+// are any more events found. In case of a retrieval or parsing error, false is
+// returned and Error() can be queried for the exact failure.
+func (it *BaseImageAllowlistMRTDRemovedIterator) Next() bool {
+	// If the iterator failed, stop iterating
+	if it.fail != nil {
+		return false
+	}
+	// If the iterator completed, deliver directly whatever's available
+	if it.done {
+		select {
+		case log := <-it.logs:
+			it.Event = new(BaseImageAllowlistMRTDRemoved)
+			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+				it.fail = err
+				return false
+			}
+			it.Event.Raw = log
+			return true
+
+		default:
+			return false
+		}
+	}
+	// Iterator still in progress, wait for either a data or an error event
+	select {
+	case log := <-it.logs:
+		it.Event = new(BaseImageAllowlistMRTDRemoved)
+		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+			it.fail = err
+			return false
+		}
+		it.Event.Raw = log
+		return true
+
+	case err := <-it.sub.Err():
+		it.done = true
+		it.fail = err
+		return it.Next()
+	}
+}
+
+// Error returns any retrieval or parsing error occurred during filtering.
+func (it *BaseImageAllowlistMRTDRemovedIterator) Error() error {
+	return it.fail
+}
+
+// Close terminates the iteration process, releasing any pending underlying
+// resources.
+func (it *BaseImageAllowlistMRTDRemovedIterator) Close() error {
+	it.sub.Unsubscribe()
+	return nil
+}
+
+// BaseImageAllowlistMRTDRemoved represents a MRTDRemoved event raised by the BaseImageAllowlist contract.
+type BaseImageAllowlistMRTDRemoved struct {
+	Mrtd common.Hash
+	Raw  types.Log // Blockchain specific contextual infos
+}
+
+// FilterMRTDRemoved is a free log retrieval operation binding the contract event 0xd6fbbe88e44fd94e9f5becd0b28808c6699dc50e8ad10ca60f62933500258d97.
+//
+// Solidity: event MRTDRemoved(bytes indexed mrtd)
+func (_BaseImageAllowlist *BaseImageAllowlistFilterer) FilterMRTDRemoved(opts *bind.FilterOpts, mrtd [][]byte) (*BaseImageAllowlistMRTDRemovedIterator, error) {
+
+	var mrtdRule []interface{}
+	for _, mrtdItem := range mrtd {
+		mrtdRule = append(mrtdRule, mrtdItem)
+	}
+
+	logs, sub, err := _BaseImageAllowlist.contract.FilterLogs(opts, "MRTDRemoved", mrtdRule)
+	if err != nil {
+		return nil, err
+	}
+	return &BaseImageAllowlistMRTDRemovedIterator{contract: _BaseImageAllowlist.contract, event: "MRTDRemoved", logs: logs, sub: sub}, nil
+}
+
+// WatchMRTDRemoved is a free log subscription operation binding the contract event 0xd6fbbe88e44fd94e9f5becd0b28808c6699dc50e8ad10ca60f62933500258d97.
+//
+// Solidity: event MRTDRemoved(bytes indexed mrtd)
+func (_BaseImageAllowlist *BaseImageAllowlistFilterer) WatchMRTDRemoved(opts *bind.WatchOpts, sink chan<- *BaseImageAllowlistMRTDRemoved, mrtd [][]byte) (event.Subscription, error) {
+
+	var mrtdRule []interface{}
+	for _, mrtdItem := range mrtd {
+		mrtdRule = append(mrtdRule, mrtdItem)
+	}
+
+	logs, sub, err := _BaseImageAllowlist.contract.WatchLogs(opts, "MRTDRemoved", mrtdRule)
+	if err != nil {
+		return nil, err
+	}
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case log := <-logs:
+				// New log arrived, parse the event and forward to the user
+				event := new(BaseImageAllowlistMRTDRemoved)
+				if err := _BaseImageAllowlist.contract.UnpackLog(event, "MRTDRemoved", log); err != nil {
+					return err
+				}
+				event.Raw = log
+
+				select {
+				case sink <- event:
+				case err := <-sub.Err():
+					return err
+				case <-quit:
+					return nil
+				}
+			case err := <-sub.Err():
+				return err
+			case <-quit:
+				return nil
+			}
+		}
+	}), nil
+}
+
+// ParseMRTDRemoved is a log parse operation binding the contract event 0xd6fbbe88e44fd94e9f5becd0b28808c6699dc50e8ad10ca60f62933500258d97.
+//
+// Solidity: event MRTDRemoved(bytes indexed mrtd)
+func (_BaseImageAllowlist *BaseImageAllowlistFilterer) ParseMRTDRemoved(log types.Log) (*BaseImageAllowlistMRTDRemoved, error) {
+	event := new(BaseImageAllowlistMRTDRemoved)
+	if err := _BaseImageAllowlist.contract.UnpackLog(event, "MRTDRemoved", log); err != nil {
+		return nil, err
+	}
+	event.Raw = log
+	return event, nil
+}
+
+// BaseImageAllowlistMinimumSVNUpdatedIterator is returned from FilterMinimumSVNUpdated and is used to iterate over the raw logs and unpacked data for MinimumSVNUpdated events raised by the BaseImageAllowlist contract.
+type BaseImageAllowlistMinimumSVNUpdatedIterator struct {
+	Event *BaseImageAllowlistMinimumSVNUpdated // Event containing the contract specifics and raw log
+
+	contract *bind.BoundContract // Generic contract to use for unpacking event data
+	event    string              // Event name to use for unpacking event data
+
+	logs chan types.Log        // Log channel receiving the found contract events
+	sub  ethereum.Subscription // Subscription for errors, completion and termination
+	done bool                  // Whether the subscription completed delivering logs
+	fail error                 // Occurred error to stop iteration
+}
+
+// Next advances the iterator to the subsequent event, returning whether there
+// are any more events found. In case of a retrieval or parsing error, false is
+// returned and Error() can be queried for the exact failure.
+func (it *BaseImageAllowlistMinimumSVNUpdatedIterator) Next() bool {
+	// If the iterator failed, stop iterating
+	if it.fail != nil {
+		return false
+	}
+	// If the iterator completed, deliver directly whatever's available
+	if it.done {
+		select {
+		case log := <-it.logs:
+			it.Event = new(BaseImageAllowlistMinimumSVNUpdated)
+			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+				it.fail = err
+				return false
+			}
+			it.Event.Raw = log
+			return true
+
+		default:
+			return false
+		}
+	}
+	// Iterator still in progress, wait for either a data or an error event
+	select {
+	case log := <-it.logs:
+		it.Event = new(BaseImageAllowlistMinimumSVNUpdated)
+		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+			it.fail = err
+			return false
+		}
+		it.Event.Raw = log
+		return true
+
+	case err := <-it.sub.Err():
+		it.done = true
+		it.fail = err
+		return it.Next()
+	}
+}
+
+// Error returns any retrieval or parsing error occurred during filtering.
+func (it *BaseImageAllowlistMinimumSVNUpdatedIterator) Error() error {
+	return it.fail
+}
+
+// Close terminates the iteration process, releasing any pending underlying
+// resources.
+func (it *BaseImageAllowlistMinimumSVNUpdatedIterator) Close() error {
+	it.sub.Unsubscribe()
+	return nil
+}
+
+// BaseImageAllowlistMinimumSVNUpdated represents a MinimumSVNUpdated event raised by the BaseImageAllowlist contract.
+type BaseImageAllowlistMinimumSVNUpdated struct {
+	OldSVN uint32
+	NewSVN uint32
+	Raw    types.Log // Blockchain specific contextual infos
+}
+
+// FilterMinimumSVNUpdated is a free log retrieval operation binding the contract event 0x9071bbd128eef3facf8bf1ce7acdcb4ff10b9ce4b8b4612092d3c92779fab08d.
+//
+// Solidity: event MinimumSVNUpdated(uint32 oldSVN, uint32 newSVN)
+func (_BaseImageAllowlist *BaseImageAllowlistFilterer) FilterMinimumSVNUpdated(opts *bind.FilterOpts) (*BaseImageAllowlistMinimumSVNUpdatedIterator, error) {
+
+	logs, sub, err := _BaseImageAllowlist.contract.FilterLogs(opts, "MinimumSVNUpdated")
+	if err != nil {
+		return nil, err
+	}
+	return &BaseImageAllowlistMinimumSVNUpdatedIterator{contract: _BaseImageAllowlist.contract, event: "MinimumSVNUpdated", logs: logs, sub: sub}, nil
+}
+
+// WatchMinimumSVNUpdated is a free log subscription operation binding the contract event 0x9071bbd128eef3facf8bf1ce7acdcb4ff10b9ce4b8b4612092d3c92779fab08d.
+//
+// Solidity: event MinimumSVNUpdated(uint32 oldSVN, uint32 newSVN)
+func (_BaseImageAllowlist *BaseImageAllowlistFilterer) WatchMinimumSVNUpdated(opts *bind.WatchOpts, sink chan<- *BaseImageAllowlistMinimumSVNUpdated) (event.Subscription, error) {
+
+	logs, sub, err := _BaseImageAllowlist.contract.WatchLogs(opts, "MinimumSVNUpdated")
+	if err != nil {
+		return nil, err
+	}
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case log := <-logs:
+				// New log arrived, parse the event and forward to the user
+				event := new(BaseImageAllowlistMinimumSVNUpdated)
+				if err := _BaseImageAllowlist.contract.UnpackLog(event, "MinimumSVNUpdated", log); err != nil {
+					return err
+				}
+				event.Raw = log
+
+				select {
+				case sink <- event:
+				case err := <-sub.Err():
+					return err
+				case <-quit:
+					return nil
+				}
+			case err := <-sub.Err():
+				return err
+			case <-quit:
+				return nil
+			}
+		}
+	}), nil
+}
+
+// ParseMinimumSVNUpdated is a log parse operation binding the contract event 0x9071bbd128eef3facf8bf1ce7acdcb4ff10b9ce4b8b4612092d3c92779fab08d.
+//
+// Solidity: event MinimumSVNUpdated(uint32 oldSVN, uint32 newSVN)
+func (_BaseImageAllowlist *BaseImageAllowlistFilterer) ParseMinimumSVNUpdated(log types.Log) (*BaseImageAllowlistMinimumSVNUpdated, error) {
+	event := new(BaseImageAllowlistMinimumSVNUpdated)
+	if err := _BaseImageAllowlist.contract.UnpackLog(event, "MinimumSVNUpdated", log); err != nil {
+		return nil, err
+	}
+	event.Raw = log
+	return event, nil
+}
+
+// BaseImageAllowlistMinimumSupportLevelUpdatedIterator is returned from FilterMinimumSupportLevelUpdated and is used to iterate over the raw logs and unpacked data for MinimumSupportLevelUpdated events raised by the BaseImageAllowlist contract.
+type BaseImageAllowlistMinimumSupportLevelUpdatedIterator struct {
+	Event *BaseImageAllowlistMinimumSupportLevelUpdated // Event containing the contract specifics and raw log
+
+	contract *bind.BoundContract // Generic contract to use for unpacking event data
+	event    string              // Event name to use for unpacking event data
+
+	logs chan types.Log        // Log channel receiving the found contract events
+	sub  ethereum.Subscription // Subscription for errors, completion and termination
+	done bool                  // Whether the subscription completed delivering logs
+	fail error                 // Occurred error to stop iteration
+}
+
+// Next advances the iterator to the subsequent event, returning whether there
+// are any more events found. In case of a retrieval or parsing error, false is
+// returned and Error() can be queried for the exact failure.
+func (it *BaseImageAllowlistMinimumSupportLevelUpdatedIterator) Next() bool {
+	// If the iterator failed, stop iterating
+	if it.fail != nil {
+		return false
+	}
+	// If the iterator completed, deliver directly whatever's available
+	if it.done {
+		select {
+		case log := <-it.logs:
+			it.Event = new(BaseImageAllowlistMinimumSupportLevelUpdated)
+			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+				it.fail = err
+				return false
+			}
+			it.Event.Raw = log
+			return true
+
+		default:
+			return false
+		}
+	}
+	// Iterator still in progress, wait for either a data or an error event
+	select {
+	case log := <-it.logs:
+		it.Event = new(BaseImageAllowlistMinimumSupportLevelUpdated)
+		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+			it.fail = err
+			return false
+		}
+		it.Event.Raw = log
+		return true
+
+	case err := <-it.sub.Err():
+		it.done = true
+		it.fail = err
+		return it.Next()
+	}
+}
+
+// Error returns any retrieval or parsing error occurred during filtering.
+func (it *BaseImageAllowlistMinimumSupportLevelUpdatedIterator) Error() error {
+	return it.fail
+}
+
+// Close terminates the iteration process, releasing any pending underlying
+// resources.
+func (it *BaseImageAllowlistMinimumSupportLevelUpdatedIterator) Close() error {
+	it.sub.Unsubscribe()
+	return nil
+}
+
+// BaseImageAllowlistMinimumSupportLevelUpdated represents a MinimumSupportLevelUpdated event raised by the BaseImageAllowlist contract.
+type BaseImageAllowlistMinimumSupportLevelUpdated struct {
+	OldLevel uint8
+	NewLevel uint8
+	Raw      types.Log // Blockchain specific contextual infos
+}
+
+// FilterMinimumSupportLevelUpdated is a free log retrieval operation binding the contract event 0xbcab9955f1df90464d7e2668d7080aed00ea5b75a27894a8d51b348309ac37a0.
+//
+// Solidity: event MinimumSupportLevelUpdated(uint8 oldLevel, uint8 newLevel)
+func (_BaseImageAllowlist *BaseImageAllowlistFilterer) FilterMinimumSupportLevelUpdated(opts *bind.FilterOpts) (*BaseImageAllowlistMinimumSupportLevelUpdatedIterator, error) {
+
+	logs, sub, err := _BaseImageAllowlist.contract.FilterLogs(opts, "MinimumSupportLevelUpdated")
+	if err != nil {
+		return nil, err
+	}
+	return &BaseImageAllowlistMinimumSupportLevelUpdatedIterator{contract: _BaseImageAllowlist.contract, event: "MinimumSupportLevelUpdated", logs: logs, sub: sub}, nil
+}
+
+// WatchMinimumSupportLevelUpdated is a free log subscription operation binding the contract event 0xbcab9955f1df90464d7e2668d7080aed00ea5b75a27894a8d51b348309ac37a0.
+//
+// Solidity: event MinimumSupportLevelUpdated(uint8 oldLevel, uint8 newLevel)
+func (_BaseImageAllowlist *BaseImageAllowlistFilterer) WatchMinimumSupportLevelUpdated(opts *bind.WatchOpts, sink chan<- *BaseImageAllowlistMinimumSupportLevelUpdated) (event.Subscription, error) {
+
+	logs, sub, err := _BaseImageAllowlist.contract.WatchLogs(opts, "MinimumSupportLevelUpdated")
+	if err != nil {
+		return nil, err
+	}
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case log := <-logs:
+				// New log arrived, parse the event and forward to the user
+				event := new(BaseImageAllowlistMinimumSupportLevelUpdated)
+				if err := _BaseImageAllowlist.contract.UnpackLog(event, "MinimumSupportLevelUpdated", log); err != nil {
+					return err
+				}
+				event.Raw = log
+
+				select {
+				case sink <- event:
+				case err := <-sub.Err():
+					return err
+				case <-quit:
+					return nil
+				}
+			case err := <-sub.Err():
+				return err
+			case <-quit:
+				return nil
+			}
+		}
+	}), nil
+}
+
+// ParseMinimumSupportLevelUpdated is a log parse operation binding the contract event 0xbcab9955f1df90464d7e2668d7080aed00ea5b75a27894a8d51b348309ac37a0.
+//
+// Solidity: event MinimumSupportLevelUpdated(uint8 oldLevel, uint8 newLevel)
+func (_BaseImageAllowlist *BaseImageAllowlistFilterer) ParseMinimumSupportLevelUpdated(log types.Log) (*BaseImageAllowlistMinimumSupportLevelUpdated, error) {
+	event := new(BaseImageAllowlistMinimumSupportLevelUpdated)
+	if err := _BaseImageAllowlist.contract.UnpackLog(event, "MinimumSupportLevelUpdated", log); err != nil {
 		return nil, err
 	}
 	event.Raw = log

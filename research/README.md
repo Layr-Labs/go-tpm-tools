@@ -70,7 +70,7 @@ sequenceDiagram
     Note over K: Verify AK cert (Google CA)
     Note over K: Check measurements in allowlist
     
-    K->>B: isAllowed(mrtd, rtmr0, rtmr1)?
+    K->>B: isAllowed(mrtd, rtmr1)?
     B-->>K: true
     
     K-->>W: Return secrets
@@ -101,8 +101,11 @@ If you modify the source code to build your own custom image (different from the
 export PRIVATE_KEY="0x..."
 ./research/scripts/setup.sh deploy --rpc-url https://sepolia.infura.io/v3/YOUR_KEY
 
-# Add base image measurements
-./research/scripts/setup.sh add-image --mrtd 0x... --rtmr0 0x... --rtmr1 0x...
+# Sync endorsed MRTDs from Google's firmware bucket
+./research/scripts/setup.sh sync-mrtd
+
+# Add your custom image measurement
+./research/scripts/setup.sh add-image --rtmr1 0x... --level LATEST
 
 # Run the demo
 ./research/scripts/run.sh
