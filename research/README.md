@@ -38,7 +38,7 @@ Each TDX measurement register is validated differently:
 
 | Register | What it measures | Validation approach |
 |----------|------------------|---------------------|
-| **MRTD** | Firmware binary (before boot) | Sync Google's endorsed hashes to on-chain allowlist |
+| **MRTD** | Firmware binary (before boot) | Sync Google's endorsed hashes (new endorsements added every 2-4 weeks) to on-chain allowlist |
 | **RTMR0** | Firmware config (during boot) | Unstable; requires event log replay + policy (TBD) |
 | **RTMR1** | OS/kernel (our base image) | Stable; store on-chain with support level |
 | **RTMR2** | Container (args, env, image) | Replay CEL, extract claims, apply policy |
