@@ -139,15 +139,31 @@ func (s *Server) handleAttest(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Attestation verified successfully")
 
+	// Log platform info (SVN and TD attributes)
+	if claims.Platform != nil {
+		log.Printf("  TCB SVN: %x", claims.Platform.TeeTcbSvn)
+		log.Printf("  TD Attributes: Debug=%v, PerfMon=%v", claims.Platform.Attributes.Debug, claims.Platform.Attributes.PerfMon)
+	}
+
 	// WARNING: INSECURE CONFIGURATION
 	// This demo only logs the container and GCE claims for visibility.
 	// The real implementations MUST validate these claims as the existing KMS does.
 	log.Printf("  MRTD:  %x", claims.BaseImage.MRTD)
 	log.Printf("  RTMR0: %x", claims.BaseImage.RTMR0)
 	log.Printf("  RTMR1: %x", claims.BaseImage.RTMR1)
+	if claims.Firmware != nil {
+		log.Printf("  Firmware: SecureBoot=%v, Hardened=%v", claims.Firmware.SecureBootEnabled, claims.Firmware.Hardened)
+	}
 	log.Printf("  Container: %s", claims.Container.ImageDigest)
 	if claims.GCE != nil {
 		log.Printf("  GCE: %s/%s", claims.GCE.ProjectID, claims.GCE.InstanceName)
+	}
+
+	// Check RTMR0 policy: Secure Boot must be enabled
+	if claims.Firmware != nil && !claims.Firmware.SecureBootEnabled {
+		log.Printf("Secure Boot is not enabled - rejecting")
+		s.sendErrorWithClaims(w, "Secure Boot must be enabled", claims)
+		return
 	}
 
 	// Check if MRTD (firmware) is allowed on-chain

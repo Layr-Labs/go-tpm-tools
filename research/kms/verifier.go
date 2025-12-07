@@ -6,7 +6,9 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"fmt"
+	"strings"
 
+	"github.com/google/go-eventlog/ccel"
 	"github.com/google/go-eventlog/register"
 	"github.com/google/go-tdx-guest/abi"
 	pb "github.com/google/go-tdx-guest/proto/tdx"
@@ -17,10 +19,12 @@ import (
 
 // RawAttestationRequest is the JSON request body for attestation verification.
 type RawAttestationRequest struct {
-	TdQuote      []byte   `json:"td_quote"`
-	CEL          []byte   `json:"cel"`
-	AkCertChain  [][]byte `json:"ak_cert_chain"`
-	RSAPublicKey string   `json:"rsa_public_key"` // PEM-encoded ephemeral RSA public key for response encryption
+	TdQuote       []byte   `json:"td_quote"`
+	CEL           []byte   `json:"cel"`
+	CcelAcpiTable []byte   `json:"ccel_acpi_table"` // CCEL ACPI table from /sys/firmware/acpi/tables/CCEL
+	CcelData      []byte   `json:"ccel_data"`       // UEFI event log from /sys/firmware/acpi/tables/data/CCEL
+	AkCertChain   [][]byte `json:"ak_cert_chain"`
+	RSAPublicKey  string   `json:"rsa_public_key"` // PEM-encoded ephemeral RSA public key for response encryption
 }
 
 // BaseImageMeasurements contains the TDX measurements for the base image.
@@ -28,6 +32,21 @@ type BaseImageMeasurements struct {
 	MRTD  [48]byte `json:"mrtd"`
 	RTMR0 [48]byte `json:"rtmr0"`
 	RTMR1 [48]byte `json:"rtmr1"`
+}
+
+// TDAttributes contains TD security attributes from the quote.
+type TDAttributes struct {
+	Debug         bool `json:"debug"`           // TD is in debug mode
+	SeptVEDisable bool `json:"sept_ve_disable"` // #VE on pending page access disabled
+	PKS           bool `json:"pks"`             // Supervisor protection keys enabled
+	KL            bool `json:"kl"`              // Key locker enabled
+	PerfMon       bool `json:"perf_mon"`        // Perfmon/debugging features enabled
+}
+
+// TDXPlatformInfo contains TCB and platform information from the quote.
+type TDXPlatformInfo struct {
+	TeeTcbSvn  [16]byte     `json:"tee_tcb_svn"` // TEE TCB Security Version Numbers
+	Attributes TDAttributes `json:"attributes"`
 }
 
 // ContainerClaims contains verified container claims from the CEL.
@@ -49,9 +68,18 @@ type GCEInstanceInfo struct {
 	InstanceName  string `json:"instance_name"`
 }
 
+// FirmwareState contains verified firmware configuration from RTMR0 events.
+// This is extracted from the CCEL (CC Event Log) which contains UEFI measurements.
+type FirmwareState struct {
+	SecureBootEnabled bool `json:"secure_boot_enabled"`
+	Hardened          bool `json:"hardened"` // True if production (hardened) image, false if debug
+}
+
 // VerifiedAttestation contains all verified claims from the attestation.
 type VerifiedAttestation struct {
+	Platform  *TDXPlatformInfo       `json:"platform"`
 	BaseImage *BaseImageMeasurements `json:"base_image"`
+	Firmware  *FirmwareState         `json:"firmware,omitempty"`
 	Container *ContainerClaims       `json:"container"`
 	GCE       *GCEInstanceInfo       `json:"gce,omitempty"`
 }
@@ -98,7 +126,40 @@ func VerifyAttestation(req *RawAttestationRequest, expectedRSAKeyHash []byte) (*
 		fmt.Printf("Warning: quote validation issue: %v\n", err)
 	}
 
-	// Step 5: Extract base image measurements (MRTD, RTMR[0], RTMR[1])
+	// Step 5: Extract and validate TD attributes
+	tdAttrs := quote.GetTdQuoteBody().GetTdAttributes()
+	if len(tdAttrs) < 8 {
+		return nil, fmt.Errorf("invalid TD attributes length: %d", len(tdAttrs))
+	}
+
+	// Parse TD attributes - see Intel TDX Module spec section 3.2
+	// Byte 0, Bit 0 = DEBUG mode - TD is debuggable, secrets may be exposed
+	// Byte 0, Bit 28 = SEPT_VE_DISABLE - #VE on pending page access disabled
+	// Byte 0, Bit 30 = PKS - Protection keys for supervisor enabled
+	// Byte 0, Bit 31 = KL - Key locker enabled
+	// Byte 1, Bit 0 = PERFMON - Performance monitoring enabled
+	platformInfo := &TDXPlatformInfo{
+		Attributes: TDAttributes{
+			Debug:         tdAttrs[0]&0x01 != 0,
+			SeptVEDisable: tdAttrs[0]&0x10 != 0, // bit 28 in little-endian
+			PKS:           tdAttrs[0]&0x40 != 0, // bit 30
+			KL:            tdAttrs[0]&0x80 != 0, // bit 31
+			PerfMon:       tdAttrs[1]&0x01 != 0, // bit 32 (byte 1, bit 0)
+		},
+	}
+
+	// Reject TDs in debug mode - secrets could be extracted
+	if platformInfo.Attributes.Debug {
+		return nil, fmt.Errorf("TD is in DEBUG mode - rejecting attestation (secrets could be extracted)")
+	}
+
+	// Extract TEE TCB SVN (Security Version Numbers)
+	teeTcbSvn := quote.GetTdQuoteBody().GetTeeTcbSvn()
+	if len(teeTcbSvn) >= 16 {
+		copy(platformInfo.TeeTcbSvn[:], teeTcbSvn[:16])
+	}
+
+	// Step 6: Extract base image measurements (MRTD, RTMR[0], RTMR[1])
 	mrtd := quote.GetTdQuoteBody().GetMrTd()
 	rtmrs := quote.GetTdQuoteBody().GetRtmrs()
 	if len(rtmrs) < 4 {
@@ -110,7 +171,7 @@ func VerifyAttestation(req *RawAttestationRequest, expectedRSAKeyHash []byte) (*
 	copy(baseImage.RTMR0[:], rtmrs[0])
 	copy(baseImage.RTMR1[:], rtmrs[1])
 
-	// Step 6: Verify AK certificate binding and extract GCE instance info
+	// Step 7: Verify AK certificate binding and extract GCE instance info
 	if len(req.AkCertChain) == 0 {
 		return nil, fmt.Errorf("AK certificate chain required")
 	}
@@ -161,7 +222,7 @@ func VerifyAttestation(req *RawAttestationRequest, expectedRSAKeyHash []byte) (*
 		}
 	}
 
-	// Step 7: Replay CEL against RTMR[2] to extract container claims
+	// Step 8: Build RTMR bank for event log replay
 	rtmrBank := register.RTMRBank{
 		RTMRs: make([]register.RTMR, len(rtmrs)),
 	}
@@ -171,6 +232,15 @@ func VerifyAttestation(req *RawAttestationRequest, expectedRSAKeyHash []byte) (*
 			Digest: rtmr,
 		}
 	}
+
+	// Step 9: Parse CCEL (UEFI event log) to extract firmware state
+	// Uses go-eventlog/ccel which supports TDX's SHA384 digests
+	var firmwareState *FirmwareState
+	if len(req.CcelData) > 0 {
+		firmwareState = parseFirmwareState(req.CcelAcpiTable, req.CcelData, rtmrBank)
+	}
+
+	// Step 10: Replay CEL against RTMR[2] to extract container claims
 
 	cosState, err := server.ParseCosCELRTMR(req.CEL, rtmrBank)
 	if err != nil {
@@ -187,8 +257,42 @@ func VerifyAttestation(req *RawAttestationRequest, expectedRSAKeyHash []byte) (*
 	}
 
 	return &VerifiedAttestation{
+		Platform:  platformInfo,
 		BaseImage: baseImage,
+		Firmware:  firmwareState,
 		Container: container,
 		GCE:       gceInfo,
 	}, nil
+}
+
+// parseFirmwareState extracts firmware configuration from CCEL event log.
+// Uses go-eventlog/ccel which supports TDX's SHA384 digests.
+func parseFirmwareState(ccelAcpiTable, ccelData []byte, rtmrBank register.RTMRBank) *FirmwareState {
+	if len(ccelData) == 0 {
+		return nil
+	}
+
+	// Parse and replay CCEL against RTMRs using go-eventlog/ccel
+	opts := ccel.ExtractOpts{}
+	fwState, err := ccel.ExtractFirmwareLogState(ccelAcpiTable, ccelData, rtmrBank, opts)
+	if err != nil {
+		fmt.Printf("Warning: failed to parse CCEL event log: %v\n", err)
+		return nil
+	}
+
+	state := &FirmwareState{}
+
+	// Extract Secure Boot state
+	if sb := fwState.GetSecureBoot(); sb != nil {
+		state.SecureBootEnabled = sb.GetEnabled()
+	}
+
+	// Extract hardened flag from kernel command line
+	// Confidential Space sets "confidential-space.hardened=true" for production images
+	if linuxKernel := fwState.GetLinuxKernel(); linuxKernel != nil {
+		cmdline := linuxKernel.GetCommandLine()
+		state.Hardened = strings.Contains(cmdline, "confidential-space.hardened=true")
+	}
+
+	return state
 }

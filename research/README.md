@@ -25,23 +25,26 @@ The proposed architecture consists of three parts:
 2.  **Self-Managed Allowlist:** We maintain a smart contract of valid measurements for these images.
 3.  **Direct Verification:** The KMS (Relying Party) verifies the workload directly using **Raw TDX Attestation**.
 
-Instead of requesting a signed JWT from Google, the code running in the user workload queries a `/v1/raw-attestation` endpoint to retrieve the raw TDX quote (hardware proof), Canonical Event Log (container measurements), and AK certificates (platform identity). The workload then sends this evidence to the KMS, which performs verification before releasing any secrets:
+Instead of requesting a signed JWT from Google, the code running in the user workload queries a `/v1/raw-attestation` endpoint to retrieve the raw TDX quote (hardware proof), Canonical Event Log (container measurements), CCEL (firmware event log), and AK certificates (platform identity). The workload then sends this evidence to the KMS, which performs verification before releasing any secrets:
 
-1. Verify the TDX quote against Intel's root CA.
-2. Verify the AK certificate against Google's GCE EK root CA.
-3. Replay the CEL to extract container measurements.
-4. Validate these measurements against our allowlist.
+1. Verify TDX quote signature against Intel CA.
+2. Verify ReportData bindings (RSA key hash, AK public key hash).
+3. Verify AK certificate chain against Google GCE EK root CA.
+4. Replay event logs to extract platform state and container claims.
+5. Verify platform meets security requirements (production mode, Secure Boot, etc.).
+6. Verify firmware (MRTD) and OS image (RTMR1) against on-chain allowlist.
+7. Verify GCE project against policy and container digest against on-chain release registry.
 
 ### Measurement Validation
 
 Each TDX measurement register is validated differently:
 
-| Register | What it measures | Validation approach |
-|----------|------------------|---------------------|
-| **MRTD** | Firmware binary (before boot) | Sync Google's endorsed hashes (new endorsements added every 2-4 weeks) to on-chain allowlist |
-| **RTMR0** | Firmware config (during boot) | Unstable; requires event log replay + policy (TBD) |
-| **RTMR1** | OS/kernel (our base image) | Stable; store on-chain with support level |
-| **RTMR2** | Container (args, env, image) | Replay CEL, extract claims, apply policy |
+| Register | What it measures | Validation |
+|----------|------------------|------------|
+| **MRTD** | Firmware binary (before boot) | On-chain allowlist (sync from Google's endorsed hashes every 2-4 weeks) |
+| **RTMR0** | Firmware config (during boot) | Replay CCEL → verify firmware config |
+| **RTMR1** | OS/kernel (our base image) | On-chain allowlist with support level |
+| **RTMR2** | Container (args, env, image) | Replay CEL → validate against on-chain release |
 
 ### Parity with Managed Attestation
 
@@ -74,17 +77,17 @@ sequenceDiagram
     participant B as Blockchain
 
     W->>L: Request raw attestation
-    L-->>W: Raw quote + CEL
-    W->>K: Post attestation
-    
-    Note over K: Verify TDX quote (Intel CA)
-    Note over K: Verify AK cert (Google CA)
-    Note over K: Check measurements in allowlist
-    
-    K->>B: isAllowed(mrtd, rtmr1)?
-    B-->>K: true
-    
-    K-->>W: Return secrets
+    L-->>W: Quote + event logs + AK cert
+    W->>K: Post attestation + RSA pubkey
+
+    Note over K: Verify signatures & bindings
+    Note over K: Replay event logs → extract claims
+    Note over K: Verify platform security requirements
+
+    K->>B: Check MRTD, RTMR1, container digest
+    B-->>K: allowed
+
+    K-->>W: Return encrypted secret
 ```
 
 ### Running the Demo

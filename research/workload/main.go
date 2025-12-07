@@ -26,10 +26,12 @@ const (
 
 // AttestRequest sent to KMS /v1/attest
 type AttestRequest struct {
-	TdQuote      []byte   `json:"td_quote"`
-	CEL          []byte   `json:"cel"`
-	AkCertChain  [][]byte `json:"ak_cert_chain"`
-	RSAPublicKey string   `json:"rsa_public_key"` // PEM-encoded RSA public key
+	TdQuote       []byte   `json:"td_quote"`
+	CEL           []byte   `json:"cel"`
+	CcelAcpiTable []byte   `json:"ccel_acpi_table"` // CCEL ACPI table for RTMR0 parsing
+	CcelData      []byte   `json:"ccel_data"`       // UEFI event log for RTMR0 policy
+	AkCertChain   [][]byte `json:"ak_cert_chain"`
+	RSAPublicKey  string   `json:"rsa_public_key"` // PEM-encoded RSA public key
 }
 
 // AttestResponse from KMS /v1/attest
@@ -157,9 +159,11 @@ func waitForSocket(path string) error {
 
 // RawAttestationResponse from the TEE server /v1/raw-attestation endpoint
 type RawAttestationResponse struct {
-	TdQuote     []byte   `json:"td_quote"`
-	CEL         []byte   `json:"cel"`
-	AkCertChain [][]byte `json:"ak_cert_chain"`
+	TdQuote       []byte   `json:"td_quote"`
+	CEL           []byte   `json:"cel"`
+	CcelAcpiTable []byte   `json:"ccel_acpi_table"` // CCEL ACPI table
+	CcelData      []byte   `json:"ccel_data"`       // UEFI event log
+	AkCertChain   [][]byte `json:"ak_cert_chain"`
 }
 
 func getAttestation(client *http.Client, rsaPubKeyPEM []byte) (*RawAttestationResponse, error) {
@@ -184,10 +188,12 @@ func getAttestation(client *http.Client, rsaPubKeyPEM []byte) (*RawAttestationRe
 
 func sendAttestation(client *http.Client, kmsURL string, attestation *RawAttestationResponse, rsaPubKeyPEM string) (*AttestResponse, error) {
 	req := AttestRequest{
-		TdQuote:      attestation.TdQuote,
-		CEL:          attestation.CEL,
-		AkCertChain:  attestation.AkCertChain,
-		RSAPublicKey: rsaPubKeyPEM,
+		TdQuote:       attestation.TdQuote,
+		CEL:           attestation.CEL,
+		CcelAcpiTable: attestation.CcelAcpiTable,
+		CcelData:      attestation.CcelData,
+		AkCertChain:   attestation.AkCertChain,
+		RSAPublicKey:  rsaPubKeyPEM,
 	}
 
 	reqBody, err := json.Marshal(req)
