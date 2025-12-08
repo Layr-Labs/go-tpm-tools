@@ -106,6 +106,9 @@ Use the pre-built custom image `confidential-space-debug-cavan-test-image-176478
 # Setup configuration
 cp research/config.env.example research/config.env
 
+# Edit config.env to set DOCKER_REPO to a Docker repository you control
+# (e.g., docker.io/yourusername)
+
 # Run the demo
 ./research/scripts/run.sh
 ```
