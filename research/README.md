@@ -23,7 +23,7 @@ The proposed architecture consists of three parts:
 
 1.  **Custom Base Images:** We customize the Confidential Space stack - modifying both the Launcher and the underlying Container-Optimized OS (COS) - while continuing to pull in upstream security patches and updates.
 2.  **Self-Managed Allowlist:** We maintain a smart contract of valid measurements for these images.
-3.  **Direct Verification:** The KMS (Relying Party) verifies the workload directly using **Raw TDX Attestation**.
+3.  **Direct Verification:** The KMS (Relying Party) verifies the workload directly using **Raw TDX Attestation**. The verification logic should be published as open-source libraries (Go initially) that any relying party can consume.
 
 Instead of requesting a signed JWT from Google, the code running in the user workload queries a `/v1/raw-attestation` endpoint to retrieve the raw TDX quote (hardware proof), Canonical Event Log (container measurements), CCEL (firmware event log), and AK certificates (platform identity). The workload then sends this evidence to the KMS, which performs verification before releasing any secrets:
 
@@ -55,6 +55,10 @@ By verifying the raw attestation evidence directly, we rely on the same cryptogr
 - **Binding:** The AK public key is cryptographically bound to the TDX quote (via ReportData), ensuring the GCE claims and the Container claims (reconstructed from the Event Log) belong to the same physical entity.
 
 This allows the Relying Party to validate the same hardware, platform, and workload identity signals required for policy enforcement.
+
+### Runtime Attestations
+
+Since we verify raw quotes directly rather than relying on hosted attestation services, we are no longer bound by Google or Intel Trust Authority rate limits. This enables runtime attestations - verifying quotes on-demand during operation, not just at startup.
 
 ## Responsibility Shift
 
@@ -136,3 +140,7 @@ These files are a rough demonstration to illustrate the architecture:
 ### Building Custom Images
 
 We can modify the Launcher code directly. For deeper OS-level customizations, we use Google's [COS Customizer](https://cos.googlesource.com/cos/tools). This tool simplifies tasks like installing GPU drivers, sealing the OEM partition (`dm-verity`), and disabling auto-updates to ensure measurement stability.
+
+## Future: SEV-SNP Support
+
+This approach could be extended to support AMD SEV-SNP for smaller machine types. However, this would require more work than switching platforms while using the out-of-the-box Confidential Space image.
