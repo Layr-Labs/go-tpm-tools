@@ -1,13 +1,10 @@
 #!/bin/bash
-# One-time setup: Deploy contract to Sepolia and populate allowlists
+# One-time setup: Deploy contract to Sepolia and manage custom image allowlist
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RESEARCH_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG_FILE="$RESEARCH_DIR/config.env"
-
-# Google's firmware endorsement bucket
-GCE_TCB_BUCKET="gs://gce_tcb_integrity/ovmf_x64_csm/tdx"
 
 # Colors
 RED='\033[0;31m'
@@ -25,48 +22,45 @@ Usage: $0 <command> [options]
 
 Commands:
   deploy              Deploy BaseImageAllowlist contract to Sepolia
-  sync-mrtd           Sync MRTD allowlist from Google's firmware endorsement bucket
-  add-mrtd            Add a single MRTD to the allowlist
-  remove-mrtd         Remove a single MRTD from the allowlist
-  batch-add-mrtd      Add multiple MRTDs from a file (one per line)
-  batch-remove-mrtd   Remove multiple MRTDs from a file (one per line)
   add-image           Add RTMR1 (custom image) with support level
+  remove-image        Remove a custom image from the allowlist
   set-min-support     Set minimum support level requirement
+  set-min-svn         Set minimum SVN requirement
   show                Show current config and contract state
+
+Note: MRTD (firmware) validation is now handled automatically by verifying
+Google's signed endorsements from gs://gce_tcb_integrity/ovmf_x64_csm/tdx/
+No manual MRTD management is required.
 
 Options for 'deploy':
   --rpc-url URL       Sepolia RPC URL (default: from config or env)
   --private-key KEY   Private key for deployment (default: from config or env)
 
-Options for 'sync-mrtd':
-  --limit N           Limit number of MRTDs to sync (default: all)
-  --batch-size N      Number of MRTDs per transaction (default: 50)
-
-Options for 'add-mrtd' / 'remove-mrtd':
-  --mrtd HASH         MRTD measurement (48 bytes hex)
-
-Options for 'batch-add-mrtd' / 'batch-remove-mrtd':
-  --file FILE         File containing MRTD hashes (one per line, hex format)
-
 Options for 'add-image':
   --rtmr1 HASH        RTMR[1] measurement (48 bytes hex)
   --level LEVEL       Support level: EXPERIMENTAL, USABLE, STABLE, LATEST (default: LATEST)
 
+Options for 'remove-image':
+  --rtmr1 HASH        RTMR[1] measurement (48 bytes hex)
+
 Options for 'set-min-support':
   --level LEVEL       Minimum support level: EXPERIMENTAL, USABLE, STABLE, LATEST
+
+Options for 'set-min-svn':
+  --svn NUMBER        Minimum SVN (Security Version Number)
 
 Examples:
   # Deploy contract
   $0 deploy --rpc-url https://sepolia.infura.io/v3/YOUR_KEY --private-key 0x...
-
-  # Sync all endorsed MRTDs from Google's bucket
-  $0 sync-mrtd
 
   # Add a custom image as LATEST
   $0 add-image --rtmr1 0x7bf10daf... --level LATEST
 
   # Set minimum support level to STABLE
   $0 set-min-support --level STABLE
+
+  # Set minimum SVN to reject old firmware
+  $0 set-min-svn --svn 3
 
   # Show current state
   $0 show
@@ -173,314 +167,12 @@ deploy_contract() {
 
     echo ""
     log "Next steps:"
-    log "1. Sync endorsed MRTDs from Google: $0 sync-mrtd"
-    log "2. Add your custom image: $0 add-image --rtmr1 0x... --level LATEST"
-    log "3. (Optional) Set minimum support level: $0 set-min-support --level STABLE"
-}
-
-sync_mrtd() {
-    local limit=""
-    local batch_size=50
-
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --limit) limit="$2"; shift 2 ;;
-            --batch-size) batch_size="$2"; shift 2 ;;
-            *) error "Unknown option: $1" ;;
-        esac
-    done
-
-    [ -n "$CONTRACT_ADDR" ] || error "CONTRACT_ADDR not set. Run 'deploy' first."
-    [ -n "$SEPOLIA_RPC_URL" ] || error "SEPOLIA_RPC_URL not set."
-    [ -n "$PRIVATE_KEY" ] || error "PRIVATE_KEY not set."
-
-    log "Fetching endorsed MRTDs from Google's firmware bucket..."
-    log "Bucket: $GCE_TCB_BUCKET"
-
-    # List all endorsement files (filenames are MRTD hashes)
-    MRTD_LIST=$(gsutil ls "$GCE_TCB_BUCKET/*.binarypb" 2>/dev/null | sed 's|.*/||' | sed 's|\.binarypb$||')
-
-    if [ -z "$MRTD_LIST" ]; then
-        error "No endorsements found in bucket. Make sure gsutil is configured."
-    fi
-
-    TOTAL=$(echo "$MRTD_LIST" | wc -l | tr -d ' ')
-    log "Found $TOTAL endorsed MRTDs"
-
-    if [ -n "$limit" ]; then
-        MRTD_LIST=$(echo "$MRTD_LIST" | head -n "$limit")
-        log "Limiting to first $limit"
-    fi
-
-    # Filter out already-added MRTDs
-    log "Checking which MRTDs need to be added..."
-    TO_ADD=()
-    SKIPPED=0
-
-    for mrtd in $MRTD_LIST; do
-        mrtd_hex="0x$mrtd"
-        ALLOWED=$(cast call "$CONTRACT_ADDR" "isMRTDAllowed(bytes)(bool)" "$mrtd_hex" --rpc-url "$SEPOLIA_RPC_URL" 2>/dev/null || echo "false")
-
-        if [ "$ALLOWED" = "true" ]; then
-            SKIPPED=$((SKIPPED + 1))
-        else
-            TO_ADD+=("$mrtd_hex")
-        fi
-    done
-
-    log "Skipping $SKIPPED already present, ${#TO_ADD[@]} to add"
-
-    if [ ${#TO_ADD[@]} -eq 0 ]; then
-        log "Nothing to add, all MRTDs already present"
-        return
-    fi
-
-    # Batch add in chunks
-    ADDED=0
-    for ((i=0; i<${#TO_ADD[@]}; i+=batch_size)); do
-        BATCH=("${TO_ADD[@]:i:batch_size}")
-        BATCH_NUM=$((i / batch_size + 1))
-        TOTAL_BATCHES=$(( (${#TO_ADD[@]} + batch_size - 1) / batch_size ))
-
-        log "Batch $BATCH_NUM/$TOTAL_BATCHES: Adding ${#BATCH[@]} MRTDs..."
-
-        # Build the array argument for cast
-        ARRAY_ARG="["
-        for ((j=0; j<${#BATCH[@]}; j++)); do
-            [ $j -gt 0 ] && ARRAY_ARG+=","
-            ARRAY_ARG+="${BATCH[j]}"
-        done
-        ARRAY_ARG+="]"
-
-        cast send "$CONTRACT_ADDR" \
-            "batchAddMRTD(bytes[])" \
-            "$ARRAY_ARG" \
-            --rpc-url "$SEPOLIA_RPC_URL" \
-            --private-key "$PRIVATE_KEY" \
-            --quiet
-
-        ADDED=$((ADDED + ${#BATCH[@]}))
-    done
-
-    log "Sync complete: $ADDED added, $SKIPPED already present"
-}
-
-add_mrtd() {
-    local mrtd=""
-
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --mrtd) mrtd="$2"; shift 2 ;;
-            *) error "Unknown option: $1" ;;
-        esac
-    done
-
-    [ -n "$mrtd" ] || error "Missing --mrtd"
-    [ -n "$CONTRACT_ADDR" ] || error "CONTRACT_ADDR not set. Run 'deploy' first."
-    [ -n "$SEPOLIA_RPC_URL" ] || error "SEPOLIA_RPC_URL not set."
-    [ -n "$PRIVATE_KEY" ] || error "PRIVATE_KEY not set."
-
-    # Normalize hex (ensure 0x prefix)
-    mrtd_hex="0x$(echo "$mrtd" | sed 's/^0x//')"
-
-    log "Adding MRTD to allowlist..."
-    log "  MRTD: $mrtd_hex"
-    log "  Contract: $CONTRACT_ADDR"
-
-    cast send "$CONTRACT_ADDR" \
-        "addMRTD(bytes)" \
-        "$mrtd_hex" \
-        --rpc-url "$SEPOLIA_RPC_URL" \
-        --private-key "$PRIVATE_KEY"
-
-    log "MRTD added to allowlist!"
-
-    # Verify
-    log "Verifying..."
-    ALLOWED=$(cast call "$CONTRACT_ADDR" \
-        "isMRTDAllowed(bytes)(bool)" \
-        "$mrtd_hex" \
-        --rpc-url "$SEPOLIA_RPC_URL")
-
-    if [ "$ALLOWED" = "true" ]; then
-        log "Verification passed - MRTD is in allowlist"
-    else
-        error "Verification failed - MRTD not in allowlist"
-    fi
-}
-
-remove_mrtd() {
-    local mrtd=""
-
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --mrtd) mrtd="$2"; shift 2 ;;
-            *) error "Unknown option: $1" ;;
-        esac
-    done
-
-    [ -n "$mrtd" ] || error "Missing --mrtd"
-    [ -n "$CONTRACT_ADDR" ] || error "CONTRACT_ADDR not set. Run 'deploy' first."
-    [ -n "$SEPOLIA_RPC_URL" ] || error "SEPOLIA_RPC_URL not set."
-    [ -n "$PRIVATE_KEY" ] || error "PRIVATE_KEY not set."
-
-    # Normalize hex (ensure 0x prefix)
-    mrtd_hex="0x$(echo "$mrtd" | sed 's/^0x//')"
-
-    log "Removing MRTD from allowlist..."
-    log "  MRTD: $mrtd_hex"
-    log "  Contract: $CONTRACT_ADDR"
-
-    cast send "$CONTRACT_ADDR" \
-        "removeMRTD(bytes)" \
-        "$mrtd_hex" \
-        --rpc-url "$SEPOLIA_RPC_URL" \
-        --private-key "$PRIVATE_KEY"
-
-    log "MRTD removed from allowlist!"
-
-    # Verify
-    log "Verifying..."
-    ALLOWED=$(cast call "$CONTRACT_ADDR" \
-        "isMRTDAllowed(bytes)(bool)" \
-        "$mrtd_hex" \
-        --rpc-url "$SEPOLIA_RPC_URL")
-
-    if [ "$ALLOWED" = "false" ]; then
-        log "Verification passed - MRTD is no longer in allowlist"
-    else
-        error "Verification failed - MRTD still in allowlist"
-    fi
-}
-
-batch_add_mrtd() {
-    local file=""
-    local batch_size=50
-
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --file) file="$2"; shift 2 ;;
-            --batch-size) batch_size="$2"; shift 2 ;;
-            *) error "Unknown option: $1" ;;
-        esac
-    done
-
-    [ -n "$file" ] || error "Missing --file"
-    [ -f "$file" ] || error "File not found: $file"
-    [ -n "$CONTRACT_ADDR" ] || error "CONTRACT_ADDR not set. Run 'deploy' first."
-    [ -n "$SEPOLIA_RPC_URL" ] || error "SEPOLIA_RPC_URL not set."
-    [ -n "$PRIVATE_KEY" ] || error "PRIVATE_KEY not set."
-
-    log "Batch adding MRTDs from file: $file"
-
-    # Read file into array, skipping empty lines and comments
-    TO_ADD=()
-    while IFS= read -r line || [ -n "$line" ]; do
-        [[ -z "$line" || "$line" =~ ^# ]] && continue
-        mrtd_hex="0x$(echo "$line" | sed 's/^0x//')"
-        TO_ADD+=("$mrtd_hex")
-    done < "$file"
-
-    log "Found ${#TO_ADD[@]} MRTDs in file"
-
-    if [ ${#TO_ADD[@]} -eq 0 ]; then
-        log "Nothing to add"
-        return
-    fi
-
-    # Batch add in chunks
-    ADDED=0
-    for ((i=0; i<${#TO_ADD[@]}; i+=batch_size)); do
-        BATCH=("${TO_ADD[@]:i:batch_size}")
-        BATCH_NUM=$((i / batch_size + 1))
-        TOTAL_BATCHES=$(( (${#TO_ADD[@]} + batch_size - 1) / batch_size ))
-
-        log "Batch $BATCH_NUM/$TOTAL_BATCHES: Adding ${#BATCH[@]} MRTDs..."
-
-        # Build the array argument for cast
-        ARRAY_ARG="["
-        for ((j=0; j<${#BATCH[@]}; j++)); do
-            [ $j -gt 0 ] && ARRAY_ARG+=","
-            ARRAY_ARG+="${BATCH[j]}"
-        done
-        ARRAY_ARG+="]"
-
-        cast send "$CONTRACT_ADDR" \
-            "batchAddMRTD(bytes[])" \
-            "$ARRAY_ARG" \
-            --rpc-url "$SEPOLIA_RPC_URL" \
-            --private-key "$PRIVATE_KEY" \
-            --quiet
-
-        ADDED=$((ADDED + ${#BATCH[@]}))
-    done
-
-    log "Batch add complete: $ADDED MRTDs added"
-}
-
-batch_remove_mrtd() {
-    local file=""
-    local batch_size=50
-
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --file) file="$2"; shift 2 ;;
-            --batch-size) batch_size="$2"; shift 2 ;;
-            *) error "Unknown option: $1" ;;
-        esac
-    done
-
-    [ -n "$file" ] || error "Missing --file"
-    [ -f "$file" ] || error "File not found: $file"
-    [ -n "$CONTRACT_ADDR" ] || error "CONTRACT_ADDR not set. Run 'deploy' first."
-    [ -n "$SEPOLIA_RPC_URL" ] || error "SEPOLIA_RPC_URL not set."
-    [ -n "$PRIVATE_KEY" ] || error "PRIVATE_KEY not set."
-
-    log "Batch removing MRTDs from file: $file"
-
-    # Read file into array, skipping empty lines and comments
-    TO_REMOVE=()
-    while IFS= read -r line || [ -n "$line" ]; do
-        [[ -z "$line" || "$line" =~ ^# ]] && continue
-        mrtd_hex="0x$(echo "$line" | sed 's/^0x//')"
-        TO_REMOVE+=("$mrtd_hex")
-    done < "$file"
-
-    log "Found ${#TO_REMOVE[@]} MRTDs in file"
-
-    if [ ${#TO_REMOVE[@]} -eq 0 ]; then
-        log "Nothing to remove"
-        return
-    fi
-
-    # Batch remove in chunks
-    REMOVED=0
-    for ((i=0; i<${#TO_REMOVE[@]}; i+=batch_size)); do
-        BATCH=("${TO_REMOVE[@]:i:batch_size}")
-        BATCH_NUM=$((i / batch_size + 1))
-        TOTAL_BATCHES=$(( (${#TO_REMOVE[@]} + batch_size - 1) / batch_size ))
-
-        log "Batch $BATCH_NUM/$TOTAL_BATCHES: Removing ${#BATCH[@]} MRTDs..."
-
-        # Build the array argument for cast
-        ARRAY_ARG="["
-        for ((j=0; j<${#BATCH[@]}; j++)); do
-            [ $j -gt 0 ] && ARRAY_ARG+=","
-            ARRAY_ARG+="${BATCH[j]}"
-        done
-        ARRAY_ARG+="]"
-
-        cast send "$CONTRACT_ADDR" \
-            "batchRemoveMRTD(bytes[])" \
-            "$ARRAY_ARG" \
-            --rpc-url "$SEPOLIA_RPC_URL" \
-            --private-key "$PRIVATE_KEY" \
-            --quiet
-
-        REMOVED=$((REMOVED + ${#BATCH[@]}))
-    done
-
-    log "Batch remove complete: $REMOVED MRTDs removed"
+    log "1. Add your custom image: $0 add-image --rtmr1 0x... --level LATEST"
+    log "2. (Optional) Set minimum support level: $0 set-min-support --level STABLE"
+    log "3. (Optional) Set minimum SVN: $0 set-min-svn --svn 3"
+    log ""
+    log "Note: MRTD (firmware) validation is automatic - the KMS verifies"
+    log "Google's signed endorsements from the TCB bucket at runtime."
 }
 
 add_image() {
@@ -533,6 +225,37 @@ add_image() {
     fi
 }
 
+remove_image() {
+    local rtmr1=""
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --rtmr1) rtmr1="$2"; shift 2 ;;
+            *) error "Unknown option: $1" ;;
+        esac
+    done
+
+    [ -n "$rtmr1" ] || error "Missing --rtmr1"
+    [ -n "$CONTRACT_ADDR" ] || error "CONTRACT_ADDR not set. Run 'deploy' first."
+    [ -n "$SEPOLIA_RPC_URL" ] || error "SEPOLIA_RPC_URL not set."
+    [ -n "$PRIVATE_KEY" ] || error "PRIVATE_KEY not set."
+
+    # Normalize hex (ensure 0x prefix)
+    rtmr1_hex="0x$(echo "$rtmr1" | sed 's/^0x//')"
+
+    log "Removing custom image from allowlist..."
+    log "  RTMR1: $rtmr1_hex"
+    log "  Contract: $CONTRACT_ADDR"
+
+    cast send "$CONTRACT_ADDR" \
+        "removeImage(bytes)" \
+        "$rtmr1_hex" \
+        --rpc-url "$SEPOLIA_RPC_URL" \
+        --private-key "$PRIVATE_KEY"
+
+    log "Custom image removed from allowlist!"
+}
+
 set_min_support() {
     local level=""
 
@@ -564,6 +287,34 @@ set_min_support() {
     log "Minimum support level set to $level!"
 }
 
+set_min_svn() {
+    local svn=""
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --svn) svn="$2"; shift 2 ;;
+            *) error "Unknown option: $1" ;;
+        esac
+    done
+
+    [ -n "$svn" ] || error "Missing --svn"
+    [ -n "$CONTRACT_ADDR" ] || error "CONTRACT_ADDR not set. Run 'deploy' first."
+    [ -n "$SEPOLIA_RPC_URL" ] || error "SEPOLIA_RPC_URL not set."
+    [ -n "$PRIVATE_KEY" ] || error "PRIVATE_KEY not set."
+
+    log "Setting minimum SVN..."
+    log "  SVN: $svn"
+    log "  Contract: $CONTRACT_ADDR"
+
+    cast send "$CONTRACT_ADDR" \
+        "setMinimumSVN(uint32)" \
+        "$svn" \
+        --rpc-url "$SEPOLIA_RPC_URL" \
+        --private-key "$PRIVATE_KEY"
+
+    log "Minimum SVN set to $svn!"
+}
+
 show_config() {
     log "Current configuration:"
     echo ""
@@ -592,8 +343,11 @@ show_config() {
         fi
 
         echo ""
+        log "MRTD (firmware) validation:"
+        echo "  Verified automatically against Google's signed endorsements"
+        echo "  Bucket: gs://gce_tcb_integrity/ovmf_x64_csm/tdx/"
+        echo ""
         log "To check specific measurements:"
-        echo "  cast call $CONTRACT_ADDR 'isMRTDAllowed(bytes)(bool)' 0x<mrtd> --rpc-url \$SEPOLIA_RPC_URL"
         echo "  cast call $CONTRACT_ADDR 'getImageSupport(bytes)(uint8)' 0x<rtmr1> --rpc-url \$SEPOLIA_RPC_URL"
     fi
 }
@@ -613,33 +367,21 @@ case "${1:-}" in
         done
         deploy_contract
         ;;
-    sync-mrtd)
-        shift
-        sync_mrtd "$@"
-        ;;
-    add-mrtd)
-        shift
-        add_mrtd "$@"
-        ;;
-    remove-mrtd)
-        shift
-        remove_mrtd "$@"
-        ;;
-    batch-add-mrtd)
-        shift
-        batch_add_mrtd "$@"
-        ;;
-    batch-remove-mrtd)
-        shift
-        batch_remove_mrtd "$@"
-        ;;
     add-image)
         shift
         add_image "$@"
         ;;
+    remove-image)
+        shift
+        remove_image "$@"
+        ;;
     set-min-support)
         shift
         set_min_support "$@"
+        ;;
+    set-min-svn)
+        shift
+        set_min_svn "$@"
         ;;
     show)
         show_config

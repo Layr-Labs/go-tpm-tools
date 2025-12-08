@@ -29,9 +29,10 @@ type Config struct {
 
 // Server is the KMS HTTP server.
 type Server struct {
-	config   Config
-	client   *ethclient.Client
-	contract *BaseImageAllowlist
+	config           Config
+	client           *ethclient.Client
+	contract         *BaseImageAllowlist
+	firmwareVerifier *FirmwareVerifier
 }
 
 // AttestResponse is returned by POST /v1/attest.
@@ -66,10 +67,19 @@ func main() {
 		log.Fatalf("Failed to load contract: %v", err)
 	}
 
+	// Initialize firmware verifier for MRTD validation against Google's TCB bucket
+	ctx := context.Background()
+	firmwareVerifier, err := NewFirmwareVerifier(ctx)
+	if err != nil {
+		log.Fatalf("Failed to initialize firmware verifier: %v", err)
+	}
+	defer firmwareVerifier.Close()
+
 	server := &Server{
-		config:   config,
-		client:   client,
-		contract: contract,
+		config:           config,
+		client:           client,
+		contract:         contract,
+		firmwareVerifier: firmwareVerifier,
 	}
 
 	http.HandleFunc("/v1/attest", server.handleAttest)
@@ -166,22 +176,16 @@ func (s *Server) handleAttest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if MRTD (firmware) is allowed on-chain
-	mrtdAllowed, err := s.contract.IsMRTDAllowed(&bind.CallOpts{Context: context.Background()}, claims.BaseImage.MRTD[:])
+	// Verify MRTD (firmware) against Google's signed endorsements in GCS
+	// This replaces the on-chain allowlist with cryptographic verification
+	log.Printf("Verifying MRTD against Google's firmware endorsements...")
+	firmwareEndorsement, err := s.firmwareVerifier.VerifyMRTD(r.Context(), claims.BaseImage.MRTD[:])
 	if err != nil {
-		log.Printf("Contract call failed: %v", err)
-		s.sendError(w, "Failed to check MRTD allowlist: "+err.Error())
+		log.Printf("Firmware verification failed: %v", err)
+		s.sendErrorWithClaims(w, "Firmware not endorsed by Google: "+err.Error(), claims)
 		return
 	}
-
-	if !mrtdAllowed {
-		log.Printf("MRTD not in allowlist")
-		log.Printf("  To add, run:")
-		log.Printf("  cast send %s 'addMRTD(bytes)' 0x%x --private-key $PRIVATE_KEY",
-			s.config.ContractAddr, claims.BaseImage.MRTD)
-		s.sendErrorWithClaims(w, "MRTD (firmware) not in allowlist", claims)
-		return
-	}
+	log.Printf("  Firmware endorsed: SVN=%d, CL=%d, Built=%s", firmwareEndorsement.SVN, firmwareEndorsement.ClSpec, firmwareEndorsement.Timestamp.Format("2006-01-02"))
 
 	// Check if RTMR1 (custom image) meets support level requirements
 	imageAllowed, err := s.contract.IsImageAllowed(&bind.CallOpts{Context: context.Background()}, claims.BaseImage.RTMR1[:])

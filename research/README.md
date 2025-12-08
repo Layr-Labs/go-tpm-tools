@@ -22,7 +22,7 @@ Similarly, Intel Trust Authority (ITA) fails because its "Confidential Space Ada
 The proposed architecture consists of three parts:
 
 1.  **Custom Base Images:** We customize the Confidential Space stack - modifying both the Launcher and the underlying Container-Optimized OS (COS) - while continuing to pull in upstream security patches and updates.
-2.  **Self-Managed Allowlist:** We maintain a smart contract of valid measurements for these images.
+2.  **Self-Managed Allowlist:** We maintain a smart contract of valid custom image measurements (RTMR1).
 3.  **Direct Verification:** The KMS (Relying Party) verifies the workload directly using **Raw TDX Attestation**. The verification logic should be published as open-source libraries (Go initially) that any relying party can consume.
 
 Instead of requesting a signed JWT from Google, the code running in the user workload queries a `/v1/raw-attestation` endpoint to retrieve the raw TDX quote (hardware proof), Canonical Event Log (container measurements), CCEL (firmware event log), and AK certificates (platform identity). The workload then sends this evidence to the KMS, which performs verification before releasing any secrets:
@@ -32,8 +32,9 @@ Instead of requesting a signed JWT from Google, the code running in the user wor
 3. Verify AK certificate chain against Google GCE EK root CA.
 4. Replay event logs to extract platform state and container claims.
 5. Verify platform meets security requirements (production mode, Secure Boot, etc.).
-6. Verify firmware (MRTD) and OS image (RTMR1) against on-chain allowlist.
-7. Verify GCE project against policy and container digest against on-chain release registry.
+6. Verify firmware (MRTD) against Google's signed endorsements.
+7. Verify OS image (RTMR1) against on-chain allowlist.
+8. Verify GCE project against policy and container digest against on-chain release registry.
 
 ### Measurement Validation
 
@@ -41,10 +42,21 @@ Each TDX measurement register is validated differently:
 
 | Register | What it measures | Validation |
 |----------|------------------|------------|
-| **MRTD** | Firmware binary (before boot) | On-chain allowlist (sync from Google's endorsed hashes every 2-4 weeks) |
+| **MRTD** | Firmware binary (before boot) | Verify Google's signed endorsement from `gs://gce_tcb_integrity/ovmf_x64_csm/tdx/{MRTD}.binarypb` |
 | **RTMR0** | Firmware config (during boot) | Replay CCEL → verify firmware config |
 | **RTMR1** | OS/kernel (our base image) | On-chain allowlist with support level |
 | **RTMR2** | Container (args, env, image) | Replay CEL → validate against on-chain release |
+
+### Firmware Endorsement Verification
+
+MRTD validation uses Google's signed firmware endorsements:
+
+1. **Lookup**: Convert the 48-byte MRTD to hex and fetch `gs://gce_tcb_integrity/ovmf_x64_csm/tdx/{MRTD_HEX}.binarypb`
+2. **Parse**: Unmarshal the `VMLaunchEndorsement` protobuf containing:
+   - `serialized_uefi_golden`: The `VMGoldenMeasurement` with MRTD values for different RAM configurations
+   - `signature`: RSA-PSS signature over `serialized_uefi_golden`
+3. **Verify Signature**: Validate the signature chain against Google's TCB root certificate (`https://pki.goog/cloud_integrity/GCE-cc-tcb-root_1.crt`)
+4. **Extract Metadata**: The endorsement provides SVN (Security Version Number), build timestamp, and changelist for audit purposes
 
 ### Parity with Managed Attestation
 
@@ -52,6 +64,7 @@ By verifying the raw attestation evidence directly, we rely on the same cryptogr
 
 - **Hardware Root of Trust:** The **TDX Quote** is signed by Intel's root CA, proving the integrity of the hardware and the base image measurements (MRTD, RTMRs).
 - **Platform Root of Trust:** The **AK Certificate** is signed by Google's GCE EK root CA, proving the instance is a genuine GCE VM and providing claims like Project ID, Zone, and Instance ID.
+- **Firmware Root of Trust:** The **MRTD Endorsement** is signed by Google's TCB root CA, proving the firmware is a genuine Google-built UEFI binary.
 - **Binding:** The AK public key is cryptographically bound to the TDX quote (via ReportData), ensuring the GCE claims and the Container claims (reconstructed from the Event Log) belong to the same physical entity.
 
 This allows the Relying Party to validate the same hardware, platform, and workload identity signals required for policy enforcement.
@@ -62,22 +75,23 @@ Since we verify raw quotes directly rather than relying on hosted attestation se
 
 ## Responsibility Shift
 
-This approach fundamentally changes the trust model. Previously, Google determined trustworthiness via their RIM database. Now, **we** determine trustworthiness via our allowlist.
+This approach fundamentally changes the trust model. Previously, Google determined trustworthiness via their RIM database. Now, **we** determine trustworthiness via our allowlist (for custom images) while still relying on Google's cryptographic endorsements for firmware.
 
 We gain full control over the software stack but inherit additional maintenance responsibilities:
 - **Build & Patch:** We must build and patch the base image rather than relying on Google updates (although we can incorporate patches as they appear in the upstream codebase).
-- **Allowlist Management:** We must maintain the database of valid image measurements.
-- **Verification Logic:** Instead of simply checking a Google JWT signature, we must implement and maintain the full TDX verification protocol (checking Intel/Google root CAs, replaying event logs, etc).
+- **Allowlist Management:** We must maintain the database of valid custom image measurements (RTMR1).
+- **Verification Logic:** Instead of simply checking a Google JWT signature, we must implement and maintain the full TDX verification protocol (checking Intel/Google root CAs, replaying event logs, verifying firmware endorsements, etc).
 
 ## Demo
 
-The following demo implements end-to-end verification where a KMS verifies raw attestations against an on-chain allowlist.
+The following demo implements end-to-end verification where a KMS verifies raw attestations using Google's firmware endorsements and an on-chain image allowlist.
 
 ```mermaid
 sequenceDiagram
     participant W as Workload
     participant L as Launcher
     participant K as KMS
+    participant G as GCS Bucket
     participant B as Blockchain
 
     W->>L: Request raw attestation
@@ -88,7 +102,11 @@ sequenceDiagram
     Note over K: Replay event logs → extract claims
     Note over K: Verify platform security requirements
 
-    K->>B: Check MRTD, RTMR1, container digest
+    K->>G: Fetch MRTD endorsement
+    G-->>K: Signed VMLaunchEndorsement
+    Note over K: Verify endorsement signature
+
+    K->>B: Check RTMR1 support level
     B-->>K: allowed
 
     K-->>W: Return encrypted secret
@@ -120,12 +138,9 @@ If you modify the source code to build your own custom image (different from the
 ```bash
 # Deploy contract
 export PRIVATE_KEY="0x..."
-./research/scripts/setup.sh deploy --rpc-url https://sepolia.infura.io/v3/YOUR_KEY
+./research/scripts/setup.sh deploy
 
-# Sync endorsed MRTDs from Google's firmware bucket
-./research/scripts/setup.sh sync-mrtd
-
-# Add your custom image measurement
+# Add your custom image measurement (MRTD verification is automatic via GCS)
 ./research/scripts/setup.sh add-image --rtmr1 0x... --level LATEST
 
 # Run the demo
@@ -137,8 +152,9 @@ export PRIVATE_KEY="0x..."
 These files are a rough demonstration to illustrate the architecture:
 
 - `launcher/agent/agent.go`: `GetRawAttestation()` implementation.
-- `research/kms/verifier.go`: Verification logic (handling Intel and Google root CAs).
-- `research/contracts/src/BaseImageAllowlist.sol`: Smart contract replacing the RIM database.
+- `research/kms/verifier.go`: TDX quote verification (Intel/Google root CAs).
+- `research/kms/firmware.go`: MRTD verification against Google's signed endorsements.
+- `research/contracts/src/BaseImageAllowlist.sol`: Smart contract for custom image allowlist.
 
 ### Building Custom Images
 
