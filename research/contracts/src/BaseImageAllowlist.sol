@@ -3,13 +3,11 @@ pragma solidity ^0.8.13;
 
 /// @title BaseImageAllowlist
 /// @notice Allowlist for custom CVM base images with support level tracking
-/// @dev Three validation layers:
+/// @dev Two validation layers:
 ///      1. Minimum TCB - reject outdated platform TCBs (per-CVM)
-///      2. RTMR1 support levels - custom image versioning (TDX only)
-///      3. Firmware - verified off-chain via Google's signed endorsements
-///
-///      Note: MRTD/MEASUREMENT (firmware) validation is handled off-chain by verifying
-///      Google's signed endorsements from gs://gce_tcb_integrity/ovmf_x64_csm/{tdx,sevsnp}/
+///      2. Base image support levels - custom image versioning
+///         - TDX: grub.cfg digest (48 bytes SHA384, extracted from CCEL)
+///         - SEV-SNP: grub.cfg digest (extracted from TPM event log)
 contract BaseImageAllowlist {
     /// @notice Supported Confidential VM technologies
     enum CVM {
@@ -34,12 +32,12 @@ contract BaseImageAllowlist {
     ///      SEV-SNP: Use CurrentTcb directly (uint64 with packed component versions)
     mapping(CVM => uint64) public minimumTcb;
 
-    // RTMR1: custom image support levels
+    // Base image support levels (grub.cfg digest for both TDX and SEV-SNP)
     SupportLevel public minimumSupportLevel;
-    mapping(bytes32 => SupportLevel) public imageSupport;
+    mapping(CVM => mapping(bytes32 => SupportLevel)) public imageSupport;
 
     event MinimumTcbUpdated(CVM indexed cvm, uint64 oldTcb, uint64 newTcb);
-    event ImageSupportUpdated(bytes32 indexed rtmr1, SupportLevel level);
+    event ImageSupportUpdated(CVM indexed cvm, bytes32 indexed measurementHash, SupportLevel level);
     event MinimumSupportLevelUpdated(SupportLevel oldLevel, SupportLevel newLevel);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
@@ -79,23 +77,25 @@ contract BaseImageAllowlist {
         return tcb >= minimumTcb[cvm];
     }
 
-    // ============ RTMR1 Support Level Functions ============
+    // ============ Base Image Support Level Functions ============
 
-    /// @notice Set the support level for an image
-    /// @param rtmr1 RTMR[1] - custom image measurement (kernel, initrd)
+    /// @notice Set the support level for a base image measurement
+    /// @param cvm The CVM platform (grub.cfg digest for both TDX and SEV_SNP)
+    /// @param measurement The measurement bytes (48 bytes SHA384 for TDX, 32 bytes SHA256 for SEV-SNP)
     /// @param level The support level for this image
-    function setImageSupport(bytes calldata rtmr1, SupportLevel level) external onlyOwner {
-        bytes32 key = keccak256(rtmr1);
-        imageSupport[key] = level;
-        emit ImageSupportUpdated(key, level);
+    function setImageSupport(CVM cvm, bytes calldata measurement, SupportLevel level) external onlyOwner {
+        bytes32 key = keccak256(measurement);
+        imageSupport[cvm][key] = level;
+        emit ImageSupportUpdated(cvm, key, level);
     }
 
     /// @notice Remove an image from the allowlist (sets to NONE)
-    /// @param rtmr1 RTMR[1] - custom image measurement
-    function removeImage(bytes calldata rtmr1) external onlyOwner {
-        bytes32 key = keccak256(rtmr1);
-        imageSupport[key] = SupportLevel.NONE;
-        emit ImageSupportUpdated(key, SupportLevel.NONE);
+    /// @param cvm The CVM platform
+    /// @param measurement The measurement bytes
+    function removeImage(CVM cvm, bytes calldata measurement) external onlyOwner {
+        bytes32 key = keccak256(measurement);
+        imageSupport[cvm][key] = SupportLevel.NONE;
+        emit ImageSupportUpdated(cvm, key, SupportLevel.NONE);
     }
 
     /// @notice Update the minimum support level requirement
@@ -107,19 +107,21 @@ contract BaseImageAllowlist {
     }
 
     /// @notice Check if an image meets the minimum support level
-    /// @param rtmr1 RTMR[1] - custom image measurement
+    /// @param cvm The CVM platform
+    /// @param measurement The measurement bytes
     /// @return True if the image meets the minimum support level
-    function isImageAllowed(bytes calldata rtmr1) external view returns (bool) {
-        bytes32 key = keccak256(rtmr1);
-        return checkSupport(imageSupport[key], minimumSupportLevel);
+    function isImageAllowed(CVM cvm, bytes calldata measurement) external view returns (bool) {
+        bytes32 key = keccak256(measurement);
+        return checkSupport(imageSupport[cvm][key], minimumSupportLevel);
     }
 
     /// @notice Get the support level for an image
-    /// @param rtmr1 RTMR[1] - custom image measurement
+    /// @param cvm The CVM platform
+    /// @param measurement The measurement bytes
     /// @return The support level
-    function getImageSupport(bytes calldata rtmr1) external view returns (SupportLevel) {
-        bytes32 key = keccak256(rtmr1);
-        return imageSupport[key];
+    function getImageSupport(CVM cvm, bytes calldata measurement) external view returns (SupportLevel) {
+        bytes32 key = keccak256(measurement);
+        return imageSupport[cvm][key];
     }
 
     /// @notice Check if an image level meets a minimum requirement

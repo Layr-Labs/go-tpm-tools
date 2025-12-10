@@ -28,7 +28,7 @@ CONFIG_FILE="$RESEARCH_DIR/config.env"
 PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null)}"
 ZONE="${ZONE:-us-central1-a}"
 DOCKER_REPO="${DOCKER_REPO:-docker.io/cavaneigen}"
-CS_IMAGE="${CS_IMAGE:-confidential-space-debug-cavan-test-image-1765299170}"
+CS_IMAGE="${CS_IMAGE:-confidential-space-debug-cavan-test-image-1765405118}"
 CS_IMAGE_PROJECT="${CS_IMAGE_PROJECT:-$PROJECT_ID}"
 
 # Platform (tdx or sevsnp)
@@ -62,8 +62,8 @@ build() {
     log "KMS image pushed: $KMS_IMAGE"
 
     log "Building workload..."
-    cd "$RESEARCH_DIR/workload"
-    docker build --platform linux/amd64 -t "$WORKLOAD_IMAGE" .
+    cd "$RESEARCH_DIR/.."
+    docker build --platform linux/amd64 -f research/workload/Dockerfile -t "$WORKLOAD_IMAGE" .
     docker push "$WORKLOAD_IMAGE"
     log "Workload image pushed: $WORKLOAD_IMAGE"
 }
@@ -150,17 +150,9 @@ deploy_sevsnp() {
 stream_logs() {
     log "Streaming logs (Ctrl+C to stop)..."
 
-    # KMS logs in background
-    (gcloud compute ssh "$KMS_INSTANCE" --zone="$ZONE" --project="$PROJECT_ID" -- \
-        "sudo docker logs -f \$(sudo docker ps -q)" 2>/dev/null | sed "s/^/[KMS] /" &)
-
-    # TDX logs
-    while true; do
-        gcloud logging read "resource.type=gce_instance AND resource.labels.instance_id:$TDX_INSTANCE" \
-            --project="$PROJECT_ID" --freshness=1m --format="value(textPayload)" --limit=10 2>/dev/null | \
-            grep -v "^$" | tail -5
-        sleep 5
-    done
+    # KMS logs - stream docker logs directly
+    gcloud compute ssh "$KMS_INSTANCE" --zone="$ZONE" --project="$PROJECT_ID" -- \
+        "sudo docker logs -f \$(sudo docker ps -q)" 2>/dev/null | sed "s/^/[KMS] /"
 }
 
 cleanup() {
@@ -197,10 +189,8 @@ run_demo() {
     log "View logs:    ./run.sh logs"
     log "Cleanup:      ./run.sh cleanup"
     log ""
-    if [ "$PLATFORM" = "tdx" ]; then
-        log "If base image not in allowlist, add it with:"
-        log "  ./setup.sh add-image --rtmr1 0x..."
-    fi
+    log "If base image not in allowlist, add it with:"
+    log "  ./setup.sh add-image --cvm $PLATFORM --measurement 0x<grub_cfg_digest>"
 }
 
 # Parse flags
@@ -238,3 +228,12 @@ case "${1:-run}" in
         echo "  sevsnp    Deploy SEV-SNP workload VM only"
         ;;
 esac
+
+
+cast send $CONTRACT_ADDR \
+    "setImageSupport(uint8,bytes,uint8)" \
+    0 \
+    0x52f79ba560d79f5accf2f09ed1dddd03f0f9f4fb8d205f19f81dc664f0adfedebae731852c9632c33d97546ac5e07888 \
+    4 \
+    --rpc-url $SEPOLIA_RPC_URL \
+    --private-key $PRIVATE_KEY

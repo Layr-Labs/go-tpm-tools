@@ -8,6 +8,7 @@ package agent
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
@@ -41,28 +42,11 @@ import (
 )
 
 const (
-	audienceSTS = "https://sts.googleapis.com"
+	audienceSTS       = "https://sts.googleapis.com"
+	maxReportDataSize = 64 // Maximum size for TEE ReportData (TDX/SEV-SNP)
 )
 
 type principalIDTokenFetcher func(audience string) ([][]byte, error)
-
-// RawAttestation contains raw attestation evidence for self-verification.
-// For TDX: TdQuote, CcelAcpiTable, CcelData are populated.
-// For SEV-SNP: SnpReport is populated.
-// Common: CEL (container claims) and AkCertChain (GCE identity).
-type RawAttestation struct {
-	// TDX-specific fields
-	TdQuote       []byte `json:"td_quote,omitempty"`
-	CcelAcpiTable []byte `json:"ccel_acpi_table,omitempty"`
-	CcelData      []byte `json:"ccel_data,omitempty"`
-
-	// SEV-SNP-specific fields
-	SnpReport []byte `json:"snp_report,omitempty"`
-
-	// Common fields
-	CEL         []byte   `json:"cel"`
-	AkCertChain [][]byte `json:"ak_cert_chain"` // AK cert + intermediate certs (DER encoded)
-}
 
 // AttestationAgent is an agent that interacts with GCE's Attestation Service
 // to Verify an attestation message. It is an interface instead of a concrete
@@ -71,10 +55,9 @@ type AttestationAgent interface {
 	MeasureEvent(cel.Content) error
 	Attest(context.Context, AttestAgentOpts) ([]byte, error)
 	AttestWithClient(ctx context.Context, opts AttestAgentOpts, client verifier.Client) ([]byte, error)
+	GetAttestation(reportData []byte) (*pb.Attestation, error)
 	Refresh(context.Context) error
 	Close() error
-	// GetRawAttestation returns the raw TDX quote and CEL for self-verification.
-	GetRawAttestation(nonce []byte) (*RawAttestation, error)
 }
 
 type attestRoot interface {
@@ -444,86 +427,72 @@ func (a *agent) Refresh(ctx context.Context) error {
 	return nil
 }
 
-// GetRawAttestation returns the raw attestation evidence for self-verification.
-// Supports both TDX and SEV-SNP platforms.
-//
-// This allows relying parties to verify:
-//   - TDX quote against Intel's root CA
-//   - SEV-SNP report against AMD's root CA
-//   - Replay the CEL to extract container claims
-//
-// The ReportData (64 bytes) is structured as:
-//   - Bytes 0-31:  SHA256(nonce)           - proves freshness
-//   - Bytes 32-63: SHA256(AK public key)   - binds quote to this specific GCE VM
-//
-// This cryptographically binds the hardware attestation (signed by Intel/AMD)
-// to the AK certificate (signed by Google), preventing an attacker from
-// mixing quotes and certs from different machines.
-func (a *agent) GetRawAttestation(nonce []byte) (*RawAttestation, error) {
-	// Build AK certificate chain (AK cert + intermediates)
-	// The AK cert contains GCE instance info in an X.509 extension
-	var akCertChain [][]byte
-	if a.fetchedAK.Cert() == nil {
-		return nil, fmt.Errorf("AK certificate not available")
+// GetAttestation returns a pb.Attestation with TPM quotes, event log, AK certs,
+// and TEE attestation. The reportData is embedded in the TEE ReportData field.
+// ReportData layout:
+//   - [0:32]  = User-provided data (truncated/padded to 32 bytes)
+//   - [32:64] = SHA256(AK_public_key_DER) - binds AK to hardware quote
+func (a *agent) GetAttestation(reportData []byte) (*pb.Attestation, error) {
+	if len(reportData) > 32 {
+		return nil, fmt.Errorf("report_data exceeds 32 bytes (first 32 bytes reserved for user data)")
 	}
 
-	// Add the AK certificate itself
-	akCertChain = append(akCertChain, a.fetchedAK.CertDERBytes())
+	// Build TEE ReportData with AK binding
+	var teeReportData [maxReportDataSize]byte
+	copy(teeReportData[:32], reportData) // User's data in first 32 bytes
 
-	// Fetch and add intermediate certificates
-	intermediateCerts, err := internal.GetCertificateChain(a.fetchedAK.Cert(), http.DefaultClient)
-	if err != nil {
-		// Log warning but don't fail - intermediates are optional for verification
-		a.logger.Warn(fmt.Sprintf("failed to fetch intermediate certs: %v", err))
-	} else {
-		akCertChain = append(akCertChain, intermediateCerts...)
-	}
-
-	// Compute AK public key hash for binding
-	akPubKeyDER, err := x509.MarshalPKIXPublicKey(a.fetchedAK.Cert().PublicKey)
+	// Add AK binding in second 32 bytes (SHA256 of AK public key DER)
+	akPubDER, err := x509.MarshalPKIXPublicKey(a.fetchedAK.PublicKey())
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal AK public key: %w", err)
 	}
-	akPubKeyHash := sha256.Sum256(akPubKeyDER)
+	akHash := sha256.Sum256(akPubDER)
+	copy(teeReportData[32:], akHash[:])
 
-	// Build ReportData: SHA256(nonce) || SHA256(AK public key)
-	// This binds the TDX quote to both the nonce (freshness) and the AK (GCE VM identity)
-	var reportData [64]byte
-	nonceHash := sha256.Sum256(nonce)
-	copy(reportData[0:32], nonceHash[:])
-	copy(reportData[32:64], akPubKeyHash[:])
-
-	// Get the attestation from the root of trust with the combined ReportData
-	attResult, err := a.avRot.Attest(reportData[:])
-	if err != nil {
-		return nil, fmt.Errorf("failed to get attestation: %w", err)
+	// Generate random TPM nonce for quote freshness
+	tpmNonce := make([]byte, 32)
+	if _, err := rand.Read(tpmNonce); err != nil {
+		return nil, fmt.Errorf("failed to generate TPM nonce: %w", err)
 	}
 
-	// Encode the CEL
+	// Encode the CEL for the attestation
 	var celBuf bytes.Buffer
 	if err := a.avRot.GetCEL().EncodeCEL(&celBuf); err != nil {
 		return nil, fmt.Errorf("failed to encode CEL: %w", err)
 	}
 
-	// Handle platform-specific attestation
-	switch v := attResult.(type) {
-	case *verifier.TDCCELAttestation:
-		return &RawAttestation{
-			TdQuote:       v.TdQuote,
-			CEL:           celBuf.Bytes(),
-			CcelAcpiTable: v.CcelAcpiTable,
-			CcelData:      v.CcelData,
-			AkCertChain:   akCertChain,
-		}, nil
-	case *SevSnpAttestation:
-		return &RawAttestation{
-			SnpReport:   v.SnpReport,
-			CEL:         celBuf.Bytes(),
-			AkCertChain: akCertChain,
-		}, nil
+	// Determine TEE device based on platform
+	var teeDevice client.TEEDevice
+
+	switch a.avRot.(type) {
+	case *tdxAttestRoot:
+		teeDevice, err = client.CreateTdxQuoteProvider()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create TDX quote provider: %w", err)
+		}
+		defer teeDevice.Close()
+	case *sevsnpAttestRoot:
+		teeDevice, err = client.CreateSevSnpQuoteProvider()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create SEV-SNP quote provider: %w", err)
+		}
+		defer teeDevice.Close()
 	default:
-		return nil, fmt.Errorf("raw attestation only supported for TDX and SEV-SNP, got %T", attResult)
+		return nil, fmt.Errorf("unsupported attestation root type: %T", a.avRot)
 	}
+
+	attestation, err := a.fetchedAK.Attest(client.AttestOpts{
+		Nonce:             tpmNonce,
+		TEENonce:          teeReportData[:],
+		TEEDevice:         teeDevice,
+		CertChainFetcher:  http.DefaultClient,
+		CanonicalEventLog: celBuf.Bytes(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate attestation: %w", err)
+	}
+
+	return attestation, nil
 }
 
 func fetchContainerImageSignatures(ctx context.Context, fetcher signaturediscovery.Fetcher, targetRepos []string, retry func() backoff.BackOff, logger logging.Logger) []oci.Signature {

@@ -22,7 +22,7 @@ Similarly, Intel Trust Authority (ITA) fails because its "Confidential Space Ada
 The proposed architecture consists of three parts:
 
 1.  **Custom Base Images:** We customize the Confidential Space stack - modifying both the Launcher and the underlying Container-Optimized OS (COS) - while continuing to pull in upstream security patches and updates.
-2.  **Self-Managed Allowlist:** We maintain a smart contract of valid custom image measurements (RTMR1 for TDX).
+2.  **Self-Managed Allowlist:** We maintain a smart contract of valid custom image measurements, keyed by CVM platform (grub.cfg digest for both TDX and SEV-SNP).
 3.  **Direct Verification:** The KMS (Relying Party) verifies the workload directly using **Raw Attestation** (TDX or SEV-SNP). The verification logic should be published as open-source libraries (Go initially) that any relying party can consume.
 
 Instead of requesting a signed JWT from Google, the code running in the user workload queries a `/v1/raw-attestation` endpoint to retrieve the raw hardware quote, Canonical Event Log (container measurements), and AK certificates (platform identity). The workload then sends this evidence to the KMS, which performs verification before releasing any secrets:
@@ -33,7 +33,7 @@ Instead of requesting a signed JWT from Google, the code running in the user wor
 4. Replay event logs to extract platform state and container claims.
 5. Verify platform meets security requirements (production mode, no debug, etc.).
 6. Verify firmware (MRTD for TDX, MEASUREMENT for SEV-SNP) against Google's signed endorsements.
-7. Verify OS image (RTMR1 for TDX) against on-chain allowlist.
+7. Verify OS image (grub.cfg digest) against on-chain allowlist.
 8. Verify GCE project against policy and container digest against on-chain release registry.
 
 ### Measurement Validation
@@ -42,19 +42,38 @@ Instead of requesting a signed JWT from Google, the code running in the user wor
 
 Each TDX measurement register is validated differently:
 
-| Register | What it measures | Validation |
-|----------|------------------|------------|
-| **MRTD** | Firmware binary (before boot) | Verify Google's signed endorsement from `gs://gce_tcb_integrity/ovmf_x64_csm/tdx/{MRTD}.binarypb` |
-| **RTMR0** | Firmware config (during boot) | Replay CCEL → verify firmware config |
-| **RTMR1** | OS/kernel (our base image) | On-chain allowlist with support level |
-| **RTMR2** | Container (args, env, image) | Replay CEL → validate against on-chain release |
+| Register | PCR Equivalent | What it measures | Validation |
+|----------|----------------|------------------|------------|
+| **MRTD** | - | Firmware binary (before boot) | Verify Google's signed endorsement from `gs://gce_tcb_integrity/ovmf_x64_csm/tdx/{MRTD}.binarypb` |
+| **RTMR0** | PCR 1,7 | Secure Boot state | Extract from CCEL → verify Secure Boot enabled |
+| **RTMR1** | PCR 2-6 | EFI state (boot order, UEFI apps) | Not used for allowlist |
+| **RTMR2** | PCR 8-15 | GRUB + kernel + container events | Extract grub.cfg digest → on-chain allowlist; Replay CEL → container claims |
+
+**Important:** RTMR1 does NOT contain the kernel or launcher - those are in RTMR2. The grub.cfg digest (extracted from CCEL) is used for base image validation because it contains the dm-verity root hash which changes when the launcher changes.
+
+**Why grub.cfg digest works for launcher validation:**
+```
+Launcher code change → OEM partition changes → seal-oem recomputes dm-verity hash
+→ dm-verity hash embedded in grub.cfg kernel cmdline → GRUB measures grub.cfg → digest changes
+```
+
+**Note:** We cannot use RTMR2 directly as the allowlist key because it also includes container events (CEL), which change with every deployment. Instead, we extract the specific grub.cfg digest from the CCEL raw events.
 
 #### SEV-SNP Measurements
+
+SEV-SNP uses a hybrid approach: the SNP report provides firmware measurements, while the TPM event log provides OS and container measurements:
 
 | Field | What it measures | Validation |
 |-------|------------------|------------|
 | **MEASUREMENT** | Firmware binary | Verify Google's signed endorsement from `gs://gce_tcb_integrity/ovmf_x64_csm/sevsnp/{MEASUREMENT}.binarypb` |
-| **CEL** | Container (args, env, image) | Measured to TPM PCRs, replay to extract claims |
+| **grub.cfg digest** | OS/kernel (GRUB files) | On-chain allowlist with support level (extracted from TPM event log) |
+| **CEL** | Container events | Replay CEL to extract claims (verified via TPM quote signed by AK) |
+
+**Mapping between platforms:**
+- **grub.cfg digest** is used for both TDX (from CCEL) and SEV-SNP (from TPM event log) - kernel/launcher identity
+- **CEL events** extracted from RTMR2 (TDX) or TPM event log (SEV-SNP) - container claims
+
+The AK public key is cryptographically bound to the hardware quote (via ReportData), ensuring the GCE claims and the Container claims belong to the same physical entity.
 
 #### TCB Version Enforcement
 
@@ -110,8 +129,8 @@ This approach fundamentally changes the trust model. Previously, Google determin
 
 We gain full control over the software stack but inherit additional maintenance responsibilities:
 - **Build & Patch:** We must build and patch the base image rather than relying on Google updates (although we can incorporate patches as they appear in the upstream codebase).
-- **Allowlist Management:** We must maintain the database of valid custom image measurements (RTMR1).
-- **Verification Logic:** Instead of simply checking a Google JWT signature, we must implement and maintain the full TDX verification protocol (checking Intel/Google root CAs, replaying event logs, verifying firmware endorsements, etc).
+- **Allowlist Management:** We must maintain the database of valid custom image measurements (grub.cfg digest for both TDX and SEV-SNP).
+- **Verification Logic:** Instead of simply checking a Google JWT signature, we must implement and maintain the full TDX/SEV-SNP verification protocols (checking Intel/AMD/Google root CAs, replaying event logs, verifying TPM quotes, verifying firmware endorsements, etc).
 
 ## Demo
 
@@ -126,18 +145,20 @@ sequenceDiagram
     participant B as Blockchain
 
     W->>L: Request raw attestation
-    L-->>W: Quote + event logs + AK cert
+    L-->>W: Quote + event logs + AK cert + TPM quote (SEV-SNP)
     W->>K: Post attestation + RSA pubkey
 
-    Note over K: Verify signatures & bindings
+    Note over K: Verify hardware quote (Intel/AMD CA)
+    Note over K: Verify TPM quote signature (SEV-SNP only)
+    Note over K: Verify RSA key + AK bindings
     Note over K: Replay event logs → extract claims
     Note over K: Verify platform security requirements
 
-    K->>G: Fetch MRTD endorsement
+    K->>G: Fetch firmware endorsement
     G-->>K: Signed VMLaunchEndorsement
     Note over K: Verify endorsement signature
 
-    K->>B: Check RTMR1 support level
+    K->>B: Check image support (grub.cfg digest)
     B-->>K: allowed
 
     K-->>W: Return encrypted secret
@@ -149,7 +170,7 @@ Requires the `data-axiom-440223-j1` GCP project.
 
 #### Quick Start
 
-Use the pre-built custom image `confidential-space-debug-cavan-test-image-1765299170` which is already registered in the deployed allowlist.
+Use the pre-built custom image `confidential-space-debug-cavan-test-image-1765405118` which is already registered in the deployed allowlist.
 
 ```bash
 # Setup configuration
@@ -171,19 +192,24 @@ If you modify the source code to build your own custom image (different from the
 export PRIVATE_KEY="0x..."
 ./research/scripts/setup.sh deploy
 
-# Add your custom image measurement (MRTD verification is automatic via GCS)
-./research/scripts/setup.sh add-image --rtmr1 0x... --level LATEST
+# Add your custom image measurement for TDX (grub.cfg digest from CCEL)
+./research/scripts/setup.sh add-image --cvm tdx --measurement 0x<grub_cfg_digest> --level LATEST
+
+# Add your custom image measurement for SEV-SNP (grub.cfg digest from TPM event log)
+./research/scripts/setup.sh add-image --cvm sevsnp --measurement 0x<grub_cfg_digest> --level LATEST
 
 # Run the demo
 ./research/scripts/run.sh
 ```
+
+**Note:** Firmware verification (MRTD for TDX, MEASUREMENT for SEV-SNP) is automatic via Google's signed endorsements from GCS.
 
 ### Proof of Concept Implementation
 
 These files are a rough demonstration to illustrate the architecture:
 
 - `launcher/agent/agent.go`: `GetRawAttestation()` implementation for TDX and SEV-SNP.
-- `research/kms/verifier.go`: TDX quote verification (Intel/Google root CAs).
+- `research/kms/verifier_tdx.go`: TDX quote verification (Intel/Google root CAs).
 - `research/kms/verifier_sevsnp.go`: SEV-SNP report verification (AMD/Google root CAs).
 - `research/kms/firmware.go`: Firmware verification for TDX (MRTD) and SEV-SNP (MEASUREMENT).
 - `research/contracts/src/BaseImageAllowlist.sol`: Smart contract for custom image allowlist.

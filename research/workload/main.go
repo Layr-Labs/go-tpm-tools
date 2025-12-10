@@ -16,6 +16,9 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	pb "github.com/google/go-tpm-tools/proto/attest"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -28,34 +31,38 @@ const (
 type Platform string
 
 const (
-	PlatformTDX    Platform = "tdx"
-	PlatformSevSnp Platform = "sevsnp"
+	PlatformTDX     Platform = "tdx"
+	PlatformSevSnp  Platform = "sevsnp"
 	PlatformUnknown Platform = "unknown"
 )
 
-// TdxAttestRequest sent to KMS /v1/attest/tdx
-type TdxAttestRequest struct {
-	TdQuote       []byte   `json:"td_quote"`
-	CEL           []byte   `json:"cel"`
-	CcelAcpiTable []byte   `json:"ccel_acpi_table"` // CCEL ACPI table for RTMR0 parsing
-	CcelData      []byte   `json:"ccel_data"`       // UEFI event log for RTMR0 policy
-	AkCertChain   [][]byte `json:"ak_cert_chain"`
-	RSAPublicKey  string   `json:"rsa_public_key"` // PEM-encoded RSA public key
+// AttestRequest is the request format for the KMS /v1/attest endpoint.
+// Works with both TDX and SEV-SNP platforms.
+type AttestRequest struct {
+	// Attestation is a serialized pb.Attestation from ak.Attest()
+	// Contains: TPM quotes, event log, AK certs, CEL, TDX/SEV-SNP quote
+	Attestation []byte `json:"attestation"`
+
+	// TDX-only: CCEL data for firmware validation (RTMR0/RTMR1)
+	CcelAcpiTable []byte `json:"ccel_acpi_table,omitempty"`
+	CcelData      []byte `json:"ccel_data,omitempty"`
+
+	// RSAPublicKey is the PEM-encoded ephemeral RSA public key for response encryption
+	RSAPublicKey string `json:"rsa_public_key"`
 }
 
-// SevSnpAttestRequest sent to KMS /v1/attest/sevsnp
-type SevSnpAttestRequest struct {
-	SnpReport    []byte   `json:"snp_report"`
-	CEL          []byte   `json:"cel"`
-	AkCertChain  [][]byte `json:"ak_cert_chain"`
-	RSAPublicKey string   `json:"rsa_public_key"` // PEM-encoded RSA public key
-}
-
-// AttestResponse from KMS /v1/attest/* endpoints
+// AttestResponse from KMS /v1/attest endpoint
 type AttestResponse struct {
 	Success         bool   `json:"success"`
 	EncryptedSecret []byte `json:"encrypted_secret,omitempty"` // RSA-OAEP encrypted
 	Error           string `json:"error,omitempty"`
+}
+
+// rawAttestResponse matches the teeserver /v1/attestation response format.
+type rawAttestResponse struct {
+	Attestation   []byte `json:"attestation"`               // Serialized pb.Attestation
+	CcelAcpiTable []byte `json:"ccel_acpi_table,omitempty"` // TDX only
+	CcelData      []byte `json:"ccel_data,omitempty"`       // TDX only
 }
 
 func main() {
@@ -116,9 +123,10 @@ func main() {
 		})
 		log("Generated RSA public key")
 
-		// Step 2: Request attestation from TEE server with RSA public key PEM
+		// Step 2: Request attestation from TEE server
+		// The nonce is SHA256(RSA public key PEM) which binds the attestation to our key
 		log("Step 2: Requesting attestation from TEE server...")
-		attestation, err := getAttestation(teeClient, pubKeyPEM)
+		attestResp, err := getAttestation(teeClient, pubKeyPEM)
 		if err != nil {
 			log("ERROR getting attestation: %v", err)
 			log("Retrying in %v...", retryInterval)
@@ -126,22 +134,33 @@ func main() {
 			continue
 		}
 
-		// Detect platform from attestation response
-		platform := detectPlatform(attestation)
-		log("Detected platform: %s", platform)
-
-		var quoteSize int
-		switch platform {
-		case PlatformTDX:
-			quoteSize = len(attestation.TdQuote)
-		case PlatformSevSnp:
-			quoteSize = len(attestation.SnpReport)
+		// Parse attestation to detect platform
+		var attestation pb.Attestation
+		if err := proto.Unmarshal(attestResp.Attestation, &attestation); err != nil {
+			log("ERROR parsing attestation: %v", err)
+			log("Retrying in %v...", retryInterval)
+			time.Sleep(retryInterval)
+			continue
 		}
-		log("Got attestation (quote size: %d bytes)", quoteSize)
 
-		// Step 3: Send attestation + RSA public key to KMS
-		log("Step 3: Sending attestation + RSA public key to KMS (%s endpoint)...", platform)
-		resp, err := sendAttestation(kmsClient, kmsURL, attestation, string(pubKeyPEM), platform)
+		platform := detectPlatform(&attestation)
+		log("Detected platform: %s", platform)
+		log("Got attestation (%d bytes)", len(attestResp.Attestation))
+
+		// CCEL data comes from teeserver response (TDX only)
+		if len(attestResp.CcelAcpiTable) > 0 && len(attestResp.CcelData) > 0 {
+			log("Got CCEL data from teeserver (%d bytes table, %d bytes data)", len(attestResp.CcelAcpiTable), len(attestResp.CcelData))
+		}
+
+		// Send attestation to KMS
+		log("Step 3: Sending attestation to KMS...")
+		req := AttestRequest{
+			Attestation:   attestResp.Attestation,
+			CcelAcpiTable: attestResp.CcelAcpiTable,
+			CcelData:      attestResp.CcelData,
+			RSAPublicKey:  string(pubKeyPEM),
+		}
+		resp, err := sendAttestation(kmsClient, kmsURL, &req)
 		if err != nil {
 			log("ERROR sending attestation: %v", err)
 			log("Retrying in %v...", retryInterval)
@@ -150,7 +169,7 @@ func main() {
 		}
 
 		if resp.Success {
-			// Step 4: Decrypt the response with our ephemeral private key
+			// Decrypt the response with our ephemeral private key
 			log("Step 4: Decrypting response with ephemeral private key...")
 			secret, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, privateKey, resp.EncryptedSecret, nil)
 			if err != nil {
@@ -176,12 +195,12 @@ func main() {
 	select {}
 }
 
-// detectPlatform determines the platform from the attestation response.
-func detectPlatform(attestation *RawAttestationResponse) Platform {
-	if len(attestation.TdQuote) > 0 {
+// detectPlatform determines the platform from the attestation.
+func detectPlatform(attestation *pb.Attestation) Platform {
+	if attestation.GetTdxAttestation() != nil {
 		return PlatformTDX
 	}
-	if len(attestation.SnpReport) > 0 {
+	if attestation.GetSevSnpAttestation() != nil {
 		return PlatformSevSnp
 	}
 	return PlatformUnknown
@@ -197,26 +216,12 @@ func waitForSocket(path string) error {
 	return fmt.Errorf("socket %s not available after 60 seconds", path)
 }
 
-// RawAttestationResponse from the TEE server /v1/raw-attestation endpoint.
-// For TDX: TdQuote, CcelAcpiTable, CcelData are populated.
-// For SEV-SNP: SnpReport is populated.
-type RawAttestationResponse struct {
-	// TDX-specific
-	TdQuote       []byte `json:"td_quote,omitempty"`
-	CcelAcpiTable []byte `json:"ccel_acpi_table,omitempty"` // CCEL ACPI table
-	CcelData      []byte `json:"ccel_data,omitempty"`       // UEFI event log
-
-	// SEV-SNP-specific
-	SnpReport []byte `json:"snp_report,omitempty"`
-
-	// Common
-	CEL         []byte   `json:"cel"`
-	AkCertChain [][]byte `json:"ak_cert_chain"`
-}
-
-func getAttestation(client *http.Client, rsaPubKeyPEM []byte) (*RawAttestationResponse, error) {
-	reqBody, _ := json.Marshal(map[string][]byte{"nonce": rsaPubKeyPEM})
-	resp, err := client.Post("http://localhost/v1/raw-attestation", "application/json", bytes.NewReader(reqBody))
+func getAttestation(client *http.Client, rsaPubKeyPEM []byte) (*rawAttestResponse, error) {
+	// Build report_data from SHA256 hash of RSA public key PEM
+	// The teeserver embeds this in ReportData[0:32], with AK hash in [32:64]
+	rsaPubKeyHash := sha256.Sum256(rsaPubKeyPEM)
+	reqBody, _ := json.Marshal(map[string][]byte{"report_data": rsaPubKeyHash[:]})
+	resp, err := client.Post("http://localhost/v1/attestation", "application/json", bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, err
 	}
@@ -227,50 +232,21 @@ func getAttestation(client *http.Client, rsaPubKeyPEM []byte) (*RawAttestationRe
 		return nil, fmt.Errorf("TEE server returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	var attestResp RawAttestationResponse
+	var attestResp rawAttestResponse
 	if err := json.NewDecoder(resp.Body).Decode(&attestResp); err != nil {
 		return nil, err
 	}
 	return &attestResp, nil
 }
 
-func sendAttestation(client *http.Client, kmsURL string, attestation *RawAttestationResponse, rsaPubKeyPEM string, platform Platform) (*AttestResponse, error) {
-	var reqBody []byte
-	var endpoint string
-	var err error
-
-	switch platform {
-	case PlatformTDX:
-		req := TdxAttestRequest{
-			TdQuote:       attestation.TdQuote,
-			CEL:           attestation.CEL,
-			CcelAcpiTable: attestation.CcelAcpiTable,
-			CcelData:      attestation.CcelData,
-			AkCertChain:   attestation.AkCertChain,
-			RSAPublicKey:  rsaPubKeyPEM,
-		}
-		reqBody, err = json.Marshal(req)
-		endpoint = "/v1/attest/tdx"
-
-	case PlatformSevSnp:
-		req := SevSnpAttestRequest{
-			SnpReport:    attestation.SnpReport,
-			CEL:          attestation.CEL,
-			AkCertChain:  attestation.AkCertChain,
-			RSAPublicKey: rsaPubKeyPEM,
-		}
-		reqBody, err = json.Marshal(req)
-		endpoint = "/v1/attest/sevsnp"
-
-	default:
-		return nil, fmt.Errorf("unknown platform: %s", platform)
-	}
-
+func sendAttestation(client *http.Client, kmsURL string, req *AttestRequest) (*AttestResponse, error) {
+	reqBody, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	resp, err := client.Post(kmsURL+endpoint, "application/json", bytes.NewReader(reqBody))
+	// Send to KMS
+	resp, err := client.Post(kmsURL+"/v1/attest", "application/json", bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, err
 	}

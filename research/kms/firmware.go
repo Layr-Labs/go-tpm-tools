@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/x509"
 	"encoding/hex"
@@ -190,7 +191,7 @@ func (v *FirmwareVerifier) extractTdxEndorsement(golden *epb.VMGoldenMeasurement
 	// Check that the MRTD matches one of the endorsed measurements
 	found := false
 	for _, measurement := range tdx.GetMeasurements() {
-		if bytesEqual(measurement.GetMrtd(), expectedMRTD) {
+		if bytes.Equal(measurement.GetMrtd(), expectedMRTD) {
 			found = true
 			break
 		}
@@ -223,7 +224,7 @@ func (v *FirmwareVerifier) extractSevSnpEndorsement(golden *epb.VMGoldenMeasurem
 	// The measurement should be present in the map
 	found := false
 	for _, measurement := range sevsnp.GetMeasurements() {
-		if bytesEqual(measurement, expectedMeasurement) {
+		if bytes.Equal(measurement, expectedMeasurement) {
 			found = true
 			break
 		}
@@ -275,15 +276,3 @@ func fetchRootsOfTrust() (*x509.CertPool, error) {
 	return roots, nil
 }
 
-// bytesEqual compares two byte slices.
-func bytesEqual(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}

@@ -22,45 +22,52 @@ Usage: $0 <command> [options]
 
 Commands:
   deploy              Deploy BaseImageAllowlist contract to Sepolia
-  add-image           Add RTMR1 (custom image) with support level
-  remove-image        Remove a custom image from the allowlist
+  add-image           Add base image measurement with support level
+  remove-image        Remove a base image from the allowlist
   set-min-support     Set minimum support level requirement
-  set-min-svn         Set minimum SVN requirement
+  set-min-tcb         Set minimum TCB requirement for a platform
   show                Show current config and contract state
 
-Note: MRTD (firmware) validation is now handled automatically by verifying
-Google's signed endorsements from gs://gce_tcb_integrity/ovmf_x64_csm/tdx/
-No manual MRTD management is required.
+Note: Firmware validation (MRTD for TDX, MEASUREMENT for SEV-SNP) is handled
+automatically by verifying Google's signed endorsements at runtime.
+No manual firmware management is required.
 
 Options for 'deploy':
   --rpc-url URL       Sepolia RPC URL (default: from config or env)
   --private-key KEY   Private key for deployment (default: from config or env)
 
 Options for 'add-image':
-  --rtmr1 HASH        RTMR[1] measurement (48 bytes hex)
+  --cvm PLATFORM      CVM platform: tdx or sevsnp (required)
+  --measurement HASH  grub.cfg digest (48 bytes SHA384 hex for TDX from CCEL,
+                      or from TPM event log for SEV-SNP)
   --level LEVEL       Support level: EXPERIMENTAL, USABLE, STABLE, LATEST (default: LATEST)
 
 Options for 'remove-image':
-  --rtmr1 HASH        RTMR[1] measurement (48 bytes hex)
+  --cvm PLATFORM      CVM platform: tdx or sevsnp (required)
+  --measurement HASH  Measurement to remove
 
 Options for 'set-min-support':
   --level LEVEL       Minimum support level: EXPERIMENTAL, USABLE, STABLE, LATEST
 
-Options for 'set-min-svn':
-  --svn NUMBER        Minimum SVN (Security Version Number)
+Options for 'set-min-tcb':
+  --cvm PLATFORM      CVM platform: tdx or sevsnp (required)
+  --tcb NUMBER        Minimum TCB version (uint64)
 
 Examples:
   # Deploy contract
   $0 deploy --rpc-url https://sepolia.infura.io/v3/YOUR_KEY --private-key 0x...
 
-  # Add a custom image as LATEST
-  $0 add-image --rtmr1 0x7bf10daf... --level LATEST
+  # Add a TDX custom image (grub.cfg digest from CCEL) as LATEST
+  $0 add-image --cvm tdx --measurement 0x7bf10daf... --level LATEST
+
+  # Add a SEV-SNP custom image (grub.cfg digest) as STABLE
+  $0 add-image --cvm sevsnp --measurement 0xabc123... --level STABLE
 
   # Set minimum support level to STABLE
   $0 set-min-support --level STABLE
 
-  # Set minimum SVN to reject old firmware
-  $0 set-min-svn --svn 3
+  # Set minimum TCB for TDX
+  $0 set-min-tcb --cvm tdx --tcb 3
 
   # Show current state
   $0 show
@@ -104,6 +111,15 @@ support_level_to_uint8() {
         STABLE) echo 3 ;;
         LATEST) echo 4 ;;
         *) error "Invalid support level: $1. Must be NONE, EXPERIMENTAL, USABLE, STABLE, or LATEST" ;;
+    esac
+}
+
+# Convert CVM platform name to uint8
+cvm_to_uint8() {
+    case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
+        tdx) echo 0 ;;
+        sevsnp|sev-snp|sev_snp) echo 1 ;;
+        *) error "Invalid CVM platform: $1. Must be 'tdx' or 'sevsnp'" ;;
     esac
 }
 
@@ -167,55 +183,71 @@ deploy_contract() {
 
     echo ""
     log "Next steps:"
-    log "1. Add your custom image: $0 add-image --rtmr1 0x... --level LATEST"
+    log "1. Add your custom image:"
+    log "   TDX:     $0 add-image --cvm tdx --measurement 0x<grub_cfg_digest> --level LATEST"
+    log "   SEV-SNP: $0 add-image --cvm sevsnp --measurement 0x<grub_cfg_digest> --level LATEST"
     log "2. (Optional) Set minimum support level: $0 set-min-support --level STABLE"
-    log "3. (Optional) Set minimum SVN: $0 set-min-svn --svn 3"
+    log "3. (Optional) Set minimum TCB: $0 set-min-tcb --cvm tdx --tcb 3"
     log ""
-    log "Note: MRTD (firmware) validation is automatic - the KMS verifies"
-    log "Google's signed endorsements from the TCB bucket at runtime."
+    log "Note: Firmware validation is automatic - the KMS verifies Google's"
+    log "signed endorsements at runtime for both TDX (MRTD) and SEV-SNP (MEASUREMENT)."
 }
 
 add_image() {
-    local rtmr1=""
+    local cvm=""
+    local measurement=""
     local level="LATEST"
 
     while [[ $# -gt 0 ]]; do
         case $1 in
-            --rtmr1) rtmr1="$2"; shift 2 ;;
+            --cvm) cvm="$2"; shift 2 ;;
+            --measurement) measurement="$2"; shift 2 ;;
+            --rtmr1) measurement="$2"; shift 2 ;;  # backward compat
             --level) level="$2"; shift 2 ;;
             *) error "Unknown option: $1" ;;
         esac
     done
 
-    [ -n "$rtmr1" ] || error "Missing --rtmr1"
+    [ -n "$cvm" ] || error "Missing --cvm (tdx or sevsnp)"
+    [ -n "$measurement" ] || error "Missing --measurement"
     [ -n "$CONTRACT_ADDR" ] || error "CONTRACT_ADDR not set. Run 'deploy' first."
     [ -n "$SEPOLIA_RPC_URL" ] || error "SEPOLIA_RPC_URL not set."
     [ -n "$PRIVATE_KEY" ] || error "PRIVATE_KEY not set."
 
-    # Convert level to uint8
+    # Convert CVM and level to uint8
+    cvm_uint8=$(cvm_to_uint8 "$cvm")
     level_uint8=$(support_level_to_uint8 "$level")
 
     # Normalize hex (ensure 0x prefix)
-    rtmr1_hex="0x$(echo "$rtmr1" | sed 's/^0x//')"
+    measurement_hex="0x$(echo "$measurement" | sed 's/^0x//')"
 
-    log "Adding custom image to allowlist..."
-    log "  RTMR1: $rtmr1_hex"
+    # Determine measurement type based on CVM
+    local measurement_type
+    if [ "$cvm_uint8" = "0" ]; then
+        measurement_type="grub.cfg digest (from CCEL)"
+    else
+        measurement_type="grub.cfg digest (from TPM event log)"
+    fi
+
+    log "Adding base image to allowlist..."
+    log "  CVM: $cvm ($cvm_uint8)"
+    log "  $measurement_type: $measurement_hex"
     log "  Support Level: $level ($level_uint8)"
     log "  Contract: $CONTRACT_ADDR"
 
     cast send "$CONTRACT_ADDR" \
-        "setImageSupport(bytes,uint8)" \
-        "$rtmr1_hex" "$level_uint8" \
+        "setImageSupport(uint8,bytes,uint8)" \
+        "$cvm_uint8" "$measurement_hex" "$level_uint8" \
         --rpc-url "$SEPOLIA_RPC_URL" \
         --private-key "$PRIVATE_KEY"
 
-    log "Custom image added to allowlist!"
+    log "Base image added to allowlist!"
 
     # Verify
     log "Verifying..."
     SUPPORT=$(cast call "$CONTRACT_ADDR" \
-        "getImageSupport(bytes)(uint8)" \
-        "$rtmr1_hex" \
+        "getImageSupport(uint8,bytes)(uint8)" \
+        "$cvm_uint8" "$measurement_hex" \
         --rpc-url "$SEPOLIA_RPC_URL")
 
     if [ "$SUPPORT" = "$level_uint8" ]; then
@@ -226,34 +258,42 @@ add_image() {
 }
 
 remove_image() {
-    local rtmr1=""
+    local cvm=""
+    local measurement=""
 
     while [[ $# -gt 0 ]]; do
         case $1 in
-            --rtmr1) rtmr1="$2"; shift 2 ;;
+            --cvm) cvm="$2"; shift 2 ;;
+            --measurement) measurement="$2"; shift 2 ;;
+            --rtmr1) measurement="$2"; shift 2 ;;  # backward compat
             *) error "Unknown option: $1" ;;
         esac
     done
 
-    [ -n "$rtmr1" ] || error "Missing --rtmr1"
+    [ -n "$cvm" ] || error "Missing --cvm (tdx or sevsnp)"
+    [ -n "$measurement" ] || error "Missing --measurement"
     [ -n "$CONTRACT_ADDR" ] || error "CONTRACT_ADDR not set. Run 'deploy' first."
     [ -n "$SEPOLIA_RPC_URL" ] || error "SEPOLIA_RPC_URL not set."
     [ -n "$PRIVATE_KEY" ] || error "PRIVATE_KEY not set."
 
-    # Normalize hex (ensure 0x prefix)
-    rtmr1_hex="0x$(echo "$rtmr1" | sed 's/^0x//')"
+    # Convert CVM to uint8
+    cvm_uint8=$(cvm_to_uint8 "$cvm")
 
-    log "Removing custom image from allowlist..."
-    log "  RTMR1: $rtmr1_hex"
+    # Normalize hex (ensure 0x prefix)
+    measurement_hex="0x$(echo "$measurement" | sed 's/^0x//')"
+
+    log "Removing base image from allowlist..."
+    log "  CVM: $cvm ($cvm_uint8)"
+    log "  Measurement: $measurement_hex"
     log "  Contract: $CONTRACT_ADDR"
 
     cast send "$CONTRACT_ADDR" \
-        "removeImage(bytes)" \
-        "$rtmr1_hex" \
+        "removeImage(uint8,bytes)" \
+        "$cvm_uint8" "$measurement_hex" \
         --rpc-url "$SEPOLIA_RPC_URL" \
         --private-key "$PRIVATE_KEY"
 
-    log "Custom image removed from allowlist!"
+    log "Base image removed from allowlist!"
 }
 
 set_min_support() {
@@ -287,32 +327,40 @@ set_min_support() {
     log "Minimum support level set to $level!"
 }
 
-set_min_svn() {
-    local svn=""
+set_min_tcb() {
+    local cvm=""
+    local tcb=""
 
     while [[ $# -gt 0 ]]; do
         case $1 in
-            --svn) svn="$2"; shift 2 ;;
+            --cvm) cvm="$2"; shift 2 ;;
+            --tcb) tcb="$2"; shift 2 ;;
+            --svn) tcb="$2"; shift 2 ;;  # backward compat
             *) error "Unknown option: $1" ;;
         esac
     done
 
-    [ -n "$svn" ] || error "Missing --svn"
+    [ -n "$cvm" ] || error "Missing --cvm (tdx or sevsnp)"
+    [ -n "$tcb" ] || error "Missing --tcb"
     [ -n "$CONTRACT_ADDR" ] || error "CONTRACT_ADDR not set. Run 'deploy' first."
     [ -n "$SEPOLIA_RPC_URL" ] || error "SEPOLIA_RPC_URL not set."
     [ -n "$PRIVATE_KEY" ] || error "PRIVATE_KEY not set."
 
-    log "Setting minimum SVN..."
-    log "  SVN: $svn"
+    # Convert CVM to uint8
+    cvm_uint8=$(cvm_to_uint8 "$cvm")
+
+    log "Setting minimum TCB for $cvm..."
+    log "  CVM: $cvm ($cvm_uint8)"
+    log "  TCB: $tcb"
     log "  Contract: $CONTRACT_ADDR"
 
     cast send "$CONTRACT_ADDR" \
-        "setMinimumSVN(uint32)" \
-        "$svn" \
+        "setMinimumTcb(uint8,uint64)" \
+        "$cvm_uint8" "$tcb" \
         --rpc-url "$SEPOLIA_RPC_URL" \
         --private-key "$PRIVATE_KEY"
 
-    log "Minimum SVN set to $svn!"
+    log "Minimum TCB for $cvm set to $tcb!"
 }
 
 show_config() {
@@ -331,9 +379,6 @@ show_config() {
         OWNER=$(cast call "$CONTRACT_ADDR" "owner()(address)" --rpc-url "$SEPOLIA_RPC_URL" 2>/dev/null || echo "<unable to query>")
         echo "  Owner: $OWNER"
 
-        MIN_SVN=$(cast call "$CONTRACT_ADDR" "minimumSVN()(uint32)" --rpc-url "$SEPOLIA_RPC_URL" 2>/dev/null || echo "<unable to query>")
-        echo "  Minimum SVN: $MIN_SVN"
-
         MIN_SUPPORT=$(cast call "$CONTRACT_ADDR" "minimumSupportLevel()(uint8)" --rpc-url "$SEPOLIA_RPC_URL" 2>/dev/null || echo "<unable to query>")
         SUPPORT_NAMES=("NONE" "EXPERIMENTAL" "USABLE" "STABLE" "LATEST")
         if [[ "$MIN_SUPPORT" =~ ^[0-4]$ ]]; then
@@ -343,12 +388,24 @@ show_config() {
         fi
 
         echo ""
-        log "MRTD (firmware) validation:"
+        log "Per-CVM Minimum TCB:"
+        TDX_TCB=$(cast call "$CONTRACT_ADDR" "minimumTcb(uint8)(uint64)" 0 --rpc-url "$SEPOLIA_RPC_URL" 2>/dev/null || echo "<unable to query>")
+        echo "  TDX: $TDX_TCB"
+        SEVSNP_TCB=$(cast call "$CONTRACT_ADDR" "minimumTcb(uint8)(uint64)" 1 --rpc-url "$SEPOLIA_RPC_URL" 2>/dev/null || echo "<unable to query>")
+        echo "  SEV-SNP: $SEVSNP_TCB"
+
+        echo ""
+        log "Firmware validation:"
         echo "  Verified automatically against Google's signed endorsements"
-        echo "  Bucket: gs://gce_tcb_integrity/ovmf_x64_csm/tdx/"
+        echo "  TDX: gs://gce_tcb_integrity/ovmf_x64_csm/tdx/"
+        echo "  SEV-SNP: verified via AK certificate chain"
         echo ""
         log "To check specific measurements:"
-        echo "  cast call $CONTRACT_ADDR 'getImageSupport(bytes)(uint8)' 0x<rtmr1> --rpc-url \$SEPOLIA_RPC_URL"
+        echo "  # TDX (grub.cfg digest from CCEL):"
+        echo "  cast call $CONTRACT_ADDR 'getImageSupport(uint8,bytes)(uint8)' 0 0x<grub_cfg_digest> --rpc-url \$SEPOLIA_RPC_URL"
+        echo ""
+        echo "  # SEV-SNP (grub.cfg digest from TPM event log):"
+        echo "  cast call $CONTRACT_ADDR 'getImageSupport(uint8,bytes)(uint8)' 1 0x<grub_cfg_digest> --rpc-url \$SEPOLIA_RPC_URL"
     fi
 }
 
@@ -379,9 +436,9 @@ case "${1:-}" in
         shift
         set_min_support "$@"
         ;;
-    set-min-svn)
+    set-min-tcb)
         shift
-        set_min_svn "$@"
+        set_min_tcb "$@"
         ;;
     show)
         show_config
