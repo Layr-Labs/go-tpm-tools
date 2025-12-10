@@ -178,12 +178,18 @@ type rawAttestRequest struct {
 
 // rawAttestResponse is the response body for /v1/raw-attestation
 type rawAttestResponse struct {
-	TdQuote       []byte   `json:"td_quote"`
-	CEL           []byte   `json:"cel"`
-	CcelAcpiTable []byte   `json:"ccel_acpi_table"`
-	CcelData      []byte   `json:"ccel_data"`
-	Nonce         []byte   `json:"nonce"`
-	AkCertChain   [][]byte `json:"ak_cert_chain,omitempty"` // AK cert + intermediate certs (DER encoded)
+	// TDX-specific fields
+	TdQuote       []byte `json:"td_quote,omitempty"`
+	CcelAcpiTable []byte `json:"ccel_acpi_table,omitempty"`
+	CcelData      []byte `json:"ccel_data,omitempty"`
+
+	// SEV-SNP-specific fields
+	SnpReport []byte `json:"snp_report,omitempty"`
+
+	// Common fields
+	CEL         []byte   `json:"cel"`
+	Nonce       []byte   `json:"nonce"`
+	AkCertChain [][]byte `json:"ak_cert_chain,omitempty"` // AK cert + intermediate certs (DER encoded)
 }
 
 // getRawAttestation returns the raw TDX quote and CEL for self-verification.
@@ -242,9 +248,10 @@ func (a *attestHandler) getRawAttestation(w http.ResponseWriter, r *http.Request
 
 	resp := rawAttestResponse{
 		TdQuote:       rawAttest.TdQuote,
-		CEL:           rawAttest.CEL,
 		CcelAcpiTable: rawAttest.CcelAcpiTable,
 		CcelData:      rawAttest.CcelData,
+		SnpReport:     rawAttest.SnpReport,
+		CEL:           rawAttest.CEL,
 		Nonce:         nonce,
 		AkCertChain:   rawAttest.AkCertChain,
 	}

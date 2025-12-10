@@ -22,6 +22,8 @@ import (
 	"github.com/google/go-configfs-tsm/configfs/configfsi"
 
 	"github.com/google/go-configfs-tsm/configfs/linuxtsm"
+	sabi "github.com/google/go-sev-guest/abi"
+	sg "github.com/google/go-sev-guest/client"
 	tg "github.com/google/go-tdx-guest/client"
 	tlabi "github.com/google/go-tdx-guest/client/linuxabi"
 
@@ -44,13 +46,22 @@ const (
 
 type principalIDTokenFetcher func(audience string) ([][]byte, error)
 
-// RawAttestation contains the raw TDX quote, CEL, and AK certificate chain for self-verification.
+// RawAttestation contains raw attestation evidence for self-verification.
+// For TDX: TdQuote, CcelAcpiTable, CcelData are populated.
+// For SEV-SNP: SnpReport is populated.
+// Common: CEL (container claims) and AkCertChain (GCE identity).
 type RawAttestation struct {
-	TdQuote       []byte   `json:"td_quote"`
-	CEL           []byte   `json:"cel"`
-	CcelAcpiTable []byte   `json:"ccel_acpi_table"`
-	CcelData      []byte   `json:"ccel_data"`
-	AkCertChain   [][]byte `json:"ak_cert_chain"` // AK cert + intermediate certs (DER encoded)
+	// TDX-specific fields
+	TdQuote       []byte `json:"td_quote,omitempty"`
+	CcelAcpiTable []byte `json:"ccel_acpi_table,omitempty"`
+	CcelData      []byte `json:"ccel_data,omitempty"`
+
+	// SEV-SNP-specific fields
+	SnpReport []byte `json:"snp_report,omitempty"`
+
+	// Common fields
+	CEL         []byte   `json:"cel"`
+	AkCertChain [][]byte `json:"ak_cert_chain"` // AK cert + intermediate certs (DER encoded)
 }
 
 // AttestationAgent is an agent that interacts with GCE's Attestation Service
@@ -126,13 +137,13 @@ func CreateAttestationAgent(tpm io.ReadWriteCloser, akFetcher util.TpmKeyFetcher
 	}
 	attestAgent.measuredRots = append(attestAgent.measuredRots, tpmAR)
 
-	// check if is a TDX machine
-	qp, err := tg.GetQuoteProvider()
+	// Check for TDX
+	tdxQP, err := tg.GetQuoteProvider()
 	if err != nil {
 		return nil, err
 	}
 	// Use qp.IsSupported to check the TDX RTMR interface is enabled
-	if qp.IsSupported() == nil {
+	if tdxQP.IsSupported() == nil {
 		logger.Info("Adding TDX RTMRs for measurement.")
 		// try to create tsm client for tdx rtmr
 		tsm, err := linuxtsm.MakeClient()
@@ -140,7 +151,7 @@ func CreateAttestationAgent(tpm io.ReadWriteCloser, akFetcher util.TpmKeyFetcher
 			return nil, fmt.Errorf("failed to create TSM for TDX: %v", err)
 		}
 		var tdxAR = &tdxAttestRoot{
-			qp:        qp,
+			qp:        tdxQP,
 			tsmClient: tsm,
 		}
 		attestAgent.measuredRots = append(attestAgent.measuredRots, tdxAR)
@@ -148,8 +159,23 @@ func CreateAttestationAgent(tpm io.ReadWriteCloser, akFetcher util.TpmKeyFetcher
 		logger.Info("Using TDX RTMR as attestation root.")
 		attestAgent.avRot = tdxAR
 	} else {
-		logger.Info("Using TPM PCR as attestation root.")
-		attestAgent.avRot = tpmAR
+		// Check for SEV-SNP
+		snpQP, err := sg.GetQuoteProvider()
+		if err == nil && snpQP.IsSupported() {
+			logger.Info("Adding SEV-SNP for attestation.")
+			var snpAR = &sevsnpAttestRoot{
+				qp:      snpQP,
+				tpmRoot: tpmAR, // CEL measured to TPM PCRs
+			}
+			// Note: We don't add snpAR to measuredRots because
+			// CEL is already measured via tpmAR
+
+			logger.Info("Using SEV-SNP as attestation root.")
+			attestAgent.avRot = snpAR
+		} else {
+			logger.Info("Using TPM PCR as attestation root.")
+			attestAgent.avRot = tpmAR
+		}
 	}
 
 	return attestAgent, nil
@@ -326,7 +352,7 @@ func (t *tpmAttestRoot) Attest(nonce []byte) (any, error) {
 
 type tdxAttestRoot struct {
 	tdxMu     sync.Mutex
-	qp        *tg.LinuxConfigFsQuoteProvider
+	qp        tg.QuoteProvider
 	tsmClient configfsi.Client
 	cosCel    cel.CEL
 }
@@ -367,6 +393,48 @@ func (t *tdxAttestRoot) Attest(nonce []byte) (any, error) {
 	}, nil
 }
 
+// sevsnpAttestRoot provides SEV-SNP attestation with TPM-based CEL.
+// SEV-SNP uses TPM PCRs for container measurements (like non-TDX path),
+// but fetches hardware attestation from the SEV-SNP device.
+type sevsnpAttestRoot struct {
+	snpMu   sync.Mutex
+	qp      sg.QuoteProvider
+	tpmRoot *tpmAttestRoot // Reuse TPM for CEL measurements
+}
+
+// SevSnpAttestation contains the raw SEV-SNP report for verification.
+type SevSnpAttestation struct {
+	SnpReport []byte
+}
+
+func (s *sevsnpAttestRoot) GetCEL() *cel.CEL {
+	// CEL is measured to TPM PCRs for SEV-SNP
+	return s.tpmRoot.GetCEL()
+}
+
+func (s *sevsnpAttestRoot) Extend(c cel.Content) error {
+	// Extend TPM PCR (same as non-TDX path)
+	return s.tpmRoot.Extend(c)
+}
+
+func (s *sevsnpAttestRoot) Attest(nonce []byte) (any, error) {
+	s.snpMu.Lock()
+	defer s.snpMu.Unlock()
+
+	// Get SNP report with nonce in REPORT_DATA
+	var snpNonce [sabi.ReportDataSize]byte
+	copy(snpNonce[:], nonce)
+
+	rawReport, err := s.qp.GetRawQuote(snpNonce)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get SEV-SNP report: %w", err)
+	}
+
+	return &SevSnpAttestation{
+		SnpReport: rawReport,
+	}, nil
+}
+
 // Refresh refreshes the internal state of the attestation agent.
 // It will reset the container image signatures for now.
 func (a *agent) Refresh(ctx context.Context) error {
@@ -376,16 +444,21 @@ func (a *agent) Refresh(ctx context.Context) error {
 	return nil
 }
 
-// GetRawAttestation returns the raw TDX quote and CEL for self-verification.
-// This allows relying parties to verify the quote against Intel's root CA
-// and replay the CEL to extract container claims without requiring Google RIM validation.
+// GetRawAttestation returns the raw attestation evidence for self-verification.
+// Supports both TDX and SEV-SNP platforms.
 //
-// The TDX quote's ReportData (64 bytes) is structured as:
+// This allows relying parties to verify:
+//   - TDX quote against Intel's root CA
+//   - SEV-SNP report against AMD's root CA
+//   - Replay the CEL to extract container claims
+//
+// The ReportData (64 bytes) is structured as:
 //   - Bytes 0-31:  SHA256(nonce)           - proves freshness
 //   - Bytes 32-63: SHA256(AK public key)   - binds quote to this specific GCE VM
 //
-// This cryptographically binds the TDX quote (signed by Intel) to the AK certificate
-// (signed by Google), preventing an attacker from mixing quotes and certs from different machines.
+// This cryptographically binds the hardware attestation (signed by Intel/AMD)
+// to the AK certificate (signed by Google), preventing an attacker from
+// mixing quotes and certs from different machines.
 func (a *agent) GetRawAttestation(nonce []byte) (*RawAttestation, error) {
 	// Build AK certificate chain (AK cert + intermediates)
 	// The AK cert contains GCE instance info in an X.509 extension
@@ -432,7 +505,7 @@ func (a *agent) GetRawAttestation(nonce []byte) (*RawAttestation, error) {
 		return nil, fmt.Errorf("failed to encode CEL: %w", err)
 	}
 
-	// Handle TDX attestation
+	// Handle platform-specific attestation
 	switch v := attResult.(type) {
 	case *verifier.TDCCELAttestation:
 		return &RawAttestation{
@@ -442,8 +515,14 @@ func (a *agent) GetRawAttestation(nonce []byte) (*RawAttestation, error) {
 			CcelData:      v.CcelData,
 			AkCertChain:   akCertChain,
 		}, nil
+	case *SevSnpAttestation:
+		return &RawAttestation{
+			SnpReport:   v.SnpReport,
+			CEL:         celBuf.Bytes(),
+			AkCertChain: akCertChain,
+		}, nil
 	default:
-		return nil, fmt.Errorf("raw attestation only supported for TDX, got %T", attResult)
+		return nil, fmt.Errorf("raw attestation only supported for TDX and SEV-SNP, got %T", attResult)
 	}
 }
 

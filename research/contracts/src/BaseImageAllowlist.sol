@@ -2,14 +2,21 @@
 pragma solidity ^0.8.13;
 
 /// @title BaseImageAllowlist
-/// @notice Allowlist for custom TDX base images with support level tracking
-/// @dev Two validation layers:
-///      1. Minimum SVN - reject outdated platform TCBs
-///      2. RTMR1 support levels - custom image versioning (LATEST/STABLE/USABLE/EXPERIMENTAL)
+/// @notice Allowlist for custom CVM base images with support level tracking
+/// @dev Three validation layers:
+///      1. Minimum TCB - reject outdated platform TCBs (per-CVM)
+///      2. RTMR1 support levels - custom image versioning (TDX only)
+///      3. Firmware - verified off-chain via Google's signed endorsements
 ///
-///      Note: MRTD (firmware) validation is handled off-chain by verifying Google's
-///      signed endorsements from gs://gce_tcb_integrity/ovmf_x64_csm/tdx/
+///      Note: MRTD/MEASUREMENT (firmware) validation is handled off-chain by verifying
+///      Google's signed endorsements from gs://gce_tcb_integrity/ovmf_x64_csm/{tdx,sevsnp}/
 contract BaseImageAllowlist {
+    /// @notice Supported Confidential VM technologies
+    enum CVM {
+        TDX,      // 0 - Intel Trust Domain Extensions
+        SEV_SNP   // 1 - AMD Secure Encrypted Virtualization - Secure Nested Paging
+    }
+
     /// @notice Support level for an image, mirrors Google's Confidential Space attributes
     /// @dev EXPERIMENTAL is outside the normal hierarchy - it only passes if minimum is also EXPERIMENTAL
     enum SupportLevel {
@@ -22,20 +29,23 @@ contract BaseImageAllowlist {
 
     address public owner;
 
-    // SVN: minimum platform TCB version
-    uint32 public minimumSVN;
+    /// @notice Minimum TCB version per CVM platform
+    /// @dev TDX: Pack TeeTcbSvn[0:3] as (major << 16 | minor << 8 | microcode)
+    ///      SEV-SNP: Use CurrentTcb directly (uint64 with packed component versions)
+    mapping(CVM => uint64) public minimumTcb;
 
     // RTMR1: custom image support levels
     SupportLevel public minimumSupportLevel;
     mapping(bytes32 => SupportLevel) public imageSupport;
 
-    event MinimumSVNUpdated(uint32 oldSVN, uint32 newSVN);
+    event MinimumTcbUpdated(CVM indexed cvm, uint64 oldTcb, uint64 newTcb);
     event ImageSupportUpdated(bytes32 indexed rtmr1, SupportLevel level);
     event MinimumSupportLevelUpdated(SupportLevel oldLevel, SupportLevel newLevel);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     error NOT_OWNER();
     error ZERO_ADDRESS();
+    error INVALID_CVM();
 
     modifier onlyOwner() {
         require(msg.sender == owner, NOT_OWNER());
@@ -48,21 +58,25 @@ contract BaseImageAllowlist {
         emit OwnershipTransferred(address(0), msg.sender);
     }
 
-    // ============ SVN Functions ============
+    // ============ TCB Functions ============
 
-    /// @notice Update the minimum SVN requirement
-    /// @param newSVN The new minimum SVN
-    function setMinimumSVN(uint32 newSVN) external onlyOwner {
-        uint32 oldSVN = minimumSVN;
-        minimumSVN = newSVN;
-        emit MinimumSVNUpdated(oldSVN, newSVN);
+    /// @notice Update the minimum TCB requirement for a CVM platform
+    /// @param cvm The CVM platform (TDX or SEV_SNP)
+    /// @param newTcb The new minimum TCB version
+    /// @dev For TDX: pack TeeTcbSvn bytes as (major << 16 | minor << 8 | microcode)
+    ///      For SEV-SNP: use CurrentTcb directly from the attestation report
+    function setMinimumTcb(CVM cvm, uint64 newTcb) external onlyOwner {
+        uint64 oldTcb = minimumTcb[cvm];
+        minimumTcb[cvm] = newTcb;
+        emit MinimumTcbUpdated(cvm, oldTcb, newTcb);
     }
 
-    /// @notice Check if an SVN meets the minimum requirement
-    /// @param svn The SVN to check
-    /// @return True if the SVN meets the minimum
-    function checkSVN(uint32 svn) external view returns (bool) {
-        return svn >= minimumSVN;
+    /// @notice Check if a TCB version meets the minimum requirement for a CVM platform
+    /// @param cvm The CVM platform (TDX or SEV_SNP)
+    /// @param tcb The TCB version to check
+    /// @return True if the TCB meets the minimum
+    function checkTcb(CVM cvm, uint64 tcb) external view returns (bool) {
+        return tcb >= minimumTcb[cvm];
     }
 
     // ============ RTMR1 Support Level Functions ============

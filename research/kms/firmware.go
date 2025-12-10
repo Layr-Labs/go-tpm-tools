@@ -24,8 +24,21 @@ const (
 	// TDXEndorsementPrefix is the path prefix for TDX endorsements.
 	TDXEndorsementPrefix = "ovmf_x64_csm/tdx/"
 
+	// SevSnpEndorsementPrefix is the path prefix for SEV-SNP endorsements.
+	SevSnpEndorsementPrefix = "ovmf_x64_csm/sevsnp/"
+
 	// GCERootCertURL is the URL for Google's TCB root certificate.
 	GCERootCertURL = "https://pki.goog/cloud_integrity/GCE-cc-tcb-root_1.crt"
+)
+
+// Technology represents the CVM technology type.
+type Technology int
+
+const (
+	// TDX is Intel Trust Domain Extensions.
+	TDX Technology = iota
+	// SevSnp is AMD Secure Encrypted Virtualization - Secure Nested Paging.
+	SevSnp
 )
 
 // FirmwareVerifier verifies MRTD values against Google's signed endorsements.
@@ -67,29 +80,56 @@ type FirmwareEndorsement struct {
 	UEFIDigest []byte    // SHA-384 of UEFI binary
 }
 
-// VerifyMRTD verifies that an MRTD value is endorsed by Google.
+// VerifyMRTD verifies that an MRTD value is endorsed by Google (TDX).
 // It fetches the endorsement from GCS and verifies the signature chain.
 func (v *FirmwareVerifier) VerifyMRTD(ctx context.Context, mrtd []byte) (*FirmwareEndorsement, error) {
-	if len(mrtd) != 48 {
-		return nil, fmt.Errorf("MRTD must be 48 bytes (SHA-384), got %d", len(mrtd))
+	return v.VerifyMeasurement(ctx, TDX, mrtd)
+}
+
+// VerifySevSnpMeasurement verifies that a SEV-SNP MEASUREMENT is endorsed by Google.
+// It fetches the endorsement from GCS and verifies the signature chain.
+func (v *FirmwareVerifier) VerifySevSnpMeasurement(ctx context.Context, measurement []byte) (*FirmwareEndorsement, error) {
+	return v.VerifyMeasurement(ctx, SevSnp, measurement)
+}
+
+// VerifyMeasurement verifies that a firmware measurement is endorsed by Google.
+// For TDX, measurement is the MRTD (48 bytes).
+// For SEV-SNP, measurement is the MEASUREMENT field (48 bytes).
+func (v *FirmwareVerifier) VerifyMeasurement(ctx context.Context, tech Technology, measurement []byte) (*FirmwareEndorsement, error) {
+	if len(measurement) != 48 {
+		return nil, fmt.Errorf("measurement must be 48 bytes (SHA-384), got %d", len(measurement))
 	}
 
-	// Convert MRTD to hex for the GCS object name
-	mrtdHex := hex.EncodeToString(mrtd)
-	objectName := TDXEndorsementPrefix + mrtdHex + ".binarypb"
+	// Select endorsement prefix based on technology
+	var prefix string
+	var techName string
+	switch tech {
+	case TDX:
+		prefix = TDXEndorsementPrefix
+		techName = "TDX MRTD"
+	case SevSnp:
+		prefix = SevSnpEndorsementPrefix
+		techName = "SEV-SNP MEASUREMENT"
+	default:
+		return nil, fmt.Errorf("unsupported technology: %d", tech)
+	}
+
+	// Convert measurement to hex for the GCS object name
+	measurementHex := hex.EncodeToString(measurement)
+	objectName := prefix + measurementHex + ".binarypb"
 
 	// Fetch endorsement from GCS
 	endorsementBytes, err := v.fetchFromGCS(ctx, objectName)
 	if err != nil {
-		// If the endorsement doesn't exist, the MRTD is not endorsed
+		// If the endorsement doesn't exist, the measurement is not endorsed
 		if strings.Contains(err.Error(), "object doesn't exist") {
-			return nil, fmt.Errorf("MRTD %s not found in Google's endorsements - firmware not endorsed", mrtdHex)
+			return nil, fmt.Errorf("%s %s not found in Google's endorsements - firmware not endorsed", techName, measurementHex)
 		}
 		return nil, fmt.Errorf("failed to fetch endorsement: %w", err)
 	}
 
 	// Verify the endorsement signature and extract info
-	return v.verifyEndorsement(endorsementBytes, mrtd)
+	return v.verifyEndorsement(endorsementBytes, measurement, tech)
 }
 
 // fetchFromGCS fetches an object from the TCB integrity bucket.
@@ -107,7 +147,7 @@ func (v *FirmwareVerifier) fetchFromGCS(ctx context.Context, objectName string) 
 }
 
 // verifyEndorsement verifies the endorsement signature and returns firmware info.
-func (v *FirmwareVerifier) verifyEndorsement(endorsementBytes, expectedMRTD []byte) (*FirmwareEndorsement, error) {
+func (v *FirmwareVerifier) verifyEndorsement(endorsementBytes, expectedMeasurement []byte, tech Technology) (*FirmwareEndorsement, error) {
 	// Parse the VMLaunchEndorsement protobuf
 	endorsement := &epb.VMLaunchEndorsement{}
 	if err := proto.Unmarshal(endorsementBytes, endorsement); err != nil {
@@ -129,7 +169,19 @@ func (v *FirmwareVerifier) verifyEndorsement(endorsementBytes, expectedMRTD []by
 		return nil, fmt.Errorf("failed to parse golden measurement: %w", err)
 	}
 
-	// Verify this is a TDX endorsement
+	// Extract technology-specific measurements and SVN
+	switch tech {
+	case TDX:
+		return v.extractTdxEndorsement(golden, expectedMeasurement)
+	case SevSnp:
+		return v.extractSevSnpEndorsement(golden, expectedMeasurement)
+	default:
+		return nil, fmt.Errorf("unsupported technology: %d", tech)
+	}
+}
+
+// extractTdxEndorsement extracts endorsement info for TDX.
+func (v *FirmwareVerifier) extractTdxEndorsement(golden *epb.VMGoldenMeasurement, expectedMRTD []byte) (*FirmwareEndorsement, error) {
 	tdx := golden.GetTdx()
 	if tdx == nil {
 		return nil, fmt.Errorf("endorsement does not contain TDX measurements")
@@ -149,6 +201,39 @@ func (v *FirmwareVerifier) verifyEndorsement(endorsementBytes, expectedMRTD []by
 
 	result := &FirmwareEndorsement{
 		SVN:        tdx.GetSvn(),
+		UEFIDigest: golden.GetDigest(),
+		ClSpec:     golden.GetClSpec(),
+	}
+
+	if ts := golden.GetTimestamp(); ts != nil {
+		result.Timestamp = ts.AsTime()
+	}
+
+	return result, nil
+}
+
+// extractSevSnpEndorsement extracts endorsement info for SEV-SNP.
+func (v *FirmwareVerifier) extractSevSnpEndorsement(golden *epb.VMGoldenMeasurement, expectedMeasurement []byte) (*FirmwareEndorsement, error) {
+	sevsnp := golden.GetSevSnp()
+	if sevsnp == nil {
+		return nil, fmt.Errorf("endorsement does not contain SEV-SNP measurements")
+	}
+
+	// SEV-SNP measurements are keyed by VMSA count (number of vCPUs)
+	// The measurement should be present in the map
+	found := false
+	for _, measurement := range sevsnp.GetMeasurements() {
+		if bytesEqual(measurement, expectedMeasurement) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, fmt.Errorf("MEASUREMENT does not match any measurement in endorsement")
+	}
+
+	result := &FirmwareEndorsement{
+		SVN:        sevsnp.GetSvn(),
 		UEFIDigest: golden.GetDigest(),
 		ClSpec:     golden.GetClSpec(),
 	}

@@ -31,7 +31,7 @@ var (
 
 // BaseImageAllowlistMetaData contains all meta data concerning the BaseImageAllowlist contract.
 var BaseImageAllowlistMetaData = &bind.MetaData{
-	ABI: "[{\"type\":\"constructor\",\"inputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"checkSVN\",\"inputs\":[{\"name\":\"svn\",\"type\":\"uint32\",\"internalType\":\"uint32\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"checkSupport\",\"inputs\":[{\"name\":\"level\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"},{\"name\":\"minimum\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"pure\"},{\"type\":\"function\",\"name\":\"getImageSupport\",\"inputs\":[{\"name\":\"rtmr1\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[{\"name\":\"\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"imageSupport\",\"inputs\":[{\"name\":\"\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"isImageAllowed\",\"inputs\":[{\"name\":\"rtmr1\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"minimumSVN\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"uint32\",\"internalType\":\"uint32\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"minimumSupportLevel\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"owner\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"address\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"removeImage\",\"inputs\":[{\"name\":\"rtmr1\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"setImageSupport\",\"inputs\":[{\"name\":\"rtmr1\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"level\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"setMinimumSVN\",\"inputs\":[{\"name\":\"newSVN\",\"type\":\"uint32\",\"internalType\":\"uint32\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"setMinimumSupportLevel\",\"inputs\":[{\"name\":\"newLevel\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"transferOwnership\",\"inputs\":[{\"name\":\"newOwner\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"event\",\"name\":\"ImageSupportUpdated\",\"inputs\":[{\"name\":\"rtmr1\",\"type\":\"bytes32\",\"indexed\":true,\"internalType\":\"bytes32\"},{\"name\":\"level\",\"type\":\"uint8\",\"indexed\":false,\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"MinimumSVNUpdated\",\"inputs\":[{\"name\":\"oldSVN\",\"type\":\"uint32\",\"indexed\":false,\"internalType\":\"uint32\"},{\"name\":\"newSVN\",\"type\":\"uint32\",\"indexed\":false,\"internalType\":\"uint32\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"MinimumSupportLevelUpdated\",\"inputs\":[{\"name\":\"oldLevel\",\"type\":\"uint8\",\"indexed\":false,\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"},{\"name\":\"newLevel\",\"type\":\"uint8\",\"indexed\":false,\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"OwnershipTransferred\",\"inputs\":[{\"name\":\"previousOwner\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"newOwner\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"}],\"anonymous\":false},{\"type\":\"error\",\"name\":\"NOT_OWNER\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ZERO_ADDRESS\",\"inputs\":[]}]",
+	ABI: "[{\"type\":\"constructor\",\"inputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"checkSupport\",\"inputs\":[{\"name\":\"level\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"},{\"name\":\"minimum\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"pure\"},{\"type\":\"function\",\"name\":\"checkTcb\",\"inputs\":[{\"name\":\"cvm\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.CVM\"},{\"name\":\"tcb\",\"type\":\"uint64\",\"internalType\":\"uint64\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getImageSupport\",\"inputs\":[{\"name\":\"rtmr1\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[{\"name\":\"\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"imageSupport\",\"inputs\":[{\"name\":\"\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"isImageAllowed\",\"inputs\":[{\"name\":\"rtmr1\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"minimumSupportLevel\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"minimumTcb\",\"inputs\":[{\"name\":\"\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.CVM\"}],\"outputs\":[{\"name\":\"\",\"type\":\"uint64\",\"internalType\":\"uint64\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"owner\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"address\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"removeImage\",\"inputs\":[{\"name\":\"rtmr1\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"setImageSupport\",\"inputs\":[{\"name\":\"rtmr1\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"level\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"setMinimumSupportLevel\",\"inputs\":[{\"name\":\"newLevel\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"setMinimumTcb\",\"inputs\":[{\"name\":\"cvm\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.CVM\"},{\"name\":\"newTcb\",\"type\":\"uint64\",\"internalType\":\"uint64\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"transferOwnership\",\"inputs\":[{\"name\":\"newOwner\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"event\",\"name\":\"ImageSupportUpdated\",\"inputs\":[{\"name\":\"rtmr1\",\"type\":\"bytes32\",\"indexed\":true,\"internalType\":\"bytes32\"},{\"name\":\"level\",\"type\":\"uint8\",\"indexed\":false,\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"MinimumSupportLevelUpdated\",\"inputs\":[{\"name\":\"oldLevel\",\"type\":\"uint8\",\"indexed\":false,\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"},{\"name\":\"newLevel\",\"type\":\"uint8\",\"indexed\":false,\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"MinimumTcbUpdated\",\"inputs\":[{\"name\":\"cvm\",\"type\":\"uint8\",\"indexed\":true,\"internalType\":\"enumBaseImageAllowlist.CVM\"},{\"name\":\"oldTcb\",\"type\":\"uint64\",\"indexed\":false,\"internalType\":\"uint64\"},{\"name\":\"newTcb\",\"type\":\"uint64\",\"indexed\":false,\"internalType\":\"uint64\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"OwnershipTransferred\",\"inputs\":[{\"name\":\"previousOwner\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"newOwner\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"}],\"anonymous\":false},{\"type\":\"error\",\"name\":\"INVALID_CVM\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"NOT_OWNER\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ZERO_ADDRESS\",\"inputs\":[]}]",
 }
 
 // BaseImageAllowlistABI is the input ABI used to generate the binding from.
@@ -180,37 +180,6 @@ func (_BaseImageAllowlist *BaseImageAllowlistTransactorRaw) Transact(opts *bind.
 	return _BaseImageAllowlist.Contract.contract.Transact(opts, method, params...)
 }
 
-// CheckSVN is a free data retrieval call binding the contract method 0xf742e62c.
-//
-// Solidity: function checkSVN(uint32 svn) view returns(bool)
-func (_BaseImageAllowlist *BaseImageAllowlistCaller) CheckSVN(opts *bind.CallOpts, svn uint32) (bool, error) {
-	var out []interface{}
-	err := _BaseImageAllowlist.contract.Call(opts, &out, "checkSVN", svn)
-
-	if err != nil {
-		return *new(bool), err
-	}
-
-	out0 := *abi.ConvertType(out[0], new(bool)).(*bool)
-
-	return out0, err
-
-}
-
-// CheckSVN is a free data retrieval call binding the contract method 0xf742e62c.
-//
-// Solidity: function checkSVN(uint32 svn) view returns(bool)
-func (_BaseImageAllowlist *BaseImageAllowlistSession) CheckSVN(svn uint32) (bool, error) {
-	return _BaseImageAllowlist.Contract.CheckSVN(&_BaseImageAllowlist.CallOpts, svn)
-}
-
-// CheckSVN is a free data retrieval call binding the contract method 0xf742e62c.
-//
-// Solidity: function checkSVN(uint32 svn) view returns(bool)
-func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) CheckSVN(svn uint32) (bool, error) {
-	return _BaseImageAllowlist.Contract.CheckSVN(&_BaseImageAllowlist.CallOpts, svn)
-}
-
 // CheckSupport is a free data retrieval call binding the contract method 0x91b2aa61.
 //
 // Solidity: function checkSupport(uint8 level, uint8 minimum) pure returns(bool)
@@ -240,6 +209,37 @@ func (_BaseImageAllowlist *BaseImageAllowlistSession) CheckSupport(level uint8, 
 // Solidity: function checkSupport(uint8 level, uint8 minimum) pure returns(bool)
 func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) CheckSupport(level uint8, minimum uint8) (bool, error) {
 	return _BaseImageAllowlist.Contract.CheckSupport(&_BaseImageAllowlist.CallOpts, level, minimum)
+}
+
+// CheckTcb is a free data retrieval call binding the contract method 0xa44cb94a.
+//
+// Solidity: function checkTcb(uint8 cvm, uint64 tcb) view returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistCaller) CheckTcb(opts *bind.CallOpts, cvm uint8, tcb uint64) (bool, error) {
+	var out []interface{}
+	err := _BaseImageAllowlist.contract.Call(opts, &out, "checkTcb", cvm, tcb)
+
+	if err != nil {
+		return *new(bool), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(bool)).(*bool)
+
+	return out0, err
+
+}
+
+// CheckTcb is a free data retrieval call binding the contract method 0xa44cb94a.
+//
+// Solidity: function checkTcb(uint8 cvm, uint64 tcb) view returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistSession) CheckTcb(cvm uint8, tcb uint64) (bool, error) {
+	return _BaseImageAllowlist.Contract.CheckTcb(&_BaseImageAllowlist.CallOpts, cvm, tcb)
+}
+
+// CheckTcb is a free data retrieval call binding the contract method 0xa44cb94a.
+//
+// Solidity: function checkTcb(uint8 cvm, uint64 tcb) view returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) CheckTcb(cvm uint8, tcb uint64) (bool, error) {
+	return _BaseImageAllowlist.Contract.CheckTcb(&_BaseImageAllowlist.CallOpts, cvm, tcb)
 }
 
 // GetImageSupport is a free data retrieval call binding the contract method 0xe0ec7e51.
@@ -335,37 +335,6 @@ func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) IsImageAllowed(rtmr1
 	return _BaseImageAllowlist.Contract.IsImageAllowed(&_BaseImageAllowlist.CallOpts, rtmr1)
 }
 
-// MinimumSVN is a free data retrieval call binding the contract method 0x848cf88d.
-//
-// Solidity: function minimumSVN() view returns(uint32)
-func (_BaseImageAllowlist *BaseImageAllowlistCaller) MinimumSVN(opts *bind.CallOpts) (uint32, error) {
-	var out []interface{}
-	err := _BaseImageAllowlist.contract.Call(opts, &out, "minimumSVN")
-
-	if err != nil {
-		return *new(uint32), err
-	}
-
-	out0 := *abi.ConvertType(out[0], new(uint32)).(*uint32)
-
-	return out0, err
-
-}
-
-// MinimumSVN is a free data retrieval call binding the contract method 0x848cf88d.
-//
-// Solidity: function minimumSVN() view returns(uint32)
-func (_BaseImageAllowlist *BaseImageAllowlistSession) MinimumSVN() (uint32, error) {
-	return _BaseImageAllowlist.Contract.MinimumSVN(&_BaseImageAllowlist.CallOpts)
-}
-
-// MinimumSVN is a free data retrieval call binding the contract method 0x848cf88d.
-//
-// Solidity: function minimumSVN() view returns(uint32)
-func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) MinimumSVN() (uint32, error) {
-	return _BaseImageAllowlist.Contract.MinimumSVN(&_BaseImageAllowlist.CallOpts)
-}
-
 // MinimumSupportLevel is a free data retrieval call binding the contract method 0x2d66eee5.
 //
 // Solidity: function minimumSupportLevel() view returns(uint8)
@@ -395,6 +364,37 @@ func (_BaseImageAllowlist *BaseImageAllowlistSession) MinimumSupportLevel() (uin
 // Solidity: function minimumSupportLevel() view returns(uint8)
 func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) MinimumSupportLevel() (uint8, error) {
 	return _BaseImageAllowlist.Contract.MinimumSupportLevel(&_BaseImageAllowlist.CallOpts)
+}
+
+// MinimumTcb is a free data retrieval call binding the contract method 0xdf1bf33c.
+//
+// Solidity: function minimumTcb(uint8 ) view returns(uint64)
+func (_BaseImageAllowlist *BaseImageAllowlistCaller) MinimumTcb(opts *bind.CallOpts, arg0 uint8) (uint64, error) {
+	var out []interface{}
+	err := _BaseImageAllowlist.contract.Call(opts, &out, "minimumTcb", arg0)
+
+	if err != nil {
+		return *new(uint64), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(uint64)).(*uint64)
+
+	return out0, err
+
+}
+
+// MinimumTcb is a free data retrieval call binding the contract method 0xdf1bf33c.
+//
+// Solidity: function minimumTcb(uint8 ) view returns(uint64)
+func (_BaseImageAllowlist *BaseImageAllowlistSession) MinimumTcb(arg0 uint8) (uint64, error) {
+	return _BaseImageAllowlist.Contract.MinimumTcb(&_BaseImageAllowlist.CallOpts, arg0)
+}
+
+// MinimumTcb is a free data retrieval call binding the contract method 0xdf1bf33c.
+//
+// Solidity: function minimumTcb(uint8 ) view returns(uint64)
+func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) MinimumTcb(arg0 uint8) (uint64, error) {
+	return _BaseImageAllowlist.Contract.MinimumTcb(&_BaseImageAllowlist.CallOpts, arg0)
 }
 
 // Owner is a free data retrieval call binding the contract method 0x8da5cb5b.
@@ -470,27 +470,6 @@ func (_BaseImageAllowlist *BaseImageAllowlistTransactorSession) SetImageSupport(
 	return _BaseImageAllowlist.Contract.SetImageSupport(&_BaseImageAllowlist.TransactOpts, rtmr1, level)
 }
 
-// SetMinimumSVN is a paid mutator transaction binding the contract method 0x9a99c501.
-//
-// Solidity: function setMinimumSVN(uint32 newSVN) returns()
-func (_BaseImageAllowlist *BaseImageAllowlistTransactor) SetMinimumSVN(opts *bind.TransactOpts, newSVN uint32) (*types.Transaction, error) {
-	return _BaseImageAllowlist.contract.Transact(opts, "setMinimumSVN", newSVN)
-}
-
-// SetMinimumSVN is a paid mutator transaction binding the contract method 0x9a99c501.
-//
-// Solidity: function setMinimumSVN(uint32 newSVN) returns()
-func (_BaseImageAllowlist *BaseImageAllowlistSession) SetMinimumSVN(newSVN uint32) (*types.Transaction, error) {
-	return _BaseImageAllowlist.Contract.SetMinimumSVN(&_BaseImageAllowlist.TransactOpts, newSVN)
-}
-
-// SetMinimumSVN is a paid mutator transaction binding the contract method 0x9a99c501.
-//
-// Solidity: function setMinimumSVN(uint32 newSVN) returns()
-func (_BaseImageAllowlist *BaseImageAllowlistTransactorSession) SetMinimumSVN(newSVN uint32) (*types.Transaction, error) {
-	return _BaseImageAllowlist.Contract.SetMinimumSVN(&_BaseImageAllowlist.TransactOpts, newSVN)
-}
-
 // SetMinimumSupportLevel is a paid mutator transaction binding the contract method 0x810280fe.
 //
 // Solidity: function setMinimumSupportLevel(uint8 newLevel) returns()
@@ -510,6 +489,27 @@ func (_BaseImageAllowlist *BaseImageAllowlistSession) SetMinimumSupportLevel(new
 // Solidity: function setMinimumSupportLevel(uint8 newLevel) returns()
 func (_BaseImageAllowlist *BaseImageAllowlistTransactorSession) SetMinimumSupportLevel(newLevel uint8) (*types.Transaction, error) {
 	return _BaseImageAllowlist.Contract.SetMinimumSupportLevel(&_BaseImageAllowlist.TransactOpts, newLevel)
+}
+
+// SetMinimumTcb is a paid mutator transaction binding the contract method 0x734a7ab6.
+//
+// Solidity: function setMinimumTcb(uint8 cvm, uint64 newTcb) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistTransactor) SetMinimumTcb(opts *bind.TransactOpts, cvm uint8, newTcb uint64) (*types.Transaction, error) {
+	return _BaseImageAllowlist.contract.Transact(opts, "setMinimumTcb", cvm, newTcb)
+}
+
+// SetMinimumTcb is a paid mutator transaction binding the contract method 0x734a7ab6.
+//
+// Solidity: function setMinimumTcb(uint8 cvm, uint64 newTcb) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistSession) SetMinimumTcb(cvm uint8, newTcb uint64) (*types.Transaction, error) {
+	return _BaseImageAllowlist.Contract.SetMinimumTcb(&_BaseImageAllowlist.TransactOpts, cvm, newTcb)
+}
+
+// SetMinimumTcb is a paid mutator transaction binding the contract method 0x734a7ab6.
+//
+// Solidity: function setMinimumTcb(uint8 cvm, uint64 newTcb) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistTransactorSession) SetMinimumTcb(cvm uint8, newTcb uint64) (*types.Transaction, error) {
+	return _BaseImageAllowlist.Contract.SetMinimumTcb(&_BaseImageAllowlist.TransactOpts, cvm, newTcb)
 }
 
 // TransferOwnership is a paid mutator transaction binding the contract method 0xf2fde38b.
@@ -678,141 +678,6 @@ func (_BaseImageAllowlist *BaseImageAllowlistFilterer) ParseImageSupportUpdated(
 	return event, nil
 }
 
-// BaseImageAllowlistMinimumSVNUpdatedIterator is returned from FilterMinimumSVNUpdated and is used to iterate over the raw logs and unpacked data for MinimumSVNUpdated events raised by the BaseImageAllowlist contract.
-type BaseImageAllowlistMinimumSVNUpdatedIterator struct {
-	Event *BaseImageAllowlistMinimumSVNUpdated // Event containing the contract specifics and raw log
-
-	contract *bind.BoundContract // Generic contract to use for unpacking event data
-	event    string              // Event name to use for unpacking event data
-
-	logs chan types.Log        // Log channel receiving the found contract events
-	sub  ethereum.Subscription // Subscription for errors, completion and termination
-	done bool                  // Whether the subscription completed delivering logs
-	fail error                 // Occurred error to stop iteration
-}
-
-// Next advances the iterator to the subsequent event, returning whether there
-// are any more events found. In case of a retrieval or parsing error, false is
-// returned and Error() can be queried for the exact failure.
-func (it *BaseImageAllowlistMinimumSVNUpdatedIterator) Next() bool {
-	// If the iterator failed, stop iterating
-	if it.fail != nil {
-		return false
-	}
-	// If the iterator completed, deliver directly whatever's available
-	if it.done {
-		select {
-		case log := <-it.logs:
-			it.Event = new(BaseImageAllowlistMinimumSVNUpdated)
-			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
-				it.fail = err
-				return false
-			}
-			it.Event.Raw = log
-			return true
-
-		default:
-			return false
-		}
-	}
-	// Iterator still in progress, wait for either a data or an error event
-	select {
-	case log := <-it.logs:
-		it.Event = new(BaseImageAllowlistMinimumSVNUpdated)
-		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
-			it.fail = err
-			return false
-		}
-		it.Event.Raw = log
-		return true
-
-	case err := <-it.sub.Err():
-		it.done = true
-		it.fail = err
-		return it.Next()
-	}
-}
-
-// Error returns any retrieval or parsing error occurred during filtering.
-func (it *BaseImageAllowlistMinimumSVNUpdatedIterator) Error() error {
-	return it.fail
-}
-
-// Close terminates the iteration process, releasing any pending underlying
-// resources.
-func (it *BaseImageAllowlistMinimumSVNUpdatedIterator) Close() error {
-	it.sub.Unsubscribe()
-	return nil
-}
-
-// BaseImageAllowlistMinimumSVNUpdated represents a MinimumSVNUpdated event raised by the BaseImageAllowlist contract.
-type BaseImageAllowlistMinimumSVNUpdated struct {
-	OldSVN uint32
-	NewSVN uint32
-	Raw    types.Log // Blockchain specific contextual infos
-}
-
-// FilterMinimumSVNUpdated is a free log retrieval operation binding the contract event 0x9071bbd128eef3facf8bf1ce7acdcb4ff10b9ce4b8b4612092d3c92779fab08d.
-//
-// Solidity: event MinimumSVNUpdated(uint32 oldSVN, uint32 newSVN)
-func (_BaseImageAllowlist *BaseImageAllowlistFilterer) FilterMinimumSVNUpdated(opts *bind.FilterOpts) (*BaseImageAllowlistMinimumSVNUpdatedIterator, error) {
-
-	logs, sub, err := _BaseImageAllowlist.contract.FilterLogs(opts, "MinimumSVNUpdated")
-	if err != nil {
-		return nil, err
-	}
-	return &BaseImageAllowlistMinimumSVNUpdatedIterator{contract: _BaseImageAllowlist.contract, event: "MinimumSVNUpdated", logs: logs, sub: sub}, nil
-}
-
-// WatchMinimumSVNUpdated is a free log subscription operation binding the contract event 0x9071bbd128eef3facf8bf1ce7acdcb4ff10b9ce4b8b4612092d3c92779fab08d.
-//
-// Solidity: event MinimumSVNUpdated(uint32 oldSVN, uint32 newSVN)
-func (_BaseImageAllowlist *BaseImageAllowlistFilterer) WatchMinimumSVNUpdated(opts *bind.WatchOpts, sink chan<- *BaseImageAllowlistMinimumSVNUpdated) (event.Subscription, error) {
-
-	logs, sub, err := _BaseImageAllowlist.contract.WatchLogs(opts, "MinimumSVNUpdated")
-	if err != nil {
-		return nil, err
-	}
-	return event.NewSubscription(func(quit <-chan struct{}) error {
-		defer sub.Unsubscribe()
-		for {
-			select {
-			case log := <-logs:
-				// New log arrived, parse the event and forward to the user
-				event := new(BaseImageAllowlistMinimumSVNUpdated)
-				if err := _BaseImageAllowlist.contract.UnpackLog(event, "MinimumSVNUpdated", log); err != nil {
-					return err
-				}
-				event.Raw = log
-
-				select {
-				case sink <- event:
-				case err := <-sub.Err():
-					return err
-				case <-quit:
-					return nil
-				}
-			case err := <-sub.Err():
-				return err
-			case <-quit:
-				return nil
-			}
-		}
-	}), nil
-}
-
-// ParseMinimumSVNUpdated is a log parse operation binding the contract event 0x9071bbd128eef3facf8bf1ce7acdcb4ff10b9ce4b8b4612092d3c92779fab08d.
-//
-// Solidity: event MinimumSVNUpdated(uint32 oldSVN, uint32 newSVN)
-func (_BaseImageAllowlist *BaseImageAllowlistFilterer) ParseMinimumSVNUpdated(log types.Log) (*BaseImageAllowlistMinimumSVNUpdated, error) {
-	event := new(BaseImageAllowlistMinimumSVNUpdated)
-	if err := _BaseImageAllowlist.contract.UnpackLog(event, "MinimumSVNUpdated", log); err != nil {
-		return nil, err
-	}
-	event.Raw = log
-	return event, nil
-}
-
 // BaseImageAllowlistMinimumSupportLevelUpdatedIterator is returned from FilterMinimumSupportLevelUpdated and is used to iterate over the raw logs and unpacked data for MinimumSupportLevelUpdated events raised by the BaseImageAllowlist contract.
 type BaseImageAllowlistMinimumSupportLevelUpdatedIterator struct {
 	Event *BaseImageAllowlistMinimumSupportLevelUpdated // Event containing the contract specifics and raw log
@@ -942,6 +807,152 @@ func (_BaseImageAllowlist *BaseImageAllowlistFilterer) WatchMinimumSupportLevelU
 func (_BaseImageAllowlist *BaseImageAllowlistFilterer) ParseMinimumSupportLevelUpdated(log types.Log) (*BaseImageAllowlistMinimumSupportLevelUpdated, error) {
 	event := new(BaseImageAllowlistMinimumSupportLevelUpdated)
 	if err := _BaseImageAllowlist.contract.UnpackLog(event, "MinimumSupportLevelUpdated", log); err != nil {
+		return nil, err
+	}
+	event.Raw = log
+	return event, nil
+}
+
+// BaseImageAllowlistMinimumTcbUpdatedIterator is returned from FilterMinimumTcbUpdated and is used to iterate over the raw logs and unpacked data for MinimumTcbUpdated events raised by the BaseImageAllowlist contract.
+type BaseImageAllowlistMinimumTcbUpdatedIterator struct {
+	Event *BaseImageAllowlistMinimumTcbUpdated // Event containing the contract specifics and raw log
+
+	contract *bind.BoundContract // Generic contract to use for unpacking event data
+	event    string              // Event name to use for unpacking event data
+
+	logs chan types.Log        // Log channel receiving the found contract events
+	sub  ethereum.Subscription // Subscription for errors, completion and termination
+	done bool                  // Whether the subscription completed delivering logs
+	fail error                 // Occurred error to stop iteration
+}
+
+// Next advances the iterator to the subsequent event, returning whether there
+// are any more events found. In case of a retrieval or parsing error, false is
+// returned and Error() can be queried for the exact failure.
+func (it *BaseImageAllowlistMinimumTcbUpdatedIterator) Next() bool {
+	// If the iterator failed, stop iterating
+	if it.fail != nil {
+		return false
+	}
+	// If the iterator completed, deliver directly whatever's available
+	if it.done {
+		select {
+		case log := <-it.logs:
+			it.Event = new(BaseImageAllowlistMinimumTcbUpdated)
+			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+				it.fail = err
+				return false
+			}
+			it.Event.Raw = log
+			return true
+
+		default:
+			return false
+		}
+	}
+	// Iterator still in progress, wait for either a data or an error event
+	select {
+	case log := <-it.logs:
+		it.Event = new(BaseImageAllowlistMinimumTcbUpdated)
+		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+			it.fail = err
+			return false
+		}
+		it.Event.Raw = log
+		return true
+
+	case err := <-it.sub.Err():
+		it.done = true
+		it.fail = err
+		return it.Next()
+	}
+}
+
+// Error returns any retrieval or parsing error occurred during filtering.
+func (it *BaseImageAllowlistMinimumTcbUpdatedIterator) Error() error {
+	return it.fail
+}
+
+// Close terminates the iteration process, releasing any pending underlying
+// resources.
+func (it *BaseImageAllowlistMinimumTcbUpdatedIterator) Close() error {
+	it.sub.Unsubscribe()
+	return nil
+}
+
+// BaseImageAllowlistMinimumTcbUpdated represents a MinimumTcbUpdated event raised by the BaseImageAllowlist contract.
+type BaseImageAllowlistMinimumTcbUpdated struct {
+	Cvm    uint8
+	OldTcb uint64
+	NewTcb uint64
+	Raw    types.Log // Blockchain specific contextual infos
+}
+
+// FilterMinimumTcbUpdated is a free log retrieval operation binding the contract event 0x83e88ada39bccecdbcee22fd99da923c7a1f3231b98245185bf9e93f4b1af53c.
+//
+// Solidity: event MinimumTcbUpdated(uint8 indexed cvm, uint64 oldTcb, uint64 newTcb)
+func (_BaseImageAllowlist *BaseImageAllowlistFilterer) FilterMinimumTcbUpdated(opts *bind.FilterOpts, cvm []uint8) (*BaseImageAllowlistMinimumTcbUpdatedIterator, error) {
+
+	var cvmRule []interface{}
+	for _, cvmItem := range cvm {
+		cvmRule = append(cvmRule, cvmItem)
+	}
+
+	logs, sub, err := _BaseImageAllowlist.contract.FilterLogs(opts, "MinimumTcbUpdated", cvmRule)
+	if err != nil {
+		return nil, err
+	}
+	return &BaseImageAllowlistMinimumTcbUpdatedIterator{contract: _BaseImageAllowlist.contract, event: "MinimumTcbUpdated", logs: logs, sub: sub}, nil
+}
+
+// WatchMinimumTcbUpdated is a free log subscription operation binding the contract event 0x83e88ada39bccecdbcee22fd99da923c7a1f3231b98245185bf9e93f4b1af53c.
+//
+// Solidity: event MinimumTcbUpdated(uint8 indexed cvm, uint64 oldTcb, uint64 newTcb)
+func (_BaseImageAllowlist *BaseImageAllowlistFilterer) WatchMinimumTcbUpdated(opts *bind.WatchOpts, sink chan<- *BaseImageAllowlistMinimumTcbUpdated, cvm []uint8) (event.Subscription, error) {
+
+	var cvmRule []interface{}
+	for _, cvmItem := range cvm {
+		cvmRule = append(cvmRule, cvmItem)
+	}
+
+	logs, sub, err := _BaseImageAllowlist.contract.WatchLogs(opts, "MinimumTcbUpdated", cvmRule)
+	if err != nil {
+		return nil, err
+	}
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case log := <-logs:
+				// New log arrived, parse the event and forward to the user
+				event := new(BaseImageAllowlistMinimumTcbUpdated)
+				if err := _BaseImageAllowlist.contract.UnpackLog(event, "MinimumTcbUpdated", log); err != nil {
+					return err
+				}
+				event.Raw = log
+
+				select {
+				case sink <- event:
+				case err := <-sub.Err():
+					return err
+				case <-quit:
+					return nil
+				}
+			case err := <-sub.Err():
+				return err
+			case <-quit:
+				return nil
+			}
+		}
+	}), nil
+}
+
+// ParseMinimumTcbUpdated is a log parse operation binding the contract event 0x83e88ada39bccecdbcee22fd99da923c7a1f3231b98245185bf9e93f4b1af53c.
+//
+// Solidity: event MinimumTcbUpdated(uint8 indexed cvm, uint64 oldTcb, uint64 newTcb)
+func (_BaseImageAllowlist *BaseImageAllowlistFilterer) ParseMinimumTcbUpdated(log types.Log) (*BaseImageAllowlistMinimumTcbUpdated, error) {
+	event := new(BaseImageAllowlistMinimumTcbUpdated)
+	if err := _BaseImageAllowlist.contract.UnpackLog(event, "MinimumTcbUpdated", log); err != nil {
 		return nil, err
 	}
 	event.Raw = log

@@ -1,18 +1,19 @@
 #!/bin/bash
-# TDX Attestation Demo
+# CVM Attestation Demo
 #
-# Demonstrates raw TDX attestation with:
+# Demonstrates raw attestation (TDX or SEV-SNP) with:
 #   - KMS server that verifies attestations against a Sepolia contract
-#   - TDX workload running in Confidential Space
+#   - CVM workload running in Confidential Space
 #
 # Prerequisites:
 #   1. Run setup.sh to deploy contract and add base image measurements
 #   2. Set environment variables or create config.env
 #
 # Usage:
-#   ./run.sh          # Run the full demo
-#   ./run.sh logs     # Stream logs from running VMs
-#   ./run.sh cleanup  # Delete all VMs
+#   ./run.sh                       # Run demo with TDX (default)
+#   ./run.sh --platform sevsnp     # Run demo with SEV-SNP
+#   ./run.sh logs                  # Stream logs from running VMs
+#   ./run.sh cleanup               # Delete all VMs
 
 set -eo pipefail
 
@@ -27,12 +28,16 @@ CONFIG_FILE="$RESEARCH_DIR/config.env"
 PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null)}"
 ZONE="${ZONE:-us-central1-a}"
 DOCKER_REPO="${DOCKER_REPO:-docker.io/cavaneigen}"
-CS_IMAGE="${CS_IMAGE:-confidential-space-debug-cavan-test-image-1764789757}"
+CS_IMAGE="${CS_IMAGE:-confidential-space-debug-cavan-test-image-1765299170}"
 CS_IMAGE_PROJECT="${CS_IMAGE_PROJECT:-$PROJECT_ID}"
+
+# Platform (tdx or sevsnp)
+PLATFORM="${PLATFORM:-tdx}"
 
 # Derived values
 KMS_INSTANCE="research-kms"
 TDX_INSTANCE="research-tdx-workload"
+SEVSNP_INSTANCE="research-sevsnp-workload"
 KMS_IMAGE="$DOCKER_REPO/research-kms:latest"
 WORKLOAD_IMAGE="$DOCKER_REPO/research-workload:latest"
 
@@ -120,6 +125,28 @@ deploy_tdx() {
     log "TDX workload VM deployed"
 }
 
+deploy_sevsnp() {
+    KMS_IP=$(cat /tmp/kms_ip.txt 2>/dev/null) || error "KMS IP not found. Deploy KMS first."
+    log "Deploying SEV-SNP workload VM..."
+
+    # Delete if exists
+    gcloud compute instances delete "$SEVSNP_INSTANCE" --zone="$ZONE" --project="$PROJECT_ID" --quiet 2>/dev/null || true
+
+    gcloud compute instances create "$SEVSNP_INSTANCE" \
+        --zone="$ZONE" \
+        --project="$PROJECT_ID" \
+        --machine-type=n2d-standard-2 \
+        --confidential-compute-type=SEV_SNP \
+        --shielded-secure-boot \
+        --image="$CS_IMAGE" \
+        --image-project="$CS_IMAGE_PROJECT" \
+        --maintenance-policy=TERMINATE \
+        --scopes=cloud-platform \
+        --metadata="tee-image-reference=$WORKLOAD_IMAGE,tee-container-log-redirect=true,tee-env-KMS_URL=http://$KMS_IP:8080"
+
+    log "SEV-SNP workload VM deployed"
+}
+
 stream_logs() {
     log "Streaming logs (Ctrl+C to stop)..."
 
@@ -140,13 +167,14 @@ cleanup() {
     log "Cleaning up VMs..."
     gcloud compute instances delete "$KMS_INSTANCE" --zone="$ZONE" --project="$PROJECT_ID" --quiet 2>/dev/null || true
     gcloud compute instances delete "$TDX_INSTANCE" --zone="$ZONE" --project="$PROJECT_ID" --quiet 2>/dev/null || true
+    gcloud compute instances delete "$SEVSNP_INSTANCE" --zone="$ZONE" --project="$PROJECT_ID" --quiet 2>/dev/null || true
     rm -f /tmp/kms_ip.txt
     log "Done"
 }
 
 run_demo() {
     check_config
-    log "Starting TDX Attestation Demo"
+    log "Starting CVM Attestation Demo (platform: $PLATFORM)"
     log "  Project: $PROJECT_ID"
     log "  Contract: $CONTRACT_ADDR (Sepolia)"
     log "  Base image: $CS_IMAGE"
@@ -154,18 +182,34 @@ run_demo() {
 
     build
     deploy_kms
-    deploy_tdx
+
+    case "$PLATFORM" in
+        tdx)    deploy_tdx ;;
+        sevsnp) deploy_sevsnp ;;
+        *)      error "Unknown platform: $PLATFORM (use tdx or sevsnp)" ;;
+    esac
 
     echo ""
     log "=== Demo Running ==="
     log "KMS: http://$(cat /tmp/kms_ip.txt):8080"
+    log "Platform: $PLATFORM"
     log ""
     log "View logs:    ./run.sh logs"
     log "Cleanup:      ./run.sh cleanup"
     log ""
-    log "If base image not in allowlist, add it with:"
-    log "  ./setup.sh add-image --mrtd 0x... --rtmr0 0x... --rtmr1 0x..."
+    if [ "$PLATFORM" = "tdx" ]; then
+        log "If base image not in allowlist, add it with:"
+        log "  ./setup.sh add-image --rtmr1 0x..."
+    fi
 }
+
+# Parse flags
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --platform) PLATFORM="$2"; shift 2 ;;
+        *) break ;;
+    esac
+done
 
 case "${1:-run}" in
     run|"")   run_demo ;;
@@ -174,8 +218,13 @@ case "${1:-run}" in
     build)    build ;;
     kms)      check_config; deploy_kms ;;
     tdx)      deploy_tdx ;;
+    sevsnp)   deploy_sevsnp ;;
     *)
-        echo "Usage: $0 [command]"
+        echo "Usage: $0 [--platform tdx|sevsnp] [command]"
+        echo ""
+        echo "Platforms:"
+        echo "  --platform tdx      Intel TDX (default)"
+        echo "  --platform sevsnp   AMD SEV-SNP"
         echo ""
         echo "Commands:"
         echo "  (none)    Run the full demo"
@@ -186,5 +235,6 @@ case "${1:-run}" in
         echo "  build     Build Docker images only"
         echo "  kms       Deploy KMS VM only"
         echo "  tdx       Deploy TDX workload VM only"
+        echo "  sevsnp    Deploy SEV-SNP workload VM only"
         ;;
 esac

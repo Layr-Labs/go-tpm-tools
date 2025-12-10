@@ -22,21 +22,23 @@ Similarly, Intel Trust Authority (ITA) fails because its "Confidential Space Ada
 The proposed architecture consists of three parts:
 
 1.  **Custom Base Images:** We customize the Confidential Space stack - modifying both the Launcher and the underlying Container-Optimized OS (COS) - while continuing to pull in upstream security patches and updates.
-2.  **Self-Managed Allowlist:** We maintain a smart contract of valid custom image measurements (RTMR1).
-3.  **Direct Verification:** The KMS (Relying Party) verifies the workload directly using **Raw TDX Attestation**. The verification logic should be published as open-source libraries (Go initially) that any relying party can consume.
+2.  **Self-Managed Allowlist:** We maintain a smart contract of valid custom image measurements (RTMR1 for TDX).
+3.  **Direct Verification:** The KMS (Relying Party) verifies the workload directly using **Raw Attestation** (TDX or SEV-SNP). The verification logic should be published as open-source libraries (Go initially) that any relying party can consume.
 
-Instead of requesting a signed JWT from Google, the code running in the user workload queries a `/v1/raw-attestation` endpoint to retrieve the raw TDX quote (hardware proof), Canonical Event Log (container measurements), CCEL (firmware event log), and AK certificates (platform identity). The workload then sends this evidence to the KMS, which performs verification before releasing any secrets:
+Instead of requesting a signed JWT from Google, the code running in the user workload queries a `/v1/raw-attestation` endpoint to retrieve the raw hardware quote, Canonical Event Log (container measurements), and AK certificates (platform identity). The workload then sends this evidence to the KMS, which performs verification before releasing any secrets:
 
-1. Verify TDX quote signature against Intel CA.
+1. Verify hardware quote signature (Intel CA for TDX, AMD CA for SEV-SNP).
 2. Verify ReportData bindings (RSA key hash, AK public key hash).
 3. Verify AK certificate chain against Google GCE EK root CA.
 4. Replay event logs to extract platform state and container claims.
-5. Verify platform meets security requirements (production mode, Secure Boot, etc.).
-6. Verify firmware (MRTD) against Google's signed endorsements.
-7. Verify OS image (RTMR1) against on-chain allowlist.
+5. Verify platform meets security requirements (production mode, no debug, etc.).
+6. Verify firmware (MRTD for TDX, MEASUREMENT for SEV-SNP) against Google's signed endorsements.
+7. Verify OS image (RTMR1 for TDX) against on-chain allowlist.
 8. Verify GCE project against policy and container digest against on-chain release registry.
 
 ### Measurement Validation
+
+#### TDX Measurements
 
 Each TDX measurement register is validated differently:
 
@@ -47,13 +49,42 @@ Each TDX measurement register is validated differently:
 | **RTMR1** | OS/kernel (our base image) | On-chain allowlist with support level |
 | **RTMR2** | Container (args, env, image) | Replay CEL → validate against on-chain release |
 
+#### SEV-SNP Measurements
+
+| Field | What it measures | Validation |
+|-------|------------------|------------|
+| **MEASUREMENT** | Firmware binary | Verify Google's signed endorsement from `gs://gce_tcb_integrity/ovmf_x64_csm/sevsnp/{MEASUREMENT}.binarypb` |
+| **CEL** | Container (args, env, image) | Measured to TPM PCRs, replay to extract claims |
+
+#### TCB Version Enforcement
+
+The contract enforces minimum TCB (Trusted Computing Base) versions per platform. This allows rejecting attestations from hosts running outdated firmware or microcode with known vulnerabilities.
+
+| Platform | TCB Field | Format |
+|----------|-----------|--------|
+| **TDX** | `TeeTcbSvn[0:3]` | Packed as `(major << 16 \| minor << 8 \| microcode)` |
+| **SEV-SNP** | `CurrentTcb` | uint64 with packed component versions (bootloader, TEE, SNP, microcode) |
+
+**Important:** On GCP, you cannot force a TCB update - Google rolls out firmware and microcode updates on their schedule. Setting a minimum TCB version in the contract allows you to refuse secrets to unpatched hosts until Google updates them. This is expected to be rarely used, but provides a policy lever for responding to critical vulnerabilities.
+
+To update the minimum TCB:
+```bash
+# TDX (CVM=0): For TDX Module 1.5.x with microcode SVN 2
+cast send $CONTRACT 'setMinimumTcb(uint8,uint64)' 0 0x010502 --private-key $PRIVATE_KEY
+
+# SEV-SNP (CVM=1): Use CurrentTcb value from a known-good attestation
+cast send $CONTRACT 'setMinimumTcb(uint8,uint64)' 1 0x... --private-key $PRIVATE_KEY
+```
+
 ### Firmware Endorsement Verification
 
-MRTD validation uses Google's signed firmware endorsements:
+Firmware measurement validation uses Google's signed endorsements:
 
-1. **Lookup**: Convert the 48-byte MRTD to hex and fetch `gs://gce_tcb_integrity/ovmf_x64_csm/tdx/{MRTD_HEX}.binarypb`
+1. **Lookup**: Convert the 48-byte measurement to hex and fetch from:
+   - TDX: `gs://gce_tcb_integrity/ovmf_x64_csm/tdx/{MRTD_HEX}.binarypb`
+   - SEV-SNP: `gs://gce_tcb_integrity/ovmf_x64_csm/sevsnp/{MEASUREMENT_HEX}.binarypb`
 2. **Parse**: Unmarshal the `VMLaunchEndorsement` protobuf containing:
-   - `serialized_uefi_golden`: The `VMGoldenMeasurement` with MRTD values for different RAM configurations
+   - `serialized_uefi_golden`: The `VMGoldenMeasurement` with measurement values for different configurations
    - `signature`: RSA-PSS signature over `serialized_uefi_golden`
 3. **Verify Signature**: Validate the signature chain against Google's TCB root certificate (`https://pki.goog/cloud_integrity/GCE-cc-tcb-root_1.crt`)
 4. **Extract Metadata**: The endorsement provides SVN (Security Version Number), build timestamp, and changelist for audit purposes
@@ -62,10 +93,10 @@ MRTD validation uses Google's signed firmware endorsements:
 
 By verifying the raw attestation evidence directly, we rely on the same cryptographic roots of trust as the managed services:
 
-- **Hardware Root of Trust:** The **TDX Quote** is signed by Intel's root CA, proving the integrity of the hardware and the base image measurements (MRTD, RTMRs).
+- **Hardware Root of Trust:** The **TDX Quote** (Intel CA) or **SEV-SNP Report** (AMD CA) proves the integrity of the hardware and firmware measurements.
 - **Platform Root of Trust:** The **AK Certificate** is signed by Google's GCE EK root CA, proving the instance is a genuine GCE VM and providing claims like Project ID, Zone, and Instance ID.
-- **Firmware Root of Trust:** The **MRTD Endorsement** is signed by Google's TCB root CA, proving the firmware is a genuine Google-built UEFI binary.
-- **Binding:** The AK public key is cryptographically bound to the TDX quote (via ReportData), ensuring the GCE claims and the Container claims (reconstructed from the Event Log) belong to the same physical entity.
+- **Firmware Root of Trust:** The **Firmware Endorsement** is signed by Google's TCB root CA, proving the firmware is a genuine Google-built UEFI binary.
+- **Binding:** The AK public key is cryptographically bound to the hardware quote (via ReportData), ensuring the GCE claims and the Container claims belong to the same physical entity.
 
 This allows the Relying Party to validate the same hardware, platform, and workload identity signals required for policy enforcement.
 
@@ -118,7 +149,7 @@ Requires the `data-axiom-440223-j1` GCP project.
 
 #### Quick Start
 
-Use the pre-built custom image `confidential-space-debug-cavan-test-image-1764789757` which is already registered in the deployed allowlist.
+Use the pre-built custom image `confidential-space-debug-cavan-test-image-1765299170` which is already registered in the deployed allowlist.
 
 ```bash
 # Setup configuration
@@ -151,15 +182,22 @@ export PRIVATE_KEY="0x..."
 
 These files are a rough demonstration to illustrate the architecture:
 
-- `launcher/agent/agent.go`: `GetRawAttestation()` implementation.
+- `launcher/agent/agent.go`: `GetRawAttestation()` implementation for TDX and SEV-SNP.
 - `research/kms/verifier.go`: TDX quote verification (Intel/Google root CAs).
-- `research/kms/firmware.go`: MRTD verification against Google's signed endorsements.
+- `research/kms/verifier_sevsnp.go`: SEV-SNP report verification (AMD/Google root CAs).
+- `research/kms/firmware.go`: Firmware verification for TDX (MRTD) and SEV-SNP (MEASUREMENT).
 - `research/contracts/src/BaseImageAllowlist.sol`: Smart contract for custom image allowlist.
+- `research/workload/main.go`: Sample workload with platform auto-detection.
+
+### Supported Platforms
+
+| Platform | Machine Type | KMS Endpoint | Status |
+|----------|-------------|--------------|--------|
+| **TDX** | c3-standard, c3d-standard | `/v1/attest/tdx` | Implemented |
+| **SEV-SNP** | n2d-custom-2-1024 | `/v1/attest/sevsnp` | Implemented |
+
+The workload automatically detects the platform based on the attestation response and uses the appropriate KMS endpoint.
 
 ### Building Custom Images
 
 We can modify the Launcher code directly. For deeper OS-level customizations, we use Google's [COS Customizer](https://cos.googlesource.com/cos/tools). This tool simplifies tasks like installing GPU drivers, sealing the OEM partition (`dm-verity`), and disabling auto-updates to ensure measurement stability.
-
-## Future: SEV-SNP Support
-
-This approach could be extended to support AMD SEV-SNP for smaller machine types. However, this would require more work than switching platforms while using the out-of-the-box Confidential Space image.
