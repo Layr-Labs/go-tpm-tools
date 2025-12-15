@@ -36,10 +36,8 @@ type Server struct {
 
 // AttestRequest is the JSON request body for POST /v1/attest.
 type AttestRequest struct {
-	Attestation   []byte `json:"attestation"`
-	CcelAcpiTable []byte `json:"ccel_acpi_table,omitempty"`
-	CcelData      []byte `json:"ccel_data,omitempty"`
-	RSAPublicKey  string `json:"rsa_public_key"`
+	Attestation  []byte `json:"attestation"`
+	RSAPublicKey string `json:"rsa_public_key"`
 }
 
 // AttestResponse is returned by POST /v1/attest.
@@ -145,7 +143,7 @@ func (s *Server) handleAttest(w http.ResponseWriter, r *http.Request) {
 	expectedRSAKeyHash := sha256.Sum256([]byte(req.RSAPublicKey))
 	log.Printf("Verifying attestation with RSA key hash: %x", expectedRSAKeyHash)
 
-	claims, err := verifier.Verify(req.Attestation, req.CcelData, req.CcelAcpiTable, expectedRSAKeyHash[:])
+	claims, err := verifier.Verify(req.Attestation, expectedRSAKeyHash[:])
 	if err != nil {
 		log.Printf("Attestation verification failed: %v", err)
 		s.sendError(w, "Attestation verification failed: "+err.Error())

@@ -31,7 +31,7 @@ var (
 
 // BaseImageAllowlistMetaData contains all meta data concerning the BaseImageAllowlist contract.
 var BaseImageAllowlistMetaData = &bind.MetaData{
-	ABI: "[{\"type\":\"constructor\",\"inputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"checkSupport\",\"inputs\":[{\"name\":\"level\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"},{\"name\":\"minimum\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"pure\"},{\"type\":\"function\",\"name\":\"checkTcb\",\"inputs\":[{\"name\":\"cvm\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.CVM\"},{\"name\":\"tcb\",\"type\":\"uint64\",\"internalType\":\"uint64\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getImageSupport\",\"inputs\":[{\"name\":\"cvm\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.CVM\"},{\"name\":\"measurement\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[{\"name\":\"\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"imageSupport\",\"inputs\":[{\"name\":\"\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.CVM\"},{\"name\":\"\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"isImageAllowed\",\"inputs\":[{\"name\":\"cvm\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.CVM\"},{\"name\":\"measurement\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"minimumSupportLevel\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"minimumTcb\",\"inputs\":[{\"name\":\"\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.CVM\"}],\"outputs\":[{\"name\":\"\",\"type\":\"uint64\",\"internalType\":\"uint64\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"owner\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"address\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"removeImage\",\"inputs\":[{\"name\":\"cvm\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.CVM\"},{\"name\":\"measurement\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"setImageSupport\",\"inputs\":[{\"name\":\"cvm\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.CVM\"},{\"name\":\"measurement\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"level\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"setMinimumSupportLevel\",\"inputs\":[{\"name\":\"newLevel\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"setMinimumTcb\",\"inputs\":[{\"name\":\"cvm\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.CVM\"},{\"name\":\"newTcb\",\"type\":\"uint64\",\"internalType\":\"uint64\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"transferOwnership\",\"inputs\":[{\"name\":\"newOwner\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"event\",\"name\":\"ImageSupportUpdated\",\"inputs\":[{\"name\":\"cvm\",\"type\":\"uint8\",\"indexed\":true,\"internalType\":\"enumBaseImageAllowlist.CVM\"},{\"name\":\"measurementHash\",\"type\":\"bytes32\",\"indexed\":true,\"internalType\":\"bytes32\"},{\"name\":\"level\",\"type\":\"uint8\",\"indexed\":false,\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"MinimumSupportLevelUpdated\",\"inputs\":[{\"name\":\"oldLevel\",\"type\":\"uint8\",\"indexed\":false,\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"},{\"name\":\"newLevel\",\"type\":\"uint8\",\"indexed\":false,\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"MinimumTcbUpdated\",\"inputs\":[{\"name\":\"cvm\",\"type\":\"uint8\",\"indexed\":true,\"internalType\":\"enumBaseImageAllowlist.CVM\"},{\"name\":\"oldTcb\",\"type\":\"uint64\",\"indexed\":false,\"internalType\":\"uint64\"},{\"name\":\"newTcb\",\"type\":\"uint64\",\"indexed\":false,\"internalType\":\"uint64\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"OwnershipTransferred\",\"inputs\":[{\"name\":\"previousOwner\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"newOwner\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"}],\"anonymous\":false},{\"type\":\"error\",\"name\":\"INVALID_CVM\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"NOT_OWNER\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ZERO_ADDRESS\",\"inputs\":[]}]",
+	ABI: "[{\"type\":\"constructor\",\"inputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"checkSupport\",\"inputs\":[{\"name\":\"level\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"},{\"name\":\"minimum\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"pure\"},{\"type\":\"function\",\"name\":\"checkTcb\",\"inputs\":[{\"name\":\"cvm\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.CVM\"},{\"name\":\"tcb\",\"type\":\"uint64\",\"internalType\":\"uint64\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getImageSupport\",\"inputs\":[{\"name\":\"pcr8\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"pcr9\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"imageSupport\",\"inputs\":[{\"name\":\"\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"isImageAllowed\",\"inputs\":[{\"name\":\"pcr8\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"pcr9\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"minimumSupportLevel\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"minimumTcb\",\"inputs\":[{\"name\":\"\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.CVM\"}],\"outputs\":[{\"name\":\"\",\"type\":\"uint64\",\"internalType\":\"uint64\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"owner\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"address\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"setImageSupport\",\"inputs\":[{\"name\":\"pcr8\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"pcr9\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"level\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"setMinimumSupportLevel\",\"inputs\":[{\"name\":\"newLevel\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"setMinimumTcb\",\"inputs\":[{\"name\":\"cvm\",\"type\":\"uint8\",\"internalType\":\"enumBaseImageAllowlist.CVM\"},{\"name\":\"newTcb\",\"type\":\"uint64\",\"internalType\":\"uint64\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"transferOwnership\",\"inputs\":[{\"name\":\"newOwner\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"event\",\"name\":\"ImageSupportUpdated\",\"inputs\":[{\"name\":\"key\",\"type\":\"bytes32\",\"indexed\":true,\"internalType\":\"bytes32\"},{\"name\":\"pcr8\",\"type\":\"bytes32\",\"indexed\":false,\"internalType\":\"bytes32\"},{\"name\":\"pcr9\",\"type\":\"bytes32\",\"indexed\":false,\"internalType\":\"bytes32\"},{\"name\":\"level\",\"type\":\"uint8\",\"indexed\":false,\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"MinimumSupportLevelUpdated\",\"inputs\":[{\"name\":\"oldLevel\",\"type\":\"uint8\",\"indexed\":false,\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"},{\"name\":\"newLevel\",\"type\":\"uint8\",\"indexed\":false,\"internalType\":\"enumBaseImageAllowlist.SupportLevel\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"MinimumTcbUpdated\",\"inputs\":[{\"name\":\"cvm\",\"type\":\"uint8\",\"indexed\":true,\"internalType\":\"enumBaseImageAllowlist.CVM\"},{\"name\":\"oldTcb\",\"type\":\"uint64\",\"indexed\":false,\"internalType\":\"uint64\"},{\"name\":\"newTcb\",\"type\":\"uint64\",\"indexed\":false,\"internalType\":\"uint64\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"OwnershipTransferred\",\"inputs\":[{\"name\":\"previousOwner\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"newOwner\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"}],\"anonymous\":false},{\"type\":\"error\",\"name\":\"NOT_OWNER\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ZERO_ADDRESS\",\"inputs\":[]}]",
 }
 
 // BaseImageAllowlistABI is the input ABI used to generate the binding from.
@@ -242,12 +242,12 @@ func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) CheckTcb(cvm uint8, 
 	return _BaseImageAllowlist.Contract.CheckTcb(&_BaseImageAllowlist.CallOpts, cvm, tcb)
 }
 
-// GetImageSupport is a free data retrieval call binding the contract method 0xa3608229.
+// GetImageSupport is a free data retrieval call binding the contract method 0xf5cbff9c.
 //
-// Solidity: function getImageSupport(uint8 cvm, bytes measurement) view returns(uint8)
-func (_BaseImageAllowlist *BaseImageAllowlistCaller) GetImageSupport(opts *bind.CallOpts, cvm uint8, measurement []byte) (uint8, error) {
+// Solidity: function getImageSupport(bytes32 pcr8, bytes32 pcr9) view returns(uint8)
+func (_BaseImageAllowlist *BaseImageAllowlistCaller) GetImageSupport(opts *bind.CallOpts, pcr8 [32]byte, pcr9 [32]byte) (uint8, error) {
 	var out []interface{}
-	err := _BaseImageAllowlist.contract.Call(opts, &out, "getImageSupport", cvm, measurement)
+	err := _BaseImageAllowlist.contract.Call(opts, &out, "getImageSupport", pcr8, pcr9)
 
 	if err != nil {
 		return *new(uint8), err
@@ -259,26 +259,26 @@ func (_BaseImageAllowlist *BaseImageAllowlistCaller) GetImageSupport(opts *bind.
 
 }
 
-// GetImageSupport is a free data retrieval call binding the contract method 0xa3608229.
+// GetImageSupport is a free data retrieval call binding the contract method 0xf5cbff9c.
 //
-// Solidity: function getImageSupport(uint8 cvm, bytes measurement) view returns(uint8)
-func (_BaseImageAllowlist *BaseImageAllowlistSession) GetImageSupport(cvm uint8, measurement []byte) (uint8, error) {
-	return _BaseImageAllowlist.Contract.GetImageSupport(&_BaseImageAllowlist.CallOpts, cvm, measurement)
+// Solidity: function getImageSupport(bytes32 pcr8, bytes32 pcr9) view returns(uint8)
+func (_BaseImageAllowlist *BaseImageAllowlistSession) GetImageSupport(pcr8 [32]byte, pcr9 [32]byte) (uint8, error) {
+	return _BaseImageAllowlist.Contract.GetImageSupport(&_BaseImageAllowlist.CallOpts, pcr8, pcr9)
 }
 
-// GetImageSupport is a free data retrieval call binding the contract method 0xa3608229.
+// GetImageSupport is a free data retrieval call binding the contract method 0xf5cbff9c.
 //
-// Solidity: function getImageSupport(uint8 cvm, bytes measurement) view returns(uint8)
-func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) GetImageSupport(cvm uint8, measurement []byte) (uint8, error) {
-	return _BaseImageAllowlist.Contract.GetImageSupport(&_BaseImageAllowlist.CallOpts, cvm, measurement)
+// Solidity: function getImageSupport(bytes32 pcr8, bytes32 pcr9) view returns(uint8)
+func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) GetImageSupport(pcr8 [32]byte, pcr9 [32]byte) (uint8, error) {
+	return _BaseImageAllowlist.Contract.GetImageSupport(&_BaseImageAllowlist.CallOpts, pcr8, pcr9)
 }
 
-// ImageSupport is a free data retrieval call binding the contract method 0x551bcfcf.
+// ImageSupport is a free data retrieval call binding the contract method 0x24847343.
 //
-// Solidity: function imageSupport(uint8 , bytes32 ) view returns(uint8)
-func (_BaseImageAllowlist *BaseImageAllowlistCaller) ImageSupport(opts *bind.CallOpts, arg0 uint8, arg1 [32]byte) (uint8, error) {
+// Solidity: function imageSupport(bytes32 ) view returns(uint8)
+func (_BaseImageAllowlist *BaseImageAllowlistCaller) ImageSupport(opts *bind.CallOpts, arg0 [32]byte) (uint8, error) {
 	var out []interface{}
-	err := _BaseImageAllowlist.contract.Call(opts, &out, "imageSupport", arg0, arg1)
+	err := _BaseImageAllowlist.contract.Call(opts, &out, "imageSupport", arg0)
 
 	if err != nil {
 		return *new(uint8), err
@@ -290,26 +290,26 @@ func (_BaseImageAllowlist *BaseImageAllowlistCaller) ImageSupport(opts *bind.Cal
 
 }
 
-// ImageSupport is a free data retrieval call binding the contract method 0x551bcfcf.
+// ImageSupport is a free data retrieval call binding the contract method 0x24847343.
 //
-// Solidity: function imageSupport(uint8 , bytes32 ) view returns(uint8)
-func (_BaseImageAllowlist *BaseImageAllowlistSession) ImageSupport(arg0 uint8, arg1 [32]byte) (uint8, error) {
-	return _BaseImageAllowlist.Contract.ImageSupport(&_BaseImageAllowlist.CallOpts, arg0, arg1)
+// Solidity: function imageSupport(bytes32 ) view returns(uint8)
+func (_BaseImageAllowlist *BaseImageAllowlistSession) ImageSupport(arg0 [32]byte) (uint8, error) {
+	return _BaseImageAllowlist.Contract.ImageSupport(&_BaseImageAllowlist.CallOpts, arg0)
 }
 
-// ImageSupport is a free data retrieval call binding the contract method 0x551bcfcf.
+// ImageSupport is a free data retrieval call binding the contract method 0x24847343.
 //
-// Solidity: function imageSupport(uint8 , bytes32 ) view returns(uint8)
-func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) ImageSupport(arg0 uint8, arg1 [32]byte) (uint8, error) {
-	return _BaseImageAllowlist.Contract.ImageSupport(&_BaseImageAllowlist.CallOpts, arg0, arg1)
+// Solidity: function imageSupport(bytes32 ) view returns(uint8)
+func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) ImageSupport(arg0 [32]byte) (uint8, error) {
+	return _BaseImageAllowlist.Contract.ImageSupport(&_BaseImageAllowlist.CallOpts, arg0)
 }
 
-// IsImageAllowed is a free data retrieval call binding the contract method 0xd0974501.
+// IsImageAllowed is a free data retrieval call binding the contract method 0xb39ed3cf.
 //
-// Solidity: function isImageAllowed(uint8 cvm, bytes measurement) view returns(bool)
-func (_BaseImageAllowlist *BaseImageAllowlistCaller) IsImageAllowed(opts *bind.CallOpts, cvm uint8, measurement []byte) (bool, error) {
+// Solidity: function isImageAllowed(bytes32 pcr8, bytes32 pcr9) view returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistCaller) IsImageAllowed(opts *bind.CallOpts, pcr8 [32]byte, pcr9 [32]byte) (bool, error) {
 	var out []interface{}
-	err := _BaseImageAllowlist.contract.Call(opts, &out, "isImageAllowed", cvm, measurement)
+	err := _BaseImageAllowlist.contract.Call(opts, &out, "isImageAllowed", pcr8, pcr9)
 
 	if err != nil {
 		return *new(bool), err
@@ -321,18 +321,18 @@ func (_BaseImageAllowlist *BaseImageAllowlistCaller) IsImageAllowed(opts *bind.C
 
 }
 
-// IsImageAllowed is a free data retrieval call binding the contract method 0xd0974501.
+// IsImageAllowed is a free data retrieval call binding the contract method 0xb39ed3cf.
 //
-// Solidity: function isImageAllowed(uint8 cvm, bytes measurement) view returns(bool)
-func (_BaseImageAllowlist *BaseImageAllowlistSession) IsImageAllowed(cvm uint8, measurement []byte) (bool, error) {
-	return _BaseImageAllowlist.Contract.IsImageAllowed(&_BaseImageAllowlist.CallOpts, cvm, measurement)
+// Solidity: function isImageAllowed(bytes32 pcr8, bytes32 pcr9) view returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistSession) IsImageAllowed(pcr8 [32]byte, pcr9 [32]byte) (bool, error) {
+	return _BaseImageAllowlist.Contract.IsImageAllowed(&_BaseImageAllowlist.CallOpts, pcr8, pcr9)
 }
 
-// IsImageAllowed is a free data retrieval call binding the contract method 0xd0974501.
+// IsImageAllowed is a free data retrieval call binding the contract method 0xb39ed3cf.
 //
-// Solidity: function isImageAllowed(uint8 cvm, bytes measurement) view returns(bool)
-func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) IsImageAllowed(cvm uint8, measurement []byte) (bool, error) {
-	return _BaseImageAllowlist.Contract.IsImageAllowed(&_BaseImageAllowlist.CallOpts, cvm, measurement)
+// Solidity: function isImageAllowed(bytes32 pcr8, bytes32 pcr9) view returns(bool)
+func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) IsImageAllowed(pcr8 [32]byte, pcr9 [32]byte) (bool, error) {
+	return _BaseImageAllowlist.Contract.IsImageAllowed(&_BaseImageAllowlist.CallOpts, pcr8, pcr9)
 }
 
 // MinimumSupportLevel is a free data retrieval call binding the contract method 0x2d66eee5.
@@ -428,46 +428,25 @@ func (_BaseImageAllowlist *BaseImageAllowlistCallerSession) Owner() (common.Addr
 	return _BaseImageAllowlist.Contract.Owner(&_BaseImageAllowlist.CallOpts)
 }
 
-// RemoveImage is a paid mutator transaction binding the contract method 0xc32764f3.
+// SetImageSupport is a paid mutator transaction binding the contract method 0x08cba123.
 //
-// Solidity: function removeImage(uint8 cvm, bytes measurement) returns()
-func (_BaseImageAllowlist *BaseImageAllowlistTransactor) RemoveImage(opts *bind.TransactOpts, cvm uint8, measurement []byte) (*types.Transaction, error) {
-	return _BaseImageAllowlist.contract.Transact(opts, "removeImage", cvm, measurement)
+// Solidity: function setImageSupport(bytes32 pcr8, bytes32 pcr9, uint8 level) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistTransactor) SetImageSupport(opts *bind.TransactOpts, pcr8 [32]byte, pcr9 [32]byte, level uint8) (*types.Transaction, error) {
+	return _BaseImageAllowlist.contract.Transact(opts, "setImageSupport", pcr8, pcr9, level)
 }
 
-// RemoveImage is a paid mutator transaction binding the contract method 0xc32764f3.
+// SetImageSupport is a paid mutator transaction binding the contract method 0x08cba123.
 //
-// Solidity: function removeImage(uint8 cvm, bytes measurement) returns()
-func (_BaseImageAllowlist *BaseImageAllowlistSession) RemoveImage(cvm uint8, measurement []byte) (*types.Transaction, error) {
-	return _BaseImageAllowlist.Contract.RemoveImage(&_BaseImageAllowlist.TransactOpts, cvm, measurement)
+// Solidity: function setImageSupport(bytes32 pcr8, bytes32 pcr9, uint8 level) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistSession) SetImageSupport(pcr8 [32]byte, pcr9 [32]byte, level uint8) (*types.Transaction, error) {
+	return _BaseImageAllowlist.Contract.SetImageSupport(&_BaseImageAllowlist.TransactOpts, pcr8, pcr9, level)
 }
 
-// RemoveImage is a paid mutator transaction binding the contract method 0xc32764f3.
+// SetImageSupport is a paid mutator transaction binding the contract method 0x08cba123.
 //
-// Solidity: function removeImage(uint8 cvm, bytes measurement) returns()
-func (_BaseImageAllowlist *BaseImageAllowlistTransactorSession) RemoveImage(cvm uint8, measurement []byte) (*types.Transaction, error) {
-	return _BaseImageAllowlist.Contract.RemoveImage(&_BaseImageAllowlist.TransactOpts, cvm, measurement)
-}
-
-// SetImageSupport is a paid mutator transaction binding the contract method 0x854c2ef3.
-//
-// Solidity: function setImageSupport(uint8 cvm, bytes measurement, uint8 level) returns()
-func (_BaseImageAllowlist *BaseImageAllowlistTransactor) SetImageSupport(opts *bind.TransactOpts, cvm uint8, measurement []byte, level uint8) (*types.Transaction, error) {
-	return _BaseImageAllowlist.contract.Transact(opts, "setImageSupport", cvm, measurement, level)
-}
-
-// SetImageSupport is a paid mutator transaction binding the contract method 0x854c2ef3.
-//
-// Solidity: function setImageSupport(uint8 cvm, bytes measurement, uint8 level) returns()
-func (_BaseImageAllowlist *BaseImageAllowlistSession) SetImageSupport(cvm uint8, measurement []byte, level uint8) (*types.Transaction, error) {
-	return _BaseImageAllowlist.Contract.SetImageSupport(&_BaseImageAllowlist.TransactOpts, cvm, measurement, level)
-}
-
-// SetImageSupport is a paid mutator transaction binding the contract method 0x854c2ef3.
-//
-// Solidity: function setImageSupport(uint8 cvm, bytes measurement, uint8 level) returns()
-func (_BaseImageAllowlist *BaseImageAllowlistTransactorSession) SetImageSupport(cvm uint8, measurement []byte, level uint8) (*types.Transaction, error) {
-	return _BaseImageAllowlist.Contract.SetImageSupport(&_BaseImageAllowlist.TransactOpts, cvm, measurement, level)
+// Solidity: function setImageSupport(bytes32 pcr8, bytes32 pcr9, uint8 level) returns()
+func (_BaseImageAllowlist *BaseImageAllowlistTransactorSession) SetImageSupport(pcr8 [32]byte, pcr9 [32]byte, level uint8) (*types.Transaction, error) {
+	return _BaseImageAllowlist.Contract.SetImageSupport(&_BaseImageAllowlist.TransactOpts, pcr8, pcr9, level)
 }
 
 // SetMinimumSupportLevel is a paid mutator transaction binding the contract method 0x810280fe.
@@ -602,48 +581,41 @@ func (it *BaseImageAllowlistImageSupportUpdatedIterator) Close() error {
 
 // BaseImageAllowlistImageSupportUpdated represents a ImageSupportUpdated event raised by the BaseImageAllowlist contract.
 type BaseImageAllowlistImageSupportUpdated struct {
-	Cvm             uint8
-	MeasurementHash [32]byte
-	Level           uint8
-	Raw             types.Log // Blockchain specific contextual infos
+	Key   [32]byte
+	Pcr8  [32]byte
+	Pcr9  [32]byte
+	Level uint8
+	Raw   types.Log // Blockchain specific contextual infos
 }
 
-// FilterImageSupportUpdated is a free log retrieval operation binding the contract event 0xd1a57778b2d2e3b06ec5a668128778d7c315815a9c3ec2b12976a528ca274c71.
+// FilterImageSupportUpdated is a free log retrieval operation binding the contract event 0x1abab0af3c1fef79a0a2e42617058e519c90f4f5d472c989003de284fbcb1608.
 //
-// Solidity: event ImageSupportUpdated(uint8 indexed cvm, bytes32 indexed measurementHash, uint8 level)
-func (_BaseImageAllowlist *BaseImageAllowlistFilterer) FilterImageSupportUpdated(opts *bind.FilterOpts, cvm []uint8, measurementHash [][32]byte) (*BaseImageAllowlistImageSupportUpdatedIterator, error) {
+// Solidity: event ImageSupportUpdated(bytes32 indexed key, bytes32 pcr8, bytes32 pcr9, uint8 level)
+func (_BaseImageAllowlist *BaseImageAllowlistFilterer) FilterImageSupportUpdated(opts *bind.FilterOpts, key [][32]byte) (*BaseImageAllowlistImageSupportUpdatedIterator, error) {
 
-	var cvmRule []interface{}
-	for _, cvmItem := range cvm {
-		cvmRule = append(cvmRule, cvmItem)
-	}
-	var measurementHashRule []interface{}
-	for _, measurementHashItem := range measurementHash {
-		measurementHashRule = append(measurementHashRule, measurementHashItem)
+	var keyRule []interface{}
+	for _, keyItem := range key {
+		keyRule = append(keyRule, keyItem)
 	}
 
-	logs, sub, err := _BaseImageAllowlist.contract.FilterLogs(opts, "ImageSupportUpdated", cvmRule, measurementHashRule)
+	logs, sub, err := _BaseImageAllowlist.contract.FilterLogs(opts, "ImageSupportUpdated", keyRule)
 	if err != nil {
 		return nil, err
 	}
 	return &BaseImageAllowlistImageSupportUpdatedIterator{contract: _BaseImageAllowlist.contract, event: "ImageSupportUpdated", logs: logs, sub: sub}, nil
 }
 
-// WatchImageSupportUpdated is a free log subscription operation binding the contract event 0xd1a57778b2d2e3b06ec5a668128778d7c315815a9c3ec2b12976a528ca274c71.
+// WatchImageSupportUpdated is a free log subscription operation binding the contract event 0x1abab0af3c1fef79a0a2e42617058e519c90f4f5d472c989003de284fbcb1608.
 //
-// Solidity: event ImageSupportUpdated(uint8 indexed cvm, bytes32 indexed measurementHash, uint8 level)
-func (_BaseImageAllowlist *BaseImageAllowlistFilterer) WatchImageSupportUpdated(opts *bind.WatchOpts, sink chan<- *BaseImageAllowlistImageSupportUpdated, cvm []uint8, measurementHash [][32]byte) (event.Subscription, error) {
+// Solidity: event ImageSupportUpdated(bytes32 indexed key, bytes32 pcr8, bytes32 pcr9, uint8 level)
+func (_BaseImageAllowlist *BaseImageAllowlistFilterer) WatchImageSupportUpdated(opts *bind.WatchOpts, sink chan<- *BaseImageAllowlistImageSupportUpdated, key [][32]byte) (event.Subscription, error) {
 
-	var cvmRule []interface{}
-	for _, cvmItem := range cvm {
-		cvmRule = append(cvmRule, cvmItem)
-	}
-	var measurementHashRule []interface{}
-	for _, measurementHashItem := range measurementHash {
-		measurementHashRule = append(measurementHashRule, measurementHashItem)
+	var keyRule []interface{}
+	for _, keyItem := range key {
+		keyRule = append(keyRule, keyItem)
 	}
 
-	logs, sub, err := _BaseImageAllowlist.contract.WatchLogs(opts, "ImageSupportUpdated", cvmRule, measurementHashRule)
+	logs, sub, err := _BaseImageAllowlist.contract.WatchLogs(opts, "ImageSupportUpdated", keyRule)
 	if err != nil {
 		return nil, err
 	}
@@ -675,9 +647,9 @@ func (_BaseImageAllowlist *BaseImageAllowlistFilterer) WatchImageSupportUpdated(
 	}), nil
 }
 
-// ParseImageSupportUpdated is a log parse operation binding the contract event 0xd1a57778b2d2e3b06ec5a668128778d7c315815a9c3ec2b12976a528ca274c71.
+// ParseImageSupportUpdated is a log parse operation binding the contract event 0x1abab0af3c1fef79a0a2e42617058e519c90f4f5d472c989003de284fbcb1608.
 //
-// Solidity: event ImageSupportUpdated(uint8 indexed cvm, bytes32 indexed measurementHash, uint8 level)
+// Solidity: event ImageSupportUpdated(bytes32 indexed key, bytes32 pcr8, bytes32 pcr9, uint8 level)
 func (_BaseImageAllowlist *BaseImageAllowlistFilterer) ParseImageSupportUpdated(log types.Log) (*BaseImageAllowlistImageSupportUpdated, error) {
 	event := new(BaseImageAllowlistImageSupportUpdated)
 	if err := _BaseImageAllowlist.contract.UnpackLog(event, "ImageSupportUpdated", log); err != nil {

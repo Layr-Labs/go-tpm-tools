@@ -6,13 +6,11 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"fmt"
-	"strings"
 
-	"github.com/google/go-eventlog/proto/state"
 	sabi "github.com/google/go-sev-guest/abi"
 	sevverify "github.com/google/go-sev-guest/verify"
-	"github.com/google/go-tdx-guest/rtmr"
 	attestpb "github.com/google/go-tpm-tools/proto/attest"
+	tpmpb "github.com/google/go-tpm-tools/proto/tpm"
 	"github.com/google/go-tpm-tools/server"
 	"github.com/google/go-tpm/legacy/tpm2"
 	"google.golang.org/protobuf/proto"
@@ -34,29 +32,31 @@ type Claims struct {
 	GCE       *GCEInfo       `json:"gce,omitempty"`
 	TDX       *TDXClaims     `json:"tdx,omitempty"`
 	SevSnp    *SevSnpClaims  `json:"sevsnp,omitempty"`
+
+	// PCR values from vTPM (platform-agnostic, same for TDX and SEV-SNP)
+	// Used for base image allowlist validation
+	PCR8 [32]byte `json:"pcr8"` // Kernel cmdline (includes dm-verity hash = launcher identity)
+	PCR9 [32]byte `json:"pcr9"` // GRUB-read files (kernel + initramfs = base image)
 }
 
 // TDXClaims contains TDX-specific verified claims.
 type TDXClaims struct {
-	MRTD          [48]byte       `json:"mrtd"`
-	RTMR0         [48]byte       `json:"rtmr0"`
-	RTMR1         [48]byte       `json:"rtmr1"`
-	TeeTcbSvn     [16]byte       `json:"tee_tcb_svn"`
-	Attributes    TDAttributes   `json:"attributes"`
-	Firmware      *FirmwareState `json:"firmware,omitempty"`
-	GrubCfgDigest []byte         `json:"grub_cfg_digest,omitempty"`
+	MRTD       [48]byte     `json:"mrtd"`
+	RTMR0      [48]byte     `json:"rtmr0"`
+	RTMR1      [48]byte     `json:"rtmr1"`
+	TeeTcbSvn  [16]byte     `json:"tee_tcb_svn"`
+	Attributes TDAttributes `json:"attributes"`
 }
 
 // SevSnpClaims contains SEV-SNP-specific verified claims.
 type SevSnpClaims struct {
-	Measurement   [48]byte     `json:"measurement"`
-	HostData      [32]byte     `json:"host_data"`
-	CurrentTcb    uint64       `json:"current_tcb"`
-	ReportedTcb   uint64       `json:"reported_tcb"`
-	CommittedTcb  uint64       `json:"committed_tcb"`
-	GuestSvn      uint32       `json:"guest_svn"`
-	Policy        SevSnpPolicy `json:"policy"`
-	GrubCfgDigest []byte       `json:"grub_cfg_digest,omitempty"`
+	Measurement  [48]byte     `json:"measurement"`
+	HostData     [32]byte     `json:"host_data"`
+	CurrentTcb   uint64       `json:"current_tcb"`
+	ReportedTcb  uint64       `json:"reported_tcb"`
+	CommittedTcb uint64       `json:"committed_tcb"`
+	GuestSvn     uint32       `json:"guest_svn"`
+	Policy       SevSnpPolicy `json:"policy"`
 }
 
 // SevSnpPolicy contains SEV-SNP guest policy flags.
@@ -98,24 +98,10 @@ type TDAttributes struct {
 	PerfMon       bool `json:"perf_mon"`
 }
 
-// FirmwareState contains firmware verification state from CCEL parsing.
-type FirmwareState struct {
-	SecureBootEnabled bool             `json:"secure_boot_enabled"`
-	Hardened          bool             `json:"hardened"`
-	GrubFiles         []GrubFileDigest `json:"grub_files,omitempty"`
-	GrubCfgDigest     []byte           `json:"grub_cfg_digest,omitempty"`
-}
-
-// GrubFileDigest contains a GRUB file and its digest.
-type GrubFileDigest struct {
-	Filename string `json:"filename"`
-	Digest   []byte `json:"digest"`
-}
-
 // Verify verifies an attestation and returns verified claims.
 // Uses server.VerifyAttestation() for TPM/AK validation, then platform-specific TEE verification.
 // expectedReportData is checked against the first 32 bytes of TEE ReportData.
-func Verify(attestationBytes, ccelData, ccelAcpiTable, expectedReportData []byte) (*Claims, error) {
+func Verify(attestationBytes, expectedReportData []byte) (*Claims, error) {
 	var attestation attestpb.Attestation
 	if err := proto.Unmarshal(attestationBytes, &attestation); err != nil {
 		return nil, fmt.Errorf("failed to parse attestation proto: %w", err)
@@ -158,6 +144,15 @@ func Verify(attestationBytes, ccelData, ccelAcpiTable, expectedReportData []byte
 
 	claims := &Claims{Platform: platform}
 
+	// Extract PCR 8 and PCR 9 from verified TPM quote (platform-agnostic)
+	pcr8, pcr9, err := extractPCRs(&attestation)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract PCRs: %w", err)
+	}
+	claims.PCR8 = pcr8
+	claims.PCR9 = pcr9
+
+	// Extract GCE instance info
 	if p := machineState.GetPlatform(); p != nil {
 		if info := p.GetInstanceInfo(); info != nil {
 			claims.GCE = &GCEInfo{
@@ -170,6 +165,7 @@ func Verify(attestationBytes, ccelData, ccelAcpiTable, expectedReportData []byte
 		}
 	}
 
+	// Extract container info
 	if cos := machineState.GetCos(); cos != nil {
 		if c := cos.GetContainer(); c != nil {
 			claims.Container = &ContainerInfo{
@@ -185,24 +181,15 @@ func Verify(attestationBytes, ccelData, ccelAcpiTable, expectedReportData []byte
 
 	switch platform {
 	case PlatformTDX:
-		tdxClaims, err := verifyTDXQuote(&attestation, ccelData, ccelAcpiTable)
+		tdxClaims, err := extractTDXClaims(&attestation, machineState)
 		if err != nil {
-			return nil, fmt.Errorf("TDX quote verification failed: %w", err)
+			return nil, fmt.Errorf("TDX verification failed: %w", err)
 		}
 		claims.TDX = tdxClaims
 	case PlatformSevSnp:
 		sevClaims, err := verifySevSnpReport(&attestation)
 		if err != nil {
 			return nil, fmt.Errorf("SEV-SNP report verification failed: %w", err)
-		}
-		// Extract grub.cfg digest from TPM event log for image allowlist
-		if grub := machineState.GetGrub(); grub != nil {
-			for _, f := range grub.GetFiles() {
-				if strings.Contains(strings.ToLower(string(f.GetUntrustedFilename())), "grub.cfg") {
-					sevClaims.GrubCfgDigest = f.GetDigest()
-					break
-				}
-			}
 		}
 		claims.SevSnp = sevClaims
 	}
@@ -236,7 +223,7 @@ func verifyReportData(attestation *attestpb.Attestation, expectedReportData []by
 
 // verifyAKBinding verifies that ReportData[32:64] == SHA256(AK_public_key_DER).
 // This binds the TEE hardware quote to the TPM's AK, proving that the TPM claims
-// (event log, PCRs, grub.cfg) came from the same VM as the TEE attestation.
+// (event log, PCRs) came from the same VM as the TEE attestation.
 func verifyAKBinding(attestation *attestpb.Attestation, platform Platform) error {
 	var reportData []byte
 	switch platform {
@@ -274,20 +261,50 @@ func verifyAKBinding(attestation *attestpb.Attestation, platform Platform) error
 	return nil
 }
 
-func verifyTDXQuote(attestation *attestpb.Attestation, ccelData, ccelAcpiTable []byte) (*TDXClaims, error) {
-	quote := attestation.GetTdxAttestation()
-	reportData := quote.GetTdQuoteBody().GetReportData()
-	opts := rtmr.TdxDefaultOpts(reportData)
+// extractPCRs extracts PCR 8 and PCR 9 from the TPM quote.
+// These values are platform-agnostic (same for TDX and SEV-SNP with identical images).
+// - PCR 8: Kernel command line (includes dm-verity root hash = launcher identity)
+// - PCR 9: Files read by GRUB (kernel + initramfs = base image)
+func extractPCRs(attestation *attestpb.Attestation) ([32]byte, [32]byte, error) {
+	var pcr8, pcr9 [32]byte
 
-	var fwState *state.FirmwareLogState
-	if len(ccelData) > 0 && len(ccelAcpiTable) > 0 {
-		var err error
-		fwState, err = rtmr.ParseCcelWithTdQuote(ccelData, ccelAcpiTable, quote, &opts)
-		if err != nil {
-			return nil, fmt.Errorf("quote/CCEL verification failed: %w", err)
+	// Find the SHA-256 quote (hash algorithm 0x000B)
+	var sha256PCRs *tpmpb.PCRs
+	for _, quote := range attestation.GetQuotes() {
+		if quote.GetPcrs().GetHash() == tpmpb.HashAlgo_SHA256 {
+			sha256PCRs = quote.GetPcrs()
+			break
 		}
 	}
 
+	if sha256PCRs == nil {
+		return pcr8, pcr9, fmt.Errorf("no SHA-256 PCR bank found in attestation")
+	}
+
+	pcrs := sha256PCRs.GetPcrs()
+
+	// Extract PCR 8
+	if val, ok := pcrs[8]; ok && len(val) == 32 {
+		copy(pcr8[:], val)
+	} else {
+		return pcr8, pcr9, fmt.Errorf("PCR 8 not found or invalid length")
+	}
+
+	// Extract PCR 9
+	if val, ok := pcrs[9]; ok && len(val) == 32 {
+		copy(pcr9[:], val)
+	} else {
+		return pcr8, pcr9, fmt.Errorf("PCR 9 not found or invalid length")
+	}
+
+	return pcr8, pcr9, nil
+}
+
+// extractTDXClaims extracts TDX-specific claims from the attestation and machine state.
+func extractTDXClaims(attestation *attestpb.Attestation, machineState *attestpb.MachineState) (*TDXClaims, error) {
+	quote := attestation.GetTdxAttestation()
+
+	// Check debug mode from TD attributes
 	tdAttrs := quote.GetTdQuoteBody().GetTdAttributes()
 	if len(tdAttrs) < 2 || tdAttrs[0]&0x01 != 0 {
 		return nil, fmt.Errorf("TD is in DEBUG mode - rejecting")
@@ -295,16 +312,25 @@ func verifyTDXQuote(attestation *attestpb.Attestation, ccelData, ccelAcpiTable [
 
 	claims := &TDXClaims{
 		Attributes: TDAttributes{
-			Debug: tdAttrs[0]&0x01 != 0, SeptVEDisable: tdAttrs[0]&0x10 != 0,
-			PKS: tdAttrs[0]&0x40 != 0, KL: tdAttrs[0]&0x80 != 0, PerfMon: tdAttrs[1]&0x01 != 0,
+			Debug:         tdAttrs[0]&0x01 != 0,
+			SeptVEDisable: tdAttrs[0]&0x10 != 0,
+			PKS:           tdAttrs[0]&0x40 != 0,
+			KL:            tdAttrs[0]&0x80 != 0,
+			PerfMon:       tdAttrs[1]&0x01 != 0,
 		},
 	}
+
+	// Extract TEE TCB SVN
 	if tcb := quote.GetTdQuoteBody().GetTeeTcbSvn(); len(tcb) >= 16 {
 		copy(claims.TeeTcbSvn[:], tcb[:16])
 	}
+
+	// Extract MRTD
 	if mrtd := quote.GetTdQuoteBody().GetMrTd(); len(mrtd) >= 48 {
 		copy(claims.MRTD[:], mrtd[:48])
 	}
+
+	// Extract RTMRs
 	if rtmrs := quote.GetTdQuoteBody().GetRtmrs(); len(rtmrs) >= 2 {
 		if len(rtmrs[0]) >= 48 {
 			copy(claims.RTMR0[:], rtmrs[0][:48])
@@ -313,12 +339,7 @@ func verifyTDXQuote(attestation *attestpb.Attestation, ccelData, ccelAcpiTable [
 			copy(claims.RTMR1[:], rtmrs[1][:48])
 		}
 	}
-	if fwState != nil {
-		claims.Firmware = parseFirmwareState(fwState)
-		if claims.Firmware != nil {
-			claims.GrubCfgDigest = claims.Firmware.GrubCfgDigest
-		}
-	}
+
 	return claims, nil
 }
 
@@ -337,12 +358,18 @@ func verifySevSnpReport(attestation *attestpb.Attestation) (*SevSnpClaims, error
 	}
 
 	claims := &SevSnpClaims{
-		CurrentTcb: report.GetCurrentTcb(), ReportedTcb: report.GetReportedTcb(),
-		CommittedTcb: report.GetCommittedTcb(), GuestSvn: report.GetGuestSvn(),
+		CurrentTcb:   report.GetCurrentTcb(),
+		ReportedTcb:  report.GetReportedTcb(),
+		CommittedTcb: report.GetCommittedTcb(),
+		GuestSvn:     report.GetGuestSvn(),
 		Policy: SevSnpPolicy{
-			Debug: guestPolicy.Debug, MigrateMA: guestPolicy.MigrateMA, SMT: guestPolicy.SMT,
-			ABIMinor: guestPolicy.ABIMinor, ABIMajor: guestPolicy.ABIMajor,
-			SingleSocket: guestPolicy.SingleSocket, CipherTextHidingDRAM: guestPolicy.CipherTextHidingDRAM,
+			Debug:                guestPolicy.Debug,
+			MigrateMA:            guestPolicy.MigrateMA,
+			SMT:                  guestPolicy.SMT,
+			ABIMinor:             guestPolicy.ABIMinor,
+			ABIMajor:             guestPolicy.ABIMajor,
+			SingleSocket:         guestPolicy.SingleSocket,
+			CipherTextHidingDRAM: guestPolicy.CipherTextHidingDRAM,
 		},
 	}
 	if m := report.GetMeasurement(); len(m) >= 48 {
@@ -352,38 +379,4 @@ func verifySevSnpReport(attestation *attestpb.Attestation) (*SevSnpClaims, error
 		copy(claims.HostData[:], h[:32])
 	}
 	return claims, nil
-}
-
-func parseFirmwareState(fwState *state.FirmwareLogState) *FirmwareState {
-	if fwState == nil {
-		return nil
-	}
-	result := &FirmwareState{}
-	if sb := fwState.GetSecureBoot(); sb != nil {
-		result.SecureBootEnabled = sb.GetEnabled()
-	}
-	if lk := fwState.GetLinuxKernel(); lk != nil {
-		result.Hardened = strings.Contains(lk.GetCommandLine(), "confidential-space.hardened=true")
-	}
-	grubPrefixes := [][]byte{[]byte("grub_cmd: "), []byte("kernel_cmdline: "), []byte("module_cmdline: "), []byte("grub_kernel_cmdline ")}
-	for _, event := range fwState.GetRawEvents() {
-		if event.GetPcrIndex() != 3 || event.GetUntrustedType() != 13 {
-			continue
-		}
-		data := event.GetData()
-		isCmd := false
-		for _, p := range grubPrefixes {
-			if bytes.HasPrefix(data, p) {
-				isCmd = true
-				break
-			}
-		}
-		if !isCmd {
-			result.GrubFiles = append(result.GrubFiles, GrubFileDigest{Filename: string(data), Digest: event.GetDigest()})
-			if strings.Contains(strings.ToLower(string(data)), "grub.cfg") {
-				result.GrubCfgDigest = event.GetDigest()
-			}
-		}
-	}
-	return result
 }

@@ -47,17 +47,22 @@ Each TDX measurement register is validated differently:
 | **MRTD** | - | Firmware binary (before boot) | Verify Google's signed endorsement from `gs://gce_tcb_integrity/ovmf_x64_csm/tdx/{MRTD}.binarypb` |
 | **RTMR0** | PCR 1,7 | Secure Boot state | Extract from CCEL → verify Secure Boot enabled |
 | **RTMR1** | PCR 2-6 | EFI state (boot order, UEFI apps) | Not used for allowlist |
-| **RTMR2** | PCR 8-15 | GRUB + kernel + container events | Extract grub.cfg digest → on-chain allowlist; Replay CEL → container claims |
+| **RTMR2** | PCR 8-15 | GRUB + kernel + container events | Replay CEL → container claims |
 
-**Important:** RTMR1 does NOT contain the kernel or launcher - those are in RTMR2. The grub.cfg digest (extracted from CCEL) is used for base image validation because it contains the dm-verity root hash which changes when the launcher changes.
+**Important:** RTMR1 does NOT contain the kernel or launcher - those are in RTMR2. The base image allowlist uses **PCR 8 + PCR 9** from the vTPM:
 
-**Why grub.cfg digest works for launcher validation:**
+| PCR | What it measures | Used for |
+|-----|------------------|----------|
+| **PCR 8** | Kernel command line (includes dm-verity root hash) | Launcher identity |
+| **PCR 9** | Files read by GRUB (kernel, initramfs) | Base image identity |
+
+**Why PCR 8 captures launcher changes:**
 ```
 Launcher code change → OEM partition changes → seal-oem recomputes dm-verity hash
-→ dm-verity hash embedded in grub.cfg kernel cmdline → GRUB measures grub.cfg → digest changes
+→ dm-verity hash embedded in kernel cmdline → measured to PCR 8
 ```
 
-**Note:** We cannot use RTMR2 directly as the allowlist key because it also includes container events (CEL), which change with every deployment. Instead, we extract the specific grub.cfg digest from the CCEL raw events.
+**Note:** PCR values come from the vTPM and are **platform-agnostic** - the same values for TDX and SEV-SNP when running identical images. This means you only need to add one entry to the allowlist per image.
 
 #### SEV-SNP Measurements
 
@@ -66,12 +71,13 @@ SEV-SNP uses a hybrid approach: the SNP report provides firmware measurements, w
 | Field | What it measures | Validation |
 |-------|------------------|------------|
 | **MEASUREMENT** | Firmware binary | Verify Google's signed endorsement from `gs://gce_tcb_integrity/ovmf_x64_csm/sevsnp/{MEASUREMENT}.binarypb` |
-| **grub.cfg digest** | OS/kernel (GRUB files) | On-chain allowlist with support level (extracted from TPM event log) |
+| **PCR 8 + PCR 9** | Launcher + base image | On-chain allowlist (same values as TDX) |
 | **CEL** | Container events | Replay CEL to extract claims (verified via TPM quote signed by AK) |
 
-**Mapping between platforms:**
-- **grub.cfg digest** is used for both TDX (from CCEL) and SEV-SNP (from TPM event log) - kernel/launcher identity
-- **CEL events** extracted from RTMR2 (TDX) or TPM event log (SEV-SNP) - container claims
+**Platform-agnostic measurements:**
+- **PCR 8** (kernel cmdline) and **PCR 9** (GRUB files) are identical for TDX and SEV-SNP running the same image
+- Only one allowlist entry needed per image version
+- **CEL events** extracted from TPM event log for container claims
 
 The AK public key is cryptographically bound to the hardware quote (via ReportData), ensuring the GCE claims and the Container claims belong to the same physical entity.
 
@@ -129,7 +135,7 @@ This approach fundamentally changes the trust model. Previously, Google determin
 
 We gain full control over the software stack but inherit additional maintenance responsibilities:
 - **Build & Patch:** We must build and patch the base image rather than relying on Google updates (although we can incorporate patches as they appear in the upstream codebase).
-- **Allowlist Management:** We must maintain the database of valid custom image measurements (grub.cfg digest for both TDX and SEV-SNP).
+- **Allowlist Management:** We must maintain the database of valid custom image measurements (PCR 8 + PCR 9 from vTPM, platform-agnostic for TDX and SEV-SNP).
 - **Verification Logic:** Instead of simply checking a Google JWT signature, we must implement and maintain the full TDX/SEV-SNP verification protocols (checking Intel/AMD/Google root CAs, replaying event logs, verifying TPM quotes, verifying firmware endorsements, etc).
 
 ## Demo
@@ -192,11 +198,8 @@ If you modify the source code to build your own custom image (different from the
 export PRIVATE_KEY="0x..."
 ./research/scripts/setup.sh deploy
 
-# Add your custom image measurement for TDX (grub.cfg digest from CCEL)
-./research/scripts/setup.sh add-image --cvm tdx --measurement 0x<grub_cfg_digest> --level LATEST
-
-# Add your custom image measurement for SEV-SNP (grub.cfg digest from TPM event log)
-./research/scripts/setup.sh add-image --cvm sevsnp --measurement 0x<grub_cfg_digest> --level LATEST
+# Add your custom image (PCR 8 + PCR 9 from vTPM, platform-agnostic)
+./research/scripts/setup.sh add-image --pcr8 0x<pcr8_hex> --pcr9 0x<pcr9_hex> --level LATEST
 
 # Run the demo
 ./research/scripts/run.sh

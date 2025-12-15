@@ -43,10 +43,6 @@ type AttestRequest struct {
 	// Contains: TPM quotes, event log, AK certs, CEL, TDX/SEV-SNP quote
 	Attestation []byte `json:"attestation"`
 
-	// TDX-only: CCEL data for firmware validation (RTMR0/RTMR1)
-	CcelAcpiTable []byte `json:"ccel_acpi_table,omitempty"`
-	CcelData      []byte `json:"ccel_data,omitempty"`
-
 	// RSAPublicKey is the PEM-encoded ephemeral RSA public key for response encryption
 	RSAPublicKey string `json:"rsa_public_key"`
 }
@@ -58,11 +54,9 @@ type AttestResponse struct {
 	Error           string `json:"error,omitempty"`
 }
 
-// rawAttestResponse matches the teeserver /v1/attestation response format.
-type rawAttestResponse struct {
-	Attestation   []byte `json:"attestation"`               // Serialized pb.Attestation
-	CcelAcpiTable []byte `json:"ccel_acpi_table,omitempty"` // TDX only
-	CcelData      []byte `json:"ccel_data,omitempty"`       // TDX only
+// attestationResponse matches the teeserver /v1/attestation response format.
+type attestationResponse struct {
+	Attestation []byte `json:"attestation"` // Serialized pb.Attestation
 }
 
 func main() {
@@ -147,18 +141,11 @@ func main() {
 		log("Detected platform: %s", platform)
 		log("Got attestation (%d bytes)", len(attestResp.Attestation))
 
-		// CCEL data comes from teeserver response (TDX only)
-		if len(attestResp.CcelAcpiTable) > 0 && len(attestResp.CcelData) > 0 {
-			log("Got CCEL data from teeserver (%d bytes table, %d bytes data)", len(attestResp.CcelAcpiTable), len(attestResp.CcelData))
-		}
-
 		// Send attestation to KMS
 		log("Step 3: Sending attestation to KMS...")
 		req := AttestRequest{
-			Attestation:   attestResp.Attestation,
-			CcelAcpiTable: attestResp.CcelAcpiTable,
-			CcelData:      attestResp.CcelData,
-			RSAPublicKey:  string(pubKeyPEM),
+			Attestation:  attestResp.Attestation,
+			RSAPublicKey: string(pubKeyPEM),
 		}
 		resp, err := sendAttestation(kmsClient, kmsURL, &req)
 		if err != nil {
@@ -216,7 +203,7 @@ func waitForSocket(path string) error {
 	return fmt.Errorf("socket %s not available after 60 seconds", path)
 }
 
-func getAttestation(client *http.Client, rsaPubKeyPEM []byte) (*rawAttestResponse, error) {
+func getAttestation(client *http.Client, rsaPubKeyPEM []byte) (*attestationResponse, error) {
 	// Build report_data from SHA256 hash of RSA public key PEM
 	// The teeserver embeds this in ReportData[0:32], with AK hash in [32:64]
 	rsaPubKeyHash := sha256.Sum256(rsaPubKeyPEM)
@@ -232,7 +219,7 @@ func getAttestation(client *http.Client, rsaPubKeyPEM []byte) (*rawAttestRespons
 		return nil, fmt.Errorf("TEE server returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	var attestResp rawAttestResponse
+	var attestResp attestationResponse
 	if err := json.NewDecoder(resp.Body).Decode(&attestResp); err != nil {
 		return nil, err
 	}

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This spec describes verification of raw attestations from Google Confidential Space VMs. Both TDX and SEV-SNP follow the same trust model but use different hardware primitives.
+This spec describes verification of raw attestations from Google Confidential Space VMs. Both TDX and SEV-SNP follow the same trust model and verification flow, using `server.VerifyAttestation()` for TPM-based validation.
 
 ## Trust Chain
 
@@ -14,24 +14,33 @@ Quote signature              AK certificate              Container claims
 verifies firmware            proves GCE VM               from event logs
 ```
 
-## TDX Verification
+## Unified Verification Flow
 
-### High-Level API
+Both TDX and SEV-SNP use the same verification approach via `server.VerifyAttestation()`:
 
 ```go
-// go-tdx-guest/rtmr.ParseCcelWithTdQuote() handles steps 1-3 in one call:
-fwState, err := rtmr.ParseCcelWithTdQuote(ccelData, acpiTable, quote, opts)
-// Returns: SecureBoot, GrubState, LinuxKernel, RawEvents
+// Unified verification for both platforms
+machineState, err := server.VerifyAttestation(&attestation, server.VerifyOpts{
+    Nonce:             tpmNonce,
+    TrustedRootCerts:  append(server.GceEKRoots, server.GcpCASEKRoots...),
+    IntermediateCerts: server.GcpCASEKIntermediates,
+    Loader:            server.GRUB,
+})
+
+// Returns: MachineState with:
+// - SecureBoot state
+// - GrubState (grub.cfg digest - SHA256)
+// - LinuxKernel (command line)
+// - GCE instance info
+// - Container claims (COS state)
+// - TdxAttestation or SevSnpAttestation (TEE quote)
 ```
 
-### Step 1: Quote + CCEL Verification
-`ParseCcelWithTdQuote()` does:
-- Verify quote signature against Intel's root CA
-- Validate quote fields (ReportData, etc.)
-- Parse CCEL and replay events against RTMRs
-- Return `FirmwareLogState` with SecureBoot, GRUB files, kernel cmdline
+### Step 1: Parse Attestation
+- Unmarshal `pb.Attestation` protobuf
+- Detect platform: `TdxAttestation` or `SevSnpAttestation`
 
-### Step 2: Binding Verification
+### Step 2: ReportData Verification
 ```
 ReportData[0:32]  = User-provided data (e.g., SHA256 of RSA pubkey)
 ReportData[32:64] = SHA256(AK_pubkey_DER)   ── binds AK to hardware
@@ -39,95 +48,60 @@ ReportData[32:64] = SHA256(AK_pubkey_DER)   ── binds AK to hardware
 - Launcher: `launcher/agent/agent.go` - `GetAttestation()` adds AK hash
 - Verifier: `research/verifier/verifier.go` - `verifyAKBinding()` checks it
 
-### Step 3: Security Policy
-- **Debug mode**: Reject if `TD_ATTRIBUTES.DEBUG = 1`
-- **Secure Boot**: From `fwState.SecureBoot.Enabled`
+### Step 3: TPM/AK Validation
+`server.VerifyAttestation()` handles:
+- TPM quote signature verification using AK
+- Event log replay against PCRs
+- AK certificate chain verification (Google GCE EK root)
+- Extract SecureBoot, GRUB files, kernel cmdline, GCE info
 
-### Step 4: Firmware Endorsement (MRTD)
-- Fetch from `gs://gce_tcb_integrity/ovmf_x64_csm/tdx/{MRTD}.binarypb`
+### Step 4: Security Policy
+- **TDX**: Reject if `TD_ATTRIBUTES.DEBUG = 1`
+- **SEV-SNP**: Reject if `Policy.Debug = true`
+- **Secure Boot**: From `machineState.GetSecureBoot().GetEnabled()`
+
+### Step 5: TEE Quote Verification
+- **TDX**: Quote signature verified against Intel's root CA (via attestation)
+- **SEV-SNP**: Report signature verified via `verify.SnpAttestation()` against AMD's root CA
+
+### Step 6: Firmware Endorsement
+- **TDX**: Fetch `gs://gce_tcb_integrity/ovmf_x64_csm/tdx/{MRTD}.binarypb`
+- **SEV-SNP**: Fetch `gs://gce_tcb_integrity/ovmf_x64_csm/sevsnp/{MEASUREMENT}.binarypb`
 - Verify RSA-PSS signature against Google TCB root CA
 
-### Step 5: TCB Version Check
-- Pack `TeeTcbSvn[0:3]` as `(major << 16 | minor << 8 | microcode)`
-- Check against policy minimum
+### Step 7: TCB Version Check
+- **TDX**: Pack `TeeTcbSvn[0:3]` as `(major << 16 | minor << 8 | microcode)`
+- **SEV-SNP**: Use `CurrentTcb` directly (uint64)
+- Check against on-chain policy minimum
 
-### Step 6: Base Image Allowlist
-- Extract **grub.cfg digest** from `fwState.RawEvents` (EV_IPL in RTMR[2])
-- Check against allowlist
+### Step 8: Base Image Allowlist
+- Extract **PCR 8** and **PCR 9** from verified TPM quote
+- **Platform-agnostic**: Same values for TDX and SEV-SNP with identical images
+- Check against on-chain allowlist: `isImageAllowed(pcr8, pcr9)`
 
-**Why grub.cfg digest?**
-- RTMR[1] = EFI state, does NOT contain kernel/launcher
-- RTMR[2] = GRUB files + container events (changes per container)
-- grub.cfg contains dm-verity hash → changes when launcher changes
+| PCR | What it measures | Used for |
+|-----|------------------|----------|
+| **PCR 8** | Kernel command line (includes dm-verity root hash) | Launcher identity |
+| **PCR 9** | Files read by GRUB (kernel, initramfs) | Base image identity |
 
-### Step 7: GCE Identity (manual)
-- Verify AK cert chain: `server.VerifyAKCert()`
-- Extract info: `server.GetGCEInstanceInfo()`
-
-### Step 8: Container Claims
-- Replay CEL against RTMR[2]: `server.ParseCosCELRTMR()`
+### Step 9: Container Claims
+- From `machineState.GetCos().GetContainer()`
 - Extract: ImageReference, ImageDigest, Args, EnvVars
 
 ---
 
-## SEV-SNP Verification
+## Platform-Specific Details
 
-### High-Level APIs
+### TDX
+- TEE quote: `attestation.GetTdxAttestation()`
+- Measurements: MRTD, RTMRs from `TdQuoteBody`
+- TCB: `TeeTcbSvn` (16 bytes, pack first 3 for comparison)
 
-```go
-// Step 1: go-sev-guest handles report verification
-verify.SnpAttestation(attestation, verify.DefaultOptions())
-validate.SnpAttestation(attestation, validateOpts)
-
-// Step 6-9: go-tpm-tools handles TPM quote + event log
-machineState, err := server.VerifyAttestation(tpmAttestation, verifyOpts)
-// Returns: MachineState with SecureBoot, GrubState, GCE info
-
-// Container claims (separate call)
-cosState, err := server.ParseCosCELPCR(cel, pcrBank)
-```
-
-### Step 1: SNP Report Verification
-`verify.SnpAttestation()` does:
-- Verify report signature against AMD's root CA
-- Fetch and verify certificate chain
-
-### Step 2: Binding Verification
-```
-ReportData[0:32]  = User-provided data (e.g., SHA256 of RSA pubkey)
-ReportData[32:64] = SHA256(AK_pubkey_DER)   ── binds AK to hardware
-```
-- Launcher: `launcher/agent/agent.go` - `GetAttestation()` adds AK hash
-- Verifier: `research/verifier/verifier.go` - `verifyAKBinding()` checks it
-
-### Step 3: Security Policy
-- **Debug mode**: Reject if `Policy.Debug = true`
-
-### Step 4: Firmware Endorsement (MEASUREMENT)
-- Fetch from `gs://gce_tcb_integrity/ovmf_x64_csm/sevsnp/{MEASUREMENT}.binarypb`
-- Verify RSA-PSS signature against Google TCB root CA
-
-### Step 5: TCB Version Check
-- Use `CurrentTcb` directly (uint64)
-- Check against policy minimum
-
-### Step 6: TPM Quote + Event Log
-`server.VerifyAttestation()` does:
-- Verify TPM quote signature using AK
-- Replay BIOS event log against PCRs
-- Extract SecureBoot, GRUB state, GCE info
-
-### Step 7: Base Image Allowlist
-- Extract **PCR 9** from verified quote
-- Check against allowlist
-
-**Why PCR 9?**
-- PCR 9 = GRUB-measured files (kernel, initrd)
-- Equivalent to grub.cfg digest for TDX
-
-### Step 8: Container Claims
-- Replay CEL against PCR 13: `server.ParseCosCELPCR()`
-- Extract: ImageReference, ImageDigest, Args, EnvVars
+### SEV-SNP
+- TEE report: `attestation.GetSevSnpAttestation()`
+- Measurements: MEASUREMENT, HostData from `Report`
+- TCB: `CurrentTcb` (uint64)
+- Additional verification: `verify.SnpAttestation()` for AMD signature
 
 ---
 
@@ -137,25 +111,28 @@ ReportData[32:64] = SHA256(AK_pubkey_DER)   ── binds AK to hardware
 |------|-----|---------|
 | **Firmware** | MRTD (48 bytes) | MEASUREMENT (48 bytes) |
 | **Firmware validation** | Google endorsement | Google endorsement |
-| **Base image** | grub.cfg digest from CCEL | PCR 9 from TPM quote |
+| **Base image** | PCR 8 + PCR 9 from vTPM | PCR 8 + PCR 9 from vTPM |
 | **Base image validation** | On-chain allowlist | On-chain allowlist |
-| **Container** | CEL → RTMR[2] | CEL → PCR 13 |
+| **Container** | CEL → machineState.Cos | CEL → machineState.Cos |
 | **TCB** | TeeTcbSvn[0:3] packed | CurrentTcb |
+
+**Key insight:** PCR 8 and PCR 9 are **platform-agnostic** - the vTPM produces identical values for TDX and SEV-SNP when running the same image. This simplifies allowlist management.
 
 ---
 
 ## On-Chain Contract
 
 ```solidity
-// CVM enum: 0=TDX, 1=SEV_SNP
+// CVM enum only used for TCB (different formats per platform)
+enum CVM { TDX, SEV_SNP }
 
 // TCB minimum (rarely used - for critical vulns)
 checkTcb(CVM cvm, uint64 tcb) → bool
 
-// Base image allowlist
-isImageAllowed(CVM cvm, bytes measurement) → bool
-// TDX: grub.cfg digest (48 bytes SHA384)
-// SEV-SNP: PCR 9 (32 bytes SHA256)
+// Base image allowlist (platform-agnostic - single entry per image)
+isImageAllowed(bytes32 pcr8, bytes32 pcr9) → bool
+// PCR 8 = launcher identity (kernel cmdline with dm-verity hash)
+// PCR 9 = base image identity (kernel + initramfs)
 
 // Support levels: NONE, EXPERIMENTAL, USABLE, STABLE, LATEST
 ```
@@ -166,7 +143,6 @@ isImageAllowed(CVM cvm, bytes measurement) → bool
 
 | Library | Purpose |
 |---------|---------|
-| `go-tdx-guest` | TDX quote parsing and Intel CA verification |
+| `go-tdx-guest` | TDX quote parsing |
 | `go-sev-guest` | SEV-SNP report parsing and AMD CA verification |
-| `go-tpm-tools` | TPM quote verification, CEL parsing, AK cert validation |
-| `go-eventlog` | CCEL/TCG event log parsing |
+| `go-tpm-tools` | TPM quote verification, CEL parsing, AK cert validation, event log parsing |

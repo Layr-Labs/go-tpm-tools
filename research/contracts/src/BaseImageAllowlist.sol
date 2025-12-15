@@ -2,12 +2,13 @@
 pragma solidity ^0.8.13;
 
 /// @title BaseImageAllowlist
-/// @notice Allowlist for custom CVM base images with support level tracking
+/// @notice Allowlist for Confidential Space base images using TPM PCR measurements
 /// @dev Two validation layers:
-///      1. Minimum TCB - reject outdated platform TCBs (per-CVM)
-///      2. Base image support levels - custom image versioning
-///         - TDX: grub.cfg digest (48 bytes SHA384, extracted from CCEL)
-///         - SEV-SNP: grub.cfg digest (extracted from TPM event log)
+///      1. Minimum TCB - reject outdated platform TCBs (per-CVM, different formats)
+///      2. Base image allowlist - PCR 8 + PCR 9 from vTPM (platform-agnostic)
+///
+///      PCR measurements come from the vTPM, which produces identical values
+///      for TDX and SEV-SNP when running the same image.
 contract BaseImageAllowlist {
     /// @notice Supported Confidential VM technologies
     enum CVM {
@@ -30,20 +31,30 @@ contract BaseImageAllowlist {
     /// @notice Minimum TCB version per CVM platform
     /// @dev TDX: Pack TeeTcbSvn[0:3] as (major << 16 | minor << 8 | microcode)
     ///      SEV-SNP: Use CurrentTcb directly (uint64 with packed component versions)
+    ///      TCB remains per-platform because TDX and SEV-SNP have different TCB formats
     mapping(CVM => uint64) public minimumTcb;
 
-    // Base image support levels (grub.cfg digest for both TDX and SEV-SNP)
+    /// @notice Minimum support level required for image validation
     SupportLevel public minimumSupportLevel;
-    mapping(CVM => mapping(bytes32 => SupportLevel)) public imageSupport;
+
+    /// @notice Base image support levels indexed by keccak256(pcr8, pcr9)
+    /// @dev Platform-agnostic: vTPM produces same PCR values for TDX and SEV-SNP
+    ///      - PCR 8: Kernel command line (includes dm-verity root hash of OEM partition = launcher)
+    ///      - PCR 9: Files read by GRUB (kernel, initramfs = COS base image)
+    mapping(bytes32 => SupportLevel) public imageSupport;
 
     event MinimumTcbUpdated(CVM indexed cvm, uint64 oldTcb, uint64 newTcb);
-    event ImageSupportUpdated(CVM indexed cvm, bytes32 indexed measurementHash, SupportLevel level);
+    event ImageSupportUpdated(
+        bytes32 indexed key,    // keccak256(abi.encodePacked(pcr8, pcr9))
+        bytes32 pcr8,           // Launcher measurement
+        bytes32 pcr9,           // Base image measurement
+        SupportLevel level
+    );
     event MinimumSupportLevelUpdated(SupportLevel oldLevel, SupportLevel newLevel);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     error NOT_OWNER();
     error ZERO_ADDRESS();
-    error INVALID_CVM();
 
     modifier onlyOwner() {
         require(msg.sender == owner, NOT_OWNER());
@@ -79,23 +90,14 @@ contract BaseImageAllowlist {
 
     // ============ Base Image Support Level Functions ============
 
-    /// @notice Set the support level for a base image measurement
-    /// @param cvm The CVM platform (grub.cfg digest for both TDX and SEV_SNP)
-    /// @param measurement The measurement bytes (48 bytes SHA384 for TDX, 32 bytes SHA256 for SEV-SNP)
+    /// @notice Set the support level for a base image
+    /// @param pcr8 TPM PCR 8 value (kernel cmdline, includes dm-verity hash = launcher identity)
+    /// @param pcr9 TPM PCR 9 value (GRUB-read files = kernel + initramfs = base image)
     /// @param level The support level for this image
-    function setImageSupport(CVM cvm, bytes calldata measurement, SupportLevel level) external onlyOwner {
-        bytes32 key = keccak256(measurement);
-        imageSupport[cvm][key] = level;
-        emit ImageSupportUpdated(cvm, key, level);
-    }
-
-    /// @notice Remove an image from the allowlist (sets to NONE)
-    /// @param cvm The CVM platform
-    /// @param measurement The measurement bytes
-    function removeImage(CVM cvm, bytes calldata measurement) external onlyOwner {
-        bytes32 key = keccak256(measurement);
-        imageSupport[cvm][key] = SupportLevel.NONE;
-        emit ImageSupportUpdated(cvm, key, SupportLevel.NONE);
+    function setImageSupport(bytes32 pcr8, bytes32 pcr9, SupportLevel level) external onlyOwner {
+        bytes32 key = keccak256(abi.encodePacked(pcr8, pcr9));
+        imageSupport[key] = level;
+        emit ImageSupportUpdated(key, pcr8, pcr9, level);
     }
 
     /// @notice Update the minimum support level requirement
@@ -107,21 +109,21 @@ contract BaseImageAllowlist {
     }
 
     /// @notice Check if an image meets the minimum support level
-    /// @param cvm The CVM platform
-    /// @param measurement The measurement bytes
+    /// @param pcr8 TPM PCR 8 value
+    /// @param pcr9 TPM PCR 9 value
     /// @return True if the image meets the minimum support level
-    function isImageAllowed(CVM cvm, bytes calldata measurement) external view returns (bool) {
-        bytes32 key = keccak256(measurement);
-        return checkSupport(imageSupport[cvm][key], minimumSupportLevel);
+    function isImageAllowed(bytes32 pcr8, bytes32 pcr9) external view returns (bool) {
+        bytes32 key = keccak256(abi.encodePacked(pcr8, pcr9));
+        return checkSupport(imageSupport[key], minimumSupportLevel);
     }
 
     /// @notice Get the support level for an image
-    /// @param cvm The CVM platform
-    /// @param measurement The measurement bytes
+    /// @param pcr8 TPM PCR 8 value
+    /// @param pcr9 TPM PCR 9 value
     /// @return The support level
-    function getImageSupport(CVM cvm, bytes calldata measurement) external view returns (SupportLevel) {
-        bytes32 key = keccak256(measurement);
-        return imageSupport[cvm][key];
+    function getImageSupport(bytes32 pcr8, bytes32 pcr9) external view returns (SupportLevel) {
+        bytes32 key = keccak256(abi.encodePacked(pcr8, pcr9));
+        return imageSupport[key];
     }
 
     /// @notice Check if an image level meets a minimum requirement

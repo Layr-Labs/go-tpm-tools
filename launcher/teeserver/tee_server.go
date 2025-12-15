@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os"
 
 	"github.com/google/go-tpm-tools/launcher/agent"
 	"github.com/google/go-tpm-tools/launcher/internal/logging"
@@ -147,9 +146,6 @@ type attestationRequest struct {
 type attestationResponse struct {
 	// Attestation is a serialized pb.Attestation proto.
 	Attestation []byte `json:"attestation"`
-	// CCEL data for TDX firmware validation (only present on TDX platforms)
-	CcelAcpiTable []byte `json:"ccel_acpi_table,omitempty"`
-	CcelData      []byte `json:"ccel_data,omitempty"`
 }
 
 // getAttestation returns a pb.Attestation for self-verification.
@@ -190,16 +186,6 @@ func (a *attestHandler) getAttestation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := attestationResponse{Attestation: attestBytes}
-
-	// Include CCEL data for TDX platforms
-	if attestation.GetTdxAttestation() != nil {
-		if ccelTable, err := os.ReadFile("/sys/firmware/acpi/tables/CCEL"); err == nil {
-			resp.CcelAcpiTable = ccelTable
-		}
-		if ccelData, err := os.ReadFile("/sys/firmware/acpi/tables/data/CCEL"); err == nil {
-			resp.CcelData = ccelData
-		}
-	}
 
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(resp); err != nil {

@@ -22,29 +22,30 @@ Usage: $0 <command> [options]
 
 Commands:
   deploy              Deploy BaseImageAllowlist contract to Sepolia
-  add-image           Add base image measurement with support level
+  add-image           Add base image using PCR8 + PCR9 (platform-agnostic)
   remove-image        Remove a base image from the allowlist
   set-min-support     Set minimum support level requirement
   set-min-tcb         Set minimum TCB requirement for a platform
   show                Show current config and contract state
 
-Note: Firmware validation (MRTD for TDX, MEASUREMENT for SEV-SNP) is handled
-automatically by verifying Google's signed endorsements at runtime.
-No manual firmware management is required.
+Note:
+- PCR 8 = kernel cmdline (includes dm-verity hash = launcher identity)
+- PCR 9 = GRUB-read files (kernel + initramfs = base image)
+- These PCR values are platform-agnostic (same for TDX and SEV-SNP)
+- Firmware validation (MRTD/MEASUREMENT) is automatic via Google's endorsements
 
 Options for 'deploy':
   --rpc-url URL       Sepolia RPC URL (default: from config or env)
   --private-key KEY   Private key for deployment (default: from config or env)
 
 Options for 'add-image':
-  --cvm PLATFORM      CVM platform: tdx or sevsnp (required)
-  --measurement HASH  grub.cfg digest (48 bytes SHA384 hex for TDX from CCEL,
-                      or from TPM event log for SEV-SNP)
+  --pcr8 HASH         PCR 8 value (32 bytes SHA256 hex) - launcher identity
+  --pcr9 HASH         PCR 9 value (32 bytes SHA256 hex) - base image identity
   --level LEVEL       Support level: EXPERIMENTAL, USABLE, STABLE, LATEST (default: LATEST)
 
 Options for 'remove-image':
-  --cvm PLATFORM      CVM platform: tdx or sevsnp (required)
-  --measurement HASH  Measurement to remove
+  --pcr8 HASH         PCR 8 value (32 bytes SHA256 hex)
+  --pcr9 HASH         PCR 9 value (32 bytes SHA256 hex)
 
 Options for 'set-min-support':
   --level LEVEL       Minimum support level: EXPERIMENTAL, USABLE, STABLE, LATEST
@@ -57,11 +58,8 @@ Examples:
   # Deploy contract
   $0 deploy --rpc-url https://sepolia.infura.io/v3/YOUR_KEY --private-key 0x...
 
-  # Add a TDX custom image (grub.cfg digest from CCEL) as LATEST
-  $0 add-image --cvm tdx --measurement 0x7bf10daf... --level LATEST
-
-  # Add a SEV-SNP custom image (grub.cfg digest) as STABLE
-  $0 add-image --cvm sevsnp --measurement 0xabc123... --level STABLE
+  # Add a custom image (same values work for both TDX and SEV-SNP)
+  $0 add-image --pcr8 0x7bf10daf... --pcr9 0xabc123... --level LATEST
 
   # Set minimum support level to STABLE
   $0 set-min-support --level STABLE
@@ -118,74 +116,58 @@ support_level_to_uint8() {
 cvm_to_uint8() {
     case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
         tdx) echo 0 ;;
-        sevsnp|sev-snp|sev_snp) echo 1 ;;
+        sev-snp|sev_snp|sevsnp) echo 1 ;;
         *) error "Invalid CVM platform: $1. Must be 'tdx' or 'sevsnp'" ;;
     esac
 }
 
 deploy_contract() {
-    log "Deploying BaseImageAllowlist to Sepolia..."
+    [ -n "$SEPOLIA_RPC_URL" ] || error "SEPOLIA_RPC_URL not set. Use --rpc-url or set environment variable."
+    [ -n "$PRIVATE_KEY" ] || error "PRIVATE_KEY not set. Use --private-key or set environment variable."
 
-    [ -n "$SEPOLIA_RPC_URL" ] || error "SEPOLIA_RPC_URL not set. Use --rpc-url or set in config."
-    [ -n "$PRIVATE_KEY" ] || error "PRIVATE_KEY not set. Use --private-key or set in environment."
+    log "Deploying BaseImageAllowlist contract to Sepolia..."
+    log "  RPC URL: $SEPOLIA_RPC_URL"
 
     cd "$RESEARCH_DIR/contracts"
 
-    # Build contract
-    log "Building contract..."
-    forge build
-
-    # Deploy
-    log "Deploying to Sepolia..."
-    DEPLOY_OUTPUT=$(forge script script/Deploy.s.sol \
+    # Deploy using forge
+    DEPLOY_OUTPUT=$(forge create \
         --rpc-url "$SEPOLIA_RPC_URL" \
-        --broadcast \
         --private-key "$PRIVATE_KEY" \
+        --broadcast \
+        src/BaseImageAllowlist.sol:BaseImageAllowlist \
         2>&1)
 
-    echo "$DEPLOY_OUTPUT"
-
     # Extract contract address from output
-    # Look for "BaseImageAllowlist deployed at:" or parse from broadcast log
-    CONTRACT_ADDR=$(echo "$DEPLOY_OUTPUT" | grep -oP 'BaseImageAllowlist deployed at: \K0x[a-fA-F0-9]+' || true)
+    CONTRACT_ADDR=$(echo "$DEPLOY_OUTPUT" | grep -oE "Deployed to: 0x[a-fA-F0-9]{40}" | cut -d' ' -f3)
 
     if [ -z "$CONTRACT_ADDR" ]; then
-        # Try to get from broadcast directory
-        BROADCAST_FILE=$(ls -t "$RESEARCH_DIR/contracts/broadcast/Deploy.s.sol/"*/run-latest.json 2>/dev/null | head -1)
-        if [ -f "$BROADCAST_FILE" ]; then
-            CONTRACT_ADDR=$(jq -r '.transactions[0].contractAddress // empty' "$BROADCAST_FILE")
-        fi
+        echo "$DEPLOY_OUTPUT"
+        error "Failed to extract contract address from deployment output"
     fi
 
-    if [ -z "$CONTRACT_ADDR" ]; then
-        error "Could not extract contract address from deployment output"
-    fi
+    log "Contract deployed!"
+    log "  Address: $CONTRACT_ADDR"
 
-    log "Contract deployed at: $CONTRACT_ADDR"
+    # Save config
     save_config
 
-    # Verify on Etherscan if API key is provided
+    # Verify on Etherscan (optional)
     if [ -n "$ETHERSCAN_API_KEY" ]; then
         log "Verifying contract on Etherscan..."
         forge verify-contract "$CONTRACT_ADDR" \
             src/BaseImageAllowlist.sol:BaseImageAllowlist \
             --chain sepolia \
-            --etherscan-api-key "$ETHERSCAN_API_KEY" \
-            --watch \
-            2>&1 || warn "Contract verification failed (contract may already be verified)"
-        log "Contract verification complete"
-        log "View on Etherscan: https://sepolia.etherscan.io/address/$CONTRACT_ADDR"
+            --etherscan-api-key "$ETHERSCAN_API_KEY" || warn "Verification failed - you can retry manually"
     else
-        log "Skipping Etherscan verification (ETHERSCAN_API_KEY not set)"
         log "To verify later, run:"
         log "  ETHERSCAN_API_KEY=... forge verify-contract $CONTRACT_ADDR src/BaseImageAllowlist.sol:BaseImageAllowlist --chain sepolia --etherscan-api-key \$ETHERSCAN_API_KEY"
     fi
 
     echo ""
     log "Next steps:"
-    log "1. Add your custom image:"
-    log "   TDX:     $0 add-image --cvm tdx --measurement 0x<grub_cfg_digest> --level LATEST"
-    log "   SEV-SNP: $0 add-image --cvm sevsnp --measurement 0x<grub_cfg_digest> --level LATEST"
+    log "1. Add your custom image (same values work for both TDX and SEV-SNP):"
+    log "   $0 add-image --pcr8 0x<pcr8_hex> --pcr9 0x<pcr9_hex> --level LATEST"
     log "2. (Optional) Set minimum support level: $0 set-min-support --level STABLE"
     log "3. (Optional) Set minimum TCB: $0 set-min-tcb --cvm tdx --tcb 3"
     log ""
@@ -194,50 +176,43 @@ deploy_contract() {
 }
 
 add_image() {
-    local cvm=""
-    local measurement=""
+    local pcr8=""
+    local pcr9=""
     local level="LATEST"
 
     while [[ $# -gt 0 ]]; do
         case $1 in
-            --cvm) cvm="$2"; shift 2 ;;
-            --measurement) measurement="$2"; shift 2 ;;
-            --rtmr1) measurement="$2"; shift 2 ;;  # backward compat
+            --pcr8) pcr8="$2"; shift 2 ;;
+            --pcr9) pcr9="$2"; shift 2 ;;
             --level) level="$2"; shift 2 ;;
             *) error "Unknown option: $1" ;;
         esac
     done
 
-    [ -n "$cvm" ] || error "Missing --cvm (tdx or sevsnp)"
-    [ -n "$measurement" ] || error "Missing --measurement"
+    [ -n "$pcr8" ] || error "Missing --pcr8 (kernel cmdline / launcher identity)"
+    [ -n "$pcr9" ] || error "Missing --pcr9 (GRUB files / base image identity)"
     [ -n "$CONTRACT_ADDR" ] || error "CONTRACT_ADDR not set. Run 'deploy' first."
     [ -n "$SEPOLIA_RPC_URL" ] || error "SEPOLIA_RPC_URL not set."
     [ -n "$PRIVATE_KEY" ] || error "PRIVATE_KEY not set."
 
-    # Convert CVM and level to uint8
-    cvm_uint8=$(cvm_to_uint8 "$cvm")
+    # Convert level to uint8
     level_uint8=$(support_level_to_uint8 "$level")
 
-    # Normalize hex (ensure 0x prefix)
-    measurement_hex="0x$(echo "$measurement" | sed 's/^0x//')"
-
-    # Determine measurement type based on CVM
-    local measurement_type
-    if [ "$cvm_uint8" = "0" ]; then
-        measurement_type="grub.cfg digest (from CCEL)"
-    else
-        measurement_type="grub.cfg digest (from TPM event log)"
-    fi
+    # Normalize hex (ensure 0x prefix, pad to 32 bytes)
+    pcr8_hex="0x$(echo "$pcr8" | sed 's/^0x//')"
+    pcr9_hex="0x$(echo "$pcr9" | sed 's/^0x//')"
 
     log "Adding base image to allowlist..."
-    log "  CVM: $cvm ($cvm_uint8)"
-    log "  $measurement_type: $measurement_hex"
+    log "  PCR8 (launcher): $pcr8_hex"
+    log "  PCR9 (base image): $pcr9_hex"
     log "  Support Level: $level ($level_uint8)"
     log "  Contract: $CONTRACT_ADDR"
+    log ""
+    log "Note: These values are platform-agnostic (same for TDX and SEV-SNP)"
 
     cast send "$CONTRACT_ADDR" \
-        "setImageSupport(uint8,bytes,uint8)" \
-        "$cvm_uint8" "$measurement_hex" "$level_uint8" \
+        "setImageSupport(bytes32,bytes32,uint8)" \
+        "$pcr8_hex" "$pcr9_hex" "$level_uint8" \
         --rpc-url "$SEPOLIA_RPC_URL" \
         --private-key "$PRIVATE_KEY"
 
@@ -246,8 +221,8 @@ add_image() {
     # Verify
     log "Verifying..."
     SUPPORT=$(cast call "$CONTRACT_ADDR" \
-        "getImageSupport(uint8,bytes)(uint8)" \
-        "$cvm_uint8" "$measurement_hex" \
+        "getImageSupport(bytes32,bytes32)(uint8)" \
+        "$pcr8_hex" "$pcr9_hex" \
         --rpc-url "$SEPOLIA_RPC_URL")
 
     if [ "$SUPPORT" = "$level_uint8" ]; then
@@ -258,38 +233,35 @@ add_image() {
 }
 
 remove_image() {
-    local cvm=""
-    local measurement=""
+    local pcr8=""
+    local pcr9=""
 
     while [[ $# -gt 0 ]]; do
         case $1 in
-            --cvm) cvm="$2"; shift 2 ;;
-            --measurement) measurement="$2"; shift 2 ;;
-            --rtmr1) measurement="$2"; shift 2 ;;  # backward compat
+            --pcr8) pcr8="$2"; shift 2 ;;
+            --pcr9) pcr9="$2"; shift 2 ;;
             *) error "Unknown option: $1" ;;
         esac
     done
 
-    [ -n "$cvm" ] || error "Missing --cvm (tdx or sevsnp)"
-    [ -n "$measurement" ] || error "Missing --measurement"
+    [ -n "$pcr8" ] || error "Missing --pcr8"
+    [ -n "$pcr9" ] || error "Missing --pcr9"
     [ -n "$CONTRACT_ADDR" ] || error "CONTRACT_ADDR not set. Run 'deploy' first."
     [ -n "$SEPOLIA_RPC_URL" ] || error "SEPOLIA_RPC_URL not set."
     [ -n "$PRIVATE_KEY" ] || error "PRIVATE_KEY not set."
 
-    # Convert CVM to uint8
-    cvm_uint8=$(cvm_to_uint8 "$cvm")
-
-    # Normalize hex (ensure 0x prefix)
-    measurement_hex="0x$(echo "$measurement" | sed 's/^0x//')"
+    # Normalize hex
+    pcr8_hex="0x$(echo "$pcr8" | sed 's/^0x//')"
+    pcr9_hex="0x$(echo "$pcr9" | sed 's/^0x//')"
 
     log "Removing base image from allowlist..."
-    log "  CVM: $cvm ($cvm_uint8)"
-    log "  Measurement: $measurement_hex"
+    log "  PCR8: $pcr8_hex"
+    log "  PCR9: $pcr9_hex"
     log "  Contract: $CONTRACT_ADDR"
 
     cast send "$CONTRACT_ADDR" \
-        "removeImage(uint8,bytes)" \
-        "$cvm_uint8" "$measurement_hex" \
+        "removeImage(bytes32,bytes32)" \
+        "$pcr8_hex" "$pcr9_hex" \
         --rpc-url "$SEPOLIA_RPC_URL" \
         --private-key "$PRIVATE_KEY"
 
@@ -335,7 +307,6 @@ set_min_tcb() {
         case $1 in
             --cvm) cvm="$2"; shift 2 ;;
             --tcb) tcb="$2"; shift 2 ;;
-            --svn) tcb="$2"; shift 2 ;;  # backward compat
             *) error "Unknown option: $1" ;;
         esac
     done
@@ -364,18 +335,16 @@ set_min_tcb() {
 }
 
 show_config() {
-    log "Current configuration:"
+    log "Current Configuration:"
     echo ""
     echo "  Config file: $CONFIG_FILE"
     echo "  SEPOLIA_RPC_URL: ${SEPOLIA_RPC_URL:-<not set>}"
     echo "  CONTRACT_ADDR: ${CONTRACT_ADDR:-<not set>}"
     echo "  PRIVATE_KEY: ${PRIVATE_KEY:+<set>}${PRIVATE_KEY:-<not set>}"
-    echo ""
 
     if [ -n "$CONTRACT_ADDR" ] && [ -n "$SEPOLIA_RPC_URL" ]; then
-        log "Contract state:"
         echo ""
-
+        log "Contract State:"
         OWNER=$(cast call "$CONTRACT_ADDR" "owner()(address)" --rpc-url "$SEPOLIA_RPC_URL" 2>/dev/null || echo "<unable to query>")
         echo "  Owner: $OWNER"
 
@@ -398,14 +367,10 @@ show_config() {
         log "Firmware validation:"
         echo "  Verified automatically against Google's signed endorsements"
         echo "  TDX: gs://gce_tcb_integrity/ovmf_x64_csm/tdx/"
-        echo "  SEV-SNP: verified via AK certificate chain"
+        echo "  SEV-SNP: gs://gce_tcb_integrity/ovmf_x64_csm/sevsnp/"
         echo ""
-        log "To check specific measurements:"
-        echo "  # TDX (grub.cfg digest from CCEL):"
-        echo "  cast call $CONTRACT_ADDR 'getImageSupport(uint8,bytes)(uint8)' 0 0x<grub_cfg_digest> --rpc-url \$SEPOLIA_RPC_URL"
-        echo ""
-        echo "  # SEV-SNP (grub.cfg digest from TPM event log):"
-        echo "  cast call $CONTRACT_ADDR 'getImageSupport(uint8,bytes)(uint8)' 1 0x<grub_cfg_digest> --rpc-url \$SEPOLIA_RPC_URL"
+        log "To check specific image (platform-agnostic - same for TDX and SEV-SNP):"
+        echo "  cast call $CONTRACT_ADDR 'getImageSupport(bytes32,bytes32)(uint8)' 0x<pcr8> 0x<pcr9> --rpc-url \$SEPOLIA_RPC_URL"
     fi
 }
 
