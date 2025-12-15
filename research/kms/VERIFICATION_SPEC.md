@@ -29,11 +29,10 @@ machineState, err := server.VerifyAttestation(&attestation, server.VerifyOpts{
 
 // Returns: MachineState with:
 // - SecureBoot state
-// - GrubState (grub.cfg digest - SHA256)
-// - LinuxKernel (command line)
 // - GCE instance info
 // - Container claims (COS state)
 // - TdxAttestation or SevSnpAttestation (TEE quote)
+// PCR values extracted separately from attestation.Quotes
 ```
 
 ### Step 1: Parse Attestation

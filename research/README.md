@@ -22,7 +22,7 @@ Similarly, Intel Trust Authority (ITA) fails because its "Confidential Space Ada
 The proposed architecture consists of three parts:
 
 1.  **Custom Base Images:** We customize the Confidential Space stack - modifying both the Launcher and the underlying Container-Optimized OS (COS) - while continuing to pull in upstream security patches and updates.
-2.  **Self-Managed Allowlist:** We maintain a smart contract of valid custom image measurements, keyed by CVM platform (grub.cfg digest for both TDX and SEV-SNP).
+2.  **Self-Managed Allowlist:** We maintain a smart contract of valid custom image measurements using PCR 8 + PCR 9 from the vTPM (platform-agnostic - same values for TDX and SEV-SNP).
 3.  **Direct Verification:** The KMS (Relying Party) verifies the workload directly using **Raw Attestation** (TDX or SEV-SNP). The verification logic should be published as open-source libraries (Go initially) that any relying party can consume.
 
 Instead of requesting a signed JWT from Google, the code running in the user workload queries a `/v1/raw-attestation` endpoint to retrieve the raw hardware quote, Canonical Event Log (container measurements), and AK certificates (platform identity). The workload then sends this evidence to the KMS, which performs verification before releasing any secrets:
@@ -33,7 +33,7 @@ Instead of requesting a signed JWT from Google, the code running in the user wor
 4. Replay event logs to extract platform state and container claims.
 5. Verify platform meets security requirements (production mode, no debug, etc.).
 6. Verify firmware (MRTD for TDX, MEASUREMENT for SEV-SNP) against Google's signed endorsements.
-7. Verify OS image (grub.cfg digest) against on-chain allowlist.
+7. Verify base image (PCR 8 + PCR 9) against on-chain allowlist.
 8. Verify GCE project against policy and container digest against on-chain release registry.
 
 ### Measurement Validation
@@ -45,7 +45,7 @@ Each TDX measurement register is validated differently:
 | Register | PCR Equivalent | What it measures | Validation |
 |----------|----------------|------------------|------------|
 | **MRTD** | - | Firmware binary (before boot) | Verify Google's signed endorsement from `gs://gce_tcb_integrity/ovmf_x64_csm/tdx/{MRTD}.binarypb` |
-| **RTMR0** | PCR 1,7 | Secure Boot state | Extract from CCEL → verify Secure Boot enabled |
+| **RTMR0** | PCR 1,7 | Secure Boot state | Extract from MachineState → verify Secure Boot enabled |
 | **RTMR1** | PCR 2-6 | EFI state (boot order, UEFI apps) | Not used for allowlist |
 | **RTMR2** | PCR 8-15 | GRUB + kernel + container events | Replay CEL → container claims |
 
@@ -164,7 +164,7 @@ sequenceDiagram
     G-->>K: Signed VMLaunchEndorsement
     Note over K: Verify endorsement signature
 
-    K->>B: Check image support (grub.cfg digest)
+    K->>B: Check image support (PCR 8 + PCR 9)
     B-->>K: allowed
 
     K-->>W: Return encrypted secret
@@ -212,9 +212,9 @@ export PRIVATE_KEY="0x..."
 These files are a rough demonstration to illustrate the architecture:
 
 - `launcher/agent/agent.go`: `GetRawAttestation()` implementation for TDX and SEV-SNP.
-- `research/kms/verifier_tdx.go`: TDX quote verification (Intel/Google root CAs).
-- `research/kms/verifier_sevsnp.go`: SEV-SNP report verification (AMD/Google root CAs).
+- `research/verifier/verifier.go`: Unified TDX and SEV-SNP verification (Intel/AMD/Google root CAs).
 - `research/kms/firmware.go`: Firmware verification for TDX (MRTD) and SEV-SNP (MEASUREMENT).
+- `research/kms/policy.go`: Policy checking against on-chain allowlist.
 - `research/contracts/src/BaseImageAllowlist.sol`: Smart contract for custom image allowlist.
 - `research/workload/main.go`: Sample workload with platform auto-detection.
 
