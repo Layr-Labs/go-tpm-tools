@@ -9,6 +9,7 @@ import (
 
 	sabi "github.com/google/go-sev-guest/abi"
 	sevverify "github.com/google/go-sev-guest/verify"
+	tdxverify "github.com/google/go-tdx-guest/verify"
 	attestpb "github.com/google/go-tpm-tools/proto/attest"
 	tpmpb "github.com/google/go-tpm-tools/proto/tpm"
 	"github.com/google/go-tpm-tools/server"
@@ -181,13 +182,13 @@ func Verify(attestationBytes, expectedReportData []byte) (*Claims, error) {
 
 	switch platform {
 	case PlatformTDX:
-		tdxClaims, err := extractTDXClaims(&attestation, machineState)
+		tdxClaims, err := verifyTDXAttestation(&attestation)
 		if err != nil {
 			return nil, fmt.Errorf("TDX verification failed: %w", err)
 		}
 		claims.TDX = tdxClaims
 	case PlatformSevSnp:
-		sevClaims, err := verifySevSnpReport(&attestation)
+		sevClaims, err := verifySevSnpAttestation(&attestation)
 		if err != nil {
 			return nil, fmt.Errorf("SEV-SNP report verification failed: %w", err)
 		}
@@ -300,9 +301,14 @@ func extractPCRs(attestation *attestpb.Attestation) ([32]byte, [32]byte, error) 
 	return pcr8, pcr9, nil
 }
 
-// extractTDXClaims extracts TDX-specific claims from the attestation and machine state.
-func extractTDXClaims(attestation *attestpb.Attestation, machineState *attestpb.MachineState) (*TDXClaims, error) {
+// verifyTDXAttestation verifies the TDX quote and extracts claims.
+func verifyTDXAttestation(attestation *attestpb.Attestation) (*TDXClaims, error) {
 	quote := attestation.GetTdxAttestation()
+
+	// Verify TDX quote signature
+	if err := tdxverify.TdxQuote(quote, tdxverify.DefaultOptions()); err != nil {
+		return nil, fmt.Errorf("TDX quote signature verification failed: %w", err)
+	}
 
 	// Check debug mode from TD attributes
 	tdAttrs := quote.GetTdQuoteBody().GetTdAttributes()
@@ -343,7 +349,8 @@ func extractTDXClaims(attestation *attestpb.Attestation, machineState *attestpb.
 	return claims, nil
 }
 
-func verifySevSnpReport(attestation *attestpb.Attestation) (*SevSnpClaims, error) {
+// verifySevSnpAttestation verifies the SEV-SNP report signature and extracts claims.
+func verifySevSnpAttestation(attestation *attestpb.Attestation) (*SevSnpClaims, error) {
 	snpAttestation := attestation.GetSevSnpAttestation()
 	if err := sevverify.SnpAttestation(snpAttestation, sevverify.DefaultOptions()); err != nil {
 		return nil, fmt.Errorf("report signature verification failed: %w", err)
