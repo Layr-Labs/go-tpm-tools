@@ -230,3 +230,43 @@ The workload automatically detects the platform based on the attestation respons
 ### Building Custom Images
 
 We can modify the Launcher code directly. For deeper OS-level customizations, we use Google's [COS Customizer](https://cos.googlesource.com/cos/tools). This tool simplifies tasks like installing GPU drivers, sealing the OEM partition (`dm-verity`), and disabling auto-updates to ensure measurement stability.
+
+### Verifiable Image Builds
+
+To establish trust in the PCR values added to the allowlist, we provide a **verifiable build pipeline** that cryptographically links source code to the final GCE image.
+
+The build process uses a CVM orchestrator running on a standard Confidential Space image:
+
+```
+Launcher Source → Cloud Build → Launcher Binary (with SLSA provenance)
+                                      ↓
+                    ┌─────────────────────────────────────┐
+                    │     Builder CVM (Standard CS)       │
+                    │                                     │
+                    │  1. Verify launcher provenance      │
+                    │  2. Hash all build inputs           │
+                    │  3. Trigger cos-customizer build    │
+                    │  4. Request GCA attestation with    │
+                    │     nonce = SHA256(input_manifest)  │
+                    │  5. Store attestation in GCS        │
+                    └─────────────────────────────────────┘
+                                      ↓
+                              GCE Disk Image
+                                      ↓
+                         Extract PCRs → Add to Allowlist
+```
+
+**Why GCA attestation from a standard CS image?**
+- The builder runs on Google's standard Confidential Space image (not a custom one)
+- This image is trusted by Google Cloud Attestation (GCA)
+- The GCA JWT proves: "A trusted CVM attested to building image X from these inputs"
+- The `nonce` field in the JWT contains `SHA256(input_manifest)`, binding the attestation to specific build inputs
+
+**Verification flow for auditors:**
+1. Verify GCA JWT signature (Google's key)
+2. Verify `nonce` in JWT == `SHA256(manifest.json)`
+3. Verify launcher SLSA provenance (Cloud Build key)
+4. Boot the resulting image, extract PCRs
+5. Compare PCRs against on-chain allowlist
+
+See [VERIFIABLE_BUILD.md](./VERIFIABLE_BUILD.md) for detailed documentation and the `research/builder/` directory for the implementation.
