@@ -18,7 +18,7 @@ import (
 	"github.com/Layr-Labs/eigenx-contracts/pkg/bindings/v1/ImageAllowlist"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/google/go-tpm-tools/research/verifier"
+	"github.com/google/go-tpm-tools/rpverifier"
 )
 
 // Config holds the KMS server configuration.
@@ -43,10 +43,10 @@ type AttestRequest struct {
 
 // AttestResponse is returned by POST /v1/attest.
 type AttestResponse struct {
-	Success         bool             `json:"success"`
-	EncryptedSecret []byte           `json:"encrypted_secret,omitempty"`
-	Error           string           `json:"error,omitempty"`
-	Claims          *verifier.Claims `json:"claims,omitempty"`
+	Success         bool               `json:"success"`
+	EncryptedSecret []byte             `json:"encrypted_secret,omitempty"`
+	Error           string             `json:"error,omitempty"`
+	Claims          *rpverifier.Claims `json:"claims,omitempty"`
 }
 
 func main() {
@@ -144,10 +144,21 @@ func (s *Server) handleAttest(w http.ResponseWriter, r *http.Request) {
 	expectedRSAKeyHash := sha256.Sum256([]byte(req.RSAPublicKey))
 	log.Printf("Verifying attestation with RSA key hash: %x", expectedRSAKeyHash)
 
-	claims, err := verifier.Verify(req.Attestation, expectedRSAKeyHash[:])
+	// Step 1: Cryptographic verification
+	verified, err := rpverifier.VerifyAttestation(req.Attestation, expectedRSAKeyHash[:])
 	if err != nil {
 		log.Printf("Attestation verification failed: %v", err)
 		s.sendError(w, "Attestation verification failed: "+err.Error())
+		return
+	}
+
+	// Step 2: Extract claims
+	claims, err := verified.ExtractClaims(rpverifier.ExtractOptions{
+		PCRIndices: []uint32{4, 8, 9},
+	})
+	if err != nil {
+		log.Printf("Failed to extract claims: %v", err)
+		s.sendError(w, "Failed to extract claims: "+err.Error())
 		return
 	}
 
@@ -190,7 +201,7 @@ func (s *Server) sendError(w http.ResponseWriter, msg string) {
 	json.NewEncoder(w).Encode(AttestResponse{Success: false, Error: msg})
 }
 
-func (s *Server) sendErrorWithClaims(w http.ResponseWriter, msg string, claims *verifier.Claims) {
+func (s *Server) sendErrorWithClaims(w http.ResponseWriter, msg string, claims *rpverifier.Claims) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusForbidden)
 	json.NewEncoder(w).Encode(AttestResponse{Success: false, Error: msg, Claims: claims})

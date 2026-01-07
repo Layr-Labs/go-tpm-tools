@@ -9,7 +9,7 @@ import (
 
 	"github.com/Layr-Labs/eigenx-contracts/pkg/bindings/v1/ImageAllowlist"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/google/go-tpm-tools/research/verifier"
+	"github.com/google/go-tpm-tools/rpverifier"
 )
 
 // PolicyChecker enforces attestation policies against on-chain allowlists
@@ -44,20 +44,25 @@ func pcrMapToContractPCRs(pcrs map[uint32][32]byte) []ImageAllowlist.IImageAllow
 }
 
 // Check verifies that the claims meet policy requirements.
-func (p *PolicyChecker) Check(ctx context.Context, claims *verifier.Claims) error {
+func (p *PolicyChecker) Check(ctx context.Context, claims *rpverifier.Claims) error {
 	switch claims.Platform {
-	case verifier.PlatformTDX:
+	case rpverifier.PlatformTDX:
 		return p.checkTDX(ctx, claims)
-	case verifier.PlatformSevSnp:
+	case rpverifier.PlatformSevSnp:
 		return p.checkSevSnp(ctx, claims)
 	default:
 		return fmt.Errorf("unknown platform: %d", claims.Platform)
 	}
 }
 
-func (p *PolicyChecker) checkTDX(ctx context.Context, claims *verifier.Claims) error {
+func (p *PolicyChecker) checkTDX(ctx context.Context, claims *rpverifier.Claims) error {
 	if claims.TDX == nil {
 		return fmt.Errorf("no TDX claims")
+	}
+
+	// Reject debug mode VMs
+	if claims.TDX.Attributes.Debug {
+		return fmt.Errorf("TD is in DEBUG mode - rejecting")
 	}
 
 	// Verify MRTD against Google's firmware endorsements
@@ -97,9 +102,14 @@ func (p *PolicyChecker) checkTDX(ctx context.Context, claims *verifier.Claims) e
 	return nil
 }
 
-func (p *PolicyChecker) checkSevSnp(ctx context.Context, claims *verifier.Claims) error {
+func (p *PolicyChecker) checkSevSnp(ctx context.Context, claims *rpverifier.Claims) error {
 	if claims.SevSnp == nil {
 		return fmt.Errorf("no SEV-SNP claims")
+	}
+
+	// Reject debug mode VMs
+	if claims.SevSnp.Policy.Debug {
+		return fmt.Errorf("guest is in DEBUG mode - rejecting")
 	}
 
 	// Verify firmware measurement against Google's endorsements
