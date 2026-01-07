@@ -55,7 +55,7 @@ type AttestationAgent interface {
 	MeasureEvent(cel.Content) error
 	Attest(context.Context, AttestAgentOpts) ([]byte, error)
 	AttestWithClient(ctx context.Context, opts AttestAgentOpts, client verifier.Client) ([]byte, error)
-	GetAttestation(reportData []byte) (*pb.Attestation, error)
+	GetAttestation(nonce [32]byte) (*pb.Attestation, error)
 	Refresh(context.Context) error
 	Close() error
 }
@@ -428,18 +428,11 @@ func (a *agent) Refresh(ctx context.Context) error {
 }
 
 // GetAttestation returns a pb.Attestation with TPM quotes, event log, AK certs,
-// and TEE attestation. The reportData is embedded in the TEE ReportData field.
-// ReportData layout:
-//   - [0:32]  = User-provided data (truncated/padded to 32 bytes)
-//   - [32:64] = SHA256(AK_public_key_DER) - binds AK to hardware quote
-func (a *agent) GetAttestation(reportData []byte) (*pb.Attestation, error) {
-	if len(reportData) > 32 {
-		return nil, fmt.Errorf("report_data exceeds 32 bytes (first 32 bytes reserved for user data)")
-	}
-
+// and TEE attestation. The nonce is embedded in the TEE quote's ReportData.
+func (a *agent) GetAttestation(nonce [32]byte) (*pb.Attestation, error) {
 	// Build TEE ReportData with AK binding
 	var teeReportData [maxReportDataSize]byte
-	copy(teeReportData[:32], reportData) // User's data in first 32 bytes
+	copy(teeReportData[:32], nonce[:]) // User's nonce in first 32 bytes
 
 	// Add AK binding in second 32 bytes (SHA256 of AK public key DER)
 	akPubDER, err := x509.MarshalPKIXPublicKey(a.fetchedAK.PublicKey())

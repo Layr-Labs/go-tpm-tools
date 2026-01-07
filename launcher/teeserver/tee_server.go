@@ -138,8 +138,9 @@ func (a *attestHandler) getITAToken(w http.ResponseWriter, r *http.Request) {
 
 // attestationRequest is the request body for /v1/attestation
 type attestationRequest struct {
-	// ReportData (up to 64 bytes) is embedded in the TEE quote's ReportData field.
-	ReportData []byte `json:"report_data"`
+	// Nonce (up to 32 bytes) is embedded in ReportData[0:32].
+	// The launcher adds AK binding in ReportData[32:64] automatically.
+	Nonce []byte `json:"nonce"`
 }
 
 // attestationResponse is the response body for /v1/attestation
@@ -166,13 +167,15 @@ func (a *attestHandler) getAttestation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.ReportData) == 0 {
-		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("report_data is required"))
+	if len(req.Nonce) == 0 || len(req.Nonce) > 32 {
+		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("nonce is required and must be ≤32 bytes"))
 		return
 	}
 
 	// Get attestation from the agent
-	attestation, err := a.attestAgent.GetAttestation(req.ReportData)
+	var nonce [32]byte
+	copy(nonce[:], req.Nonce)
+	attestation, err := a.attestAgent.GetAttestation(nonce)
 	if err != nil {
 		a.logAndWriteHTTPError(w, http.StatusInternalServerError, fmt.Errorf("failed to get attestation: %w", err))
 		return

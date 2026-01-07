@@ -11,8 +11,8 @@ This package verifies TEE attestations from workloads running in [GCP Confidenti
 `VerifyAttestation()` performs cryptographic verification:
 - TEE quote signature (Intel TDX or AMD SEV-SNP root of trust)
 - TPM quote signature and AK certificate chain
-- AK binding (proves TPM and TEE quote came from the same VM)
-- Report data matches expected nonce
+- Nonce matches expected value (ReportData[0:32])
+- AK binding (ReportData[32:64] proves TPM and TEE quote came from the same VM)
 
 ## What you handle (policy)
 
@@ -26,7 +26,10 @@ After verification, you decide whether to trust the workload:
 
 ```go
 // 1. Verify attestation (cryptographic)
-verified, err := rpverifier.VerifyAttestation(attestationBytes, expectedNonce)
+// nonce is the 32-byte challenge you sent to the workload
+var nonce [32]byte
+copy(nonce[:], yourChallenge)
+verified, err := rpverifier.VerifyAttestation(attestationBytes, nonce)
 if err != nil {
     return err // signature invalid, AK binding failed, etc.
 }

@@ -145,7 +145,7 @@ func (s *Server) handleAttest(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Verifying attestation with RSA key hash: %x", expectedRSAKeyHash)
 
 	// Step 1: Cryptographic verification
-	verified, err := rpverifier.VerifyAttestation(req.Attestation, expectedRSAKeyHash[:])
+	verified, err := rpverifier.VerifyAttestation(req.Attestation, expectedRSAKeyHash)
 	if err != nil {
 		log.Printf("Attestation verification failed: %v", err)
 		s.sendError(w, "Attestation verification failed: "+err.Error())

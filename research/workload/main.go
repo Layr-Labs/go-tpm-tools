@@ -204,10 +204,10 @@ func waitForSocket(path string) error {
 }
 
 func getAttestation(client *http.Client, rsaPubKeyPEM []byte) (*attestationResponse, error) {
-	// Build report_data from SHA256 hash of RSA public key PEM
-	// The teeserver embeds this in ReportData[0:32], with AK hash in [32:64]
+	// Nonce = SHA256(RSA public key PEM), binds attestation to our key
+	// Launcher embeds this in ReportData[0:32], adds AK hash in [32:64]
 	rsaPubKeyHash := sha256.Sum256(rsaPubKeyPEM)
-	reqBody, _ := json.Marshal(map[string][]byte{"report_data": rsaPubKeyHash[:]})
+	reqBody, _ := json.Marshal(map[string][]byte{"nonce": rsaPubKeyHash[:]})
 	resp, err := client.Post("http://localhost/v1/attestation", "application/json", bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, err

@@ -21,12 +21,12 @@ import (
 // This verifies:
 // - TEE quote signature (Intel TDX or AMD SEV-SNP root of trust)
 // - TPM quote signature and AK certificate chain
-// - AK binding (TEE ReportData contains hash of AK public key)
-// - Report data matches expected value (first 32 bytes)
+// - Nonce: ReportData[0:32] == nonce parameter
+// - AK binding: ReportData[32:64] == SHA256(AK public key)
 //
 // This does NOT make policy decisions (debug mode, TCB versions, allowlists).
 // Policy checks should be performed by the caller after extracting claims.
-func VerifyAttestation(attestationBytes, expectedReportData []byte) (*VerifiedAttestation, error) {
+func VerifyAttestation(attestationBytes []byte, nonce [32]byte) (*VerifiedAttestation, error) {
 	var attestation attestpb.Attestation
 	if err := proto.Unmarshal(attestationBytes, &attestation); err != nil {
 		return nil, fmt.Errorf("failed to parse attestation proto: %w", err)
@@ -37,7 +37,7 @@ func VerifyAttestation(attestationBytes, expectedReportData []byte) (*VerifiedAt
 		return nil, fmt.Errorf("no TEE attestation found")
 	}
 
-	if err := verifyReportData(&attestation, expectedReportData, platform); err != nil {
+	if err := verifyReportData(&attestation, nonce, platform); err != nil {
 		return nil, err
 	}
 
@@ -104,10 +104,10 @@ func getReportData(attestation *attestpb.Attestation, platform Platform) []byte 
 	return nil
 }
 
-func verifyReportData(attestation *attestpb.Attestation, expectedReportData []byte, platform Platform) error {
+func verifyReportData(attestation *attestpb.Attestation, nonce [32]byte, platform Platform) error {
 	reportData := getReportData(attestation, platform)
-	if len(reportData) < 32 || !bytes.Equal(reportData[:32], expectedReportData) {
-		return fmt.Errorf("report data mismatch in TEE quote")
+	if len(reportData) < 32 || !bytes.Equal(reportData[:32], nonce[:]) {
+		return fmt.Errorf("nonce mismatch in TEE ReportData[0:32]")
 	}
 	return nil
 }
