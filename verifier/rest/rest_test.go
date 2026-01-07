@@ -5,9 +5,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/google/go-tpm-tools/proto/tpm"
-	"github.com/google/go-tpm-tools/verifier"
-	"github.com/google/go-tpm-tools/verifier/models"
+	"github.com/Layr-Labs/go-tpm-tools/proto/tpm"
+	"github.com/Layr-Labs/go-tpm-tools/verifier"
+	"github.com/Layr-Labs/go-tpm-tools/verifier/models"
 	"github.com/google/uuid"
 	"google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
@@ -19,7 +19,7 @@ import (
 	tabi "github.com/google/go-tdx-guest/abi"
 	tpb "github.com/google/go-tdx-guest/proto/tdx"
 	tgtestdata "github.com/google/go-tdx-guest/testing/testdata"
-	attestpb "github.com/google/go-tpm-tools/proto/attest"
+	attestpb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
 )
 
 var (

@@ -9,7 +9,7 @@ import (
 	"errors"
 	"fmt"
 
-	tpb "github.com/google/go-tpm-tools/proto/tpm"
+	tpb "github.com/Layr-Labs/go-tpm-tools/proto/tpm"
 	"github.com/google/go-tpm/tpm2"
 )
 

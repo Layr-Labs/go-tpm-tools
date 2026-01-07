@@ -16,13 +16,13 @@ import (
 	"cloud.google.com/go/compute/metadata"
 
 	"github.com/containerd/containerd/v2/pkg/cap"
-	"github.com/google/go-tpm-tools/cel"
-	"github.com/google/go-tpm-tools/launcher/internal/experiments"
-	"github.com/google/go-tpm-tools/launcher/internal/launchermount"
-	"github.com/google/go-tpm-tools/launcher/internal/logging"
-	"github.com/google/go-tpm-tools/launcher/launcherfile"
-	"github.com/google/go-tpm-tools/verifier"
-	"github.com/google/go-tpm-tools/verifier/util"
+	"github.com/Layr-Labs/go-tpm-tools/cel"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/experiments"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/launchermount"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/launcherfile"
+	"github.com/Layr-Labs/go-tpm-tools/verifier"
+	"github.com/Layr-Labs/go-tpm-tools/verifier/util"
 )
 
 // MaxInt64 is the maximum value of a signed int64.

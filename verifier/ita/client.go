@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/google/go-tpm-tools/verifier"
+	"github.com/Layr-Labs/go-tpm-tools/verifier"
 )
 
 const (

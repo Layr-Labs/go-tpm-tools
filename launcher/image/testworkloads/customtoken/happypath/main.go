@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/google/go-tpm-tools/verifier/fake"
+	"github.com/Layr-Labs/go-tpm-tools/verifier/fake"
 )
 
 const (

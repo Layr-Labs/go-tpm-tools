@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/go-sev-guest/verify/trust"
-	pb "github.com/google/go-tpm-tools/proto/attest"
+	pb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
 )
 
 // EvaluatePolicy succeeds if the provided MachineState complies with the

@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"time"
 
-	apb "github.com/google/go-tpm-tools/proto/attest"
+	apb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/google/gce-tcb-verifier/gcetcbendorsement"
@@ -19,8 +19,8 @@ import (
 	"github.com/google/go-sev-guest/validate"
 	"github.com/google/go-sev-guest/verify"
 	"github.com/google/go-sev-guest/verify/trust"
-	tpb "github.com/google/go-tpm-tools/proto/tpm"
-	"github.com/google/go-tpm-tools/server"
+	tpb "github.com/Layr-Labs/go-tpm-tools/proto/tpm"
+	"github.com/Layr-Labs/go-tpm-tools/server"
 	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/spf13/cobra"
 )

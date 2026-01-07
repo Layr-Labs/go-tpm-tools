@@ -25,7 +25,7 @@ To do this:
   `go-tpm-tools/client` test (which all run against the simulator), compile
   the test binary named `client.test` by running:
     ```bash
-    go test -c github.com/google/go-tpm-tools/client
+    go test -c github.com/Layr-Labs/go-tpm-tools/client
     ```
 1. Now you can debug the binary using GDB:
     ```bash

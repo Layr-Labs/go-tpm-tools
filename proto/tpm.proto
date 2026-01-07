@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 package tpm;
-option go_package = "github.com/google/go-tpm-tools/proto/tpm";
+option go_package = "github.com/Layr-Labs/go-tpm-tools/proto/tpm";
 
 // Enum values come from TCG Algorithm Registry - v1.27 - Table 3
 enum ObjectType {

@@ -25,7 +25,7 @@ combined in a single line. It should have the following subsections:
   - "Other Changes" (non-breaking code changes or Doc/CI updates)
 
 Sections can be omitted if there wouldn't be any PRs under them. The
-[`v0.3.2` release notes](https://github.com/google/go-tpm-tools/releases/tag/v0.3.2)
+[`v0.3.2` release notes](https://github.com/Layr-Labs/go-tpm-tools/releases/tag/v0.3.2)
 are a good example. We don't need to specifically mention who wrote what PR or
 link to the "Full Changelog". Users can just look this stuff up on GitHub on
 their own.
@@ -43,8 +43,8 @@ that the Go version system can find the releases. Generally the author of the
 PR should do this.
 
 Tagging can be done via the GitHub Web UI. On the
-[Releases Page](https://github.com/google/go-tpm-tools/releases),
-click [Draft a New Release](https://github.com/google/go-tpm-tools/releases/new).
+[Releases Page](https://github.com/Layr-Labs/go-tpm-tools/releases),
+click [Draft a New Release](https://github.com/Layr-Labs/go-tpm-tools/releases/new).
 In that draft, create the git tag corresponding to your release, and copy the
 approved release notes into the description.
 
@@ -87,7 +87,7 @@ tags to the `main` branch by running:
 git push origin "cmd/vX.Y.Z" "launcher/vX.Y.Z"
 ```
 
-The tags should then be visible at https://github.com/google/go-tpm-tools/tags
+The tags should then be visible at https://github.com/Layr-Labs/go-tpm-tools/tags
 
 ## (Googlers only) sync code back into google3
 

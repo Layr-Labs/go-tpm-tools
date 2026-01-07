@@ -10,9 +10,9 @@ import (
 	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 
-	"github.com/google/go-tpm-tools/client"
-	"github.com/google/go-tpm-tools/internal/test"
-	pb "github.com/google/go-tpm-tools/proto/tpm"
+	"github.com/Layr-Labs/go-tpm-tools/client"
+	"github.com/Layr-Labs/go-tpm-tools/internal/test"
+	pb "github.com/Layr-Labs/go-tpm-tools/proto/tpm"
 )
 
 func TestSeal(t *testing.T) {

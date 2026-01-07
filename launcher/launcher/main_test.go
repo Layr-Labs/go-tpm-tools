@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/google/go-tpm-tools/launcher"
-	"github.com/google/go-tpm-tools/launcher/spec"
+	"github.com/Layr-Labs/go-tpm-tools/launcher"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/spec"
 )
 
 func TestGetExitCode(t *testing.T) {

@@ -12,7 +12,7 @@ import (
 	"github.com/google/go-configfs-tsm/configfs/configfsi"
 	"github.com/google/go-eventlog/register"
 	"github.com/google/go-tdx-guest/rtmr"
-	"github.com/google/go-tpm-tools/client"
+	"github.com/Layr-Labs/go-tpm-tools/client"
 	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 )

@@ -9,8 +9,8 @@ import (
 	tg "github.com/google/go-tdx-guest/client"
 	tabi "github.com/google/go-tdx-guest/client/linuxabi"
 	tpb "github.com/google/go-tdx-guest/proto/tdx"
-	"github.com/google/go-tpm-tools/internal"
-	pb "github.com/google/go-tpm-tools/proto/attest"
+	"github.com/Layr-Labs/go-tpm-tools/internal"
+	pb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
 )
 
 // TEEDevice is an interface to add an attestation report from a TEE technology's

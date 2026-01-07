@@ -11,8 +11,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-tpm-tools/verifier"
-	"github.com/google/go-tpm-tools/verifier/models"
+	"github.com/Layr-Labs/go-tpm-tools/verifier"
+	"github.com/Layr-Labs/go-tpm-tools/verifier/models"
 )
 
 var testVerifierRequest = verifier.VerifyAttestationRequest{

@@ -10,7 +10,7 @@ import (
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/remotes"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-tpm-tools/launcher/registryauth"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/registryauth"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
 

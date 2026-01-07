@@ -9,11 +9,11 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/google/go-tpm-tools/launcher/agent"
-	"github.com/google/go-tpm-tools/launcher/internal/logging"
-	"github.com/google/go-tpm-tools/launcher/spec"
-	"github.com/google/go-tpm-tools/verifier"
-	"github.com/google/go-tpm-tools/verifier/models"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/agent"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/spec"
+	"github.com/Layr-Labs/go-tpm-tools/verifier"
+	"github.com/Layr-Labs/go-tpm-tools/verifier/models"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

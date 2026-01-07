@@ -23,17 +23,17 @@ import (
 	tg "github.com/google/go-tdx-guest/client"
 	tlabi "github.com/google/go-tdx-guest/client/linuxabi"
 
-	"github.com/google/go-tpm-tools/cel"
-	"github.com/google/go-tpm-tools/client"
-	"github.com/google/go-tpm-tools/internal"
-	"github.com/google/go-tpm-tools/launcher/internal/logging"
-	"github.com/google/go-tpm-tools/launcher/internal/signaturediscovery"
-	"github.com/google/go-tpm-tools/launcher/spec"
-	pb "github.com/google/go-tpm-tools/proto/attest"
-	"github.com/google/go-tpm-tools/verifier"
-	"github.com/google/go-tpm-tools/verifier/models"
-	"github.com/google/go-tpm-tools/verifier/oci"
-	"github.com/google/go-tpm-tools/verifier/util"
+	"github.com/Layr-Labs/go-tpm-tools/cel"
+	"github.com/Layr-Labs/go-tpm-tools/client"
+	"github.com/Layr-Labs/go-tpm-tools/internal"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/signaturediscovery"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/spec"
+	pb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
+	"github.com/Layr-Labs/go-tpm-tools/verifier"
+	"github.com/Layr-Labs/go-tpm-tools/verifier/models"
+	"github.com/Layr-Labs/go-tpm-tools/verifier/oci"
+	"github.com/Layr-Labs/go-tpm-tools/verifier/util"
 )
 
 const (

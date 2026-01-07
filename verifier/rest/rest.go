@@ -12,8 +12,8 @@ import (
 	spb "github.com/google/go-sev-guest/proto/sevsnp"
 	tabi "github.com/google/go-tdx-guest/abi"
 	tpb "github.com/google/go-tdx-guest/proto/tdx"
-	"github.com/google/go-tpm-tools/verifier"
-	"github.com/google/go-tpm-tools/verifier/models"
+	"github.com/Layr-Labs/go-tpm-tools/verifier"
+	"github.com/Layr-Labs/go-tpm-tools/verifier/models"
 	"github.com/googleapis/gax-go/v2"
 
 	v1 "cloud.google.com/go/confidentialcomputing/apiv1"

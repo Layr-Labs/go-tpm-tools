@@ -6,7 +6,7 @@ import "proto/sevsnp.proto";
 import "proto/tdx.proto";
 import "tpm.proto";
 
-option go_package = "github.com/google/go-tpm-tools/proto/attest";
+option go_package = "github.com/Layr-Labs/go-tpm-tools/proto/attest";
 
 // Information uniquely identifying a GCE instance. Can be used to create an
 // instance URL, which can then be used with GCE APIs. Formatted like:

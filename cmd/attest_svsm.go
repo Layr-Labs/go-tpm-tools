@@ -11,8 +11,8 @@ import (
 	"github.com/google/go-configfs-tsm/report"
 	sabi "github.com/google/go-sev-guest/abi"
 	sevpb "github.com/google/go-sev-guest/proto/sevsnp"
-	"github.com/google/go-tpm-tools/client"
-	apb "github.com/google/go-tpm-tools/proto/attest"
+	"github.com/Layr-Labs/go-tpm-tools/client"
+	apb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"
 )

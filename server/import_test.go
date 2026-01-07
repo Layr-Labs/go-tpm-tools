@@ -8,9 +8,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/google/go-tpm-tools/client"
-	"github.com/google/go-tpm-tools/internal/test"
-	pb "github.com/google/go-tpm-tools/proto/tpm"
+	"github.com/Layr-Labs/go-tpm-tools/client"
+	"github.com/Layr-Labs/go-tpm-tools/internal/test"
+	pb "github.com/Layr-Labs/go-tpm-tools/proto/tpm"
 	"github.com/google/go-tpm/legacy/tpm2"
 )
 

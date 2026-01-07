@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-tpm-tools/launcher/internal/experiments"
-	"github.com/google/go-tpm-tools/launcher/internal/launchermount"
-	"github.com/google/go-tpm-tools/verifier"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/experiments"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/launchermount"
+	"github.com/Layr-Labs/go-tpm-tools/verifier"
 )
 
 func TestLaunchSpecUnmarshalJSONHappyCases(t *testing.T) {

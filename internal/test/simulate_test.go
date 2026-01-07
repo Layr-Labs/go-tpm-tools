@@ -4,8 +4,8 @@ import (
 	"crypto"
 	"testing"
 
-	"github.com/google/go-tpm-tools/client"
-	"github.com/google/go-tpm-tools/server"
+	"github.com/Layr-Labs/go-tpm-tools/client"
+	"github.com/Layr-Labs/go-tpm-tools/server"
 )
 
 func TestGetTPM(t *testing.T) {

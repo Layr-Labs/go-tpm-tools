@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/containerd/containerd/namespaces"
-	"github.com/google/go-tpm-tools/proto/attest"
-	"github.com/google/go-tpm-tools/verifier"
-	"github.com/google/go-tpm-tools/verifier/util"
+	"github.com/Layr-Labs/go-tpm-tools/proto/attest"
+	"github.com/Layr-Labs/go-tpm-tools/verifier"
+	"github.com/Layr-Labs/go-tpm-tools/verifier/util"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
