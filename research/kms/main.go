@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/Layr-Labs/eigenx-contracts/pkg/bindings/v1/ImageAllowlist"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/google/go-tpm-tools/research/verifier"
@@ -67,7 +68,7 @@ func main() {
 
 	// Load contract
 	contractAddr := common.HexToAddress(config.ContractAddr)
-	contract, err := NewBaseImageAllowlist(contractAddr, client)
+	contract, err := ImageAllowlist.NewImageAllowlist(contractAddr, client)
 	if err != nil {
 		log.Fatalf("Failed to load contract: %v", err)
 	}

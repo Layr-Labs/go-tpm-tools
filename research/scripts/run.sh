@@ -49,7 +49,7 @@ error() { echo -e "\033[0;31m[$(date '+%H:%M:%S')] ERROR:\033[0m $1"; exit 1; }
 check_config() {
     [ -n "$PROJECT_ID" ] || error "PROJECT_ID not set"
     [ -n "$CONTRACT_ADDR" ] || error "CONTRACT_ADDR not set. Run ./setup.sh deploy first."
-    [ -n "$SEPOLIA_RPC_URL" ] || error "SEPOLIA_RPC_URL not set"
+    [ -n "$RPC_URL" ] || error "RPC_URL not set"
 }
 
 build() {
@@ -80,7 +80,7 @@ deploy_kms() {
         --machine-type=e2-medium \
         --tags=http-server \
         --container-image="$KMS_IMAGE" \
-        --container-env="CONTRACT_ADDR=$CONTRACT_ADDR,ETH_RPC_URL=$SEPOLIA_RPC_URL"
+        --container-env="CONTRACT_ADDR=$CONTRACT_ADDR,ETH_RPC_URL=$RPC_URL"
 
     # Firewall rule
     gcloud compute firewall-rules create allow-kms-8080 \
@@ -189,8 +189,8 @@ run_demo() {
     log "View logs:    ./run.sh logs"
     log "Cleanup:      ./run.sh cleanup"
     log ""
-    log "If base image not in allowlist, add it with:"
-    log "  ./setup.sh add-image --cvm $PLATFORM --measurement 0x<grub_cfg_digest>"
+    log "If base image not in allowlist, copy PCRs from KMS logs and run:"
+    log "  ./setup.sh add-image --cvm $PLATFORM --pcrs image-pcrs.json"
 }
 
 # Parse flags
@@ -228,12 +228,3 @@ case "${1:-run}" in
         echo "  sevsnp    Deploy SEV-SNP workload VM only"
         ;;
 esac
-
-
-cast send $CONTRACT_ADDR \
-    "setImageSupport(uint8,bytes,uint8)" \
-    0 \
-    0x52f79ba560d79f5accf2f09ed1dddd03f0f9f4fb8d205f19f81dc664f0adfedebae731852c9632c33d97546ac5e07888 \
-    4 \
-    --rpc-url $SEPOLIA_RPC_URL \
-    --private-key $PRIVATE_KEY

@@ -36,8 +36,8 @@ type Claims struct {
 
 	// PCR values from vTPM (platform-agnostic, same for TDX and SEV-SNP)
 	// Used for base image allowlist validation
-	PCR8 [32]byte `json:"pcr8"` // Kernel cmdline (includes dm-verity hash = launcher identity)
-	PCR9 [32]byte `json:"pcr9"` // GRUB-read files (kernel + initramfs = base image)
+	// Key is PCR index, value is SHA-256 measurement
+	PCRs map[uint32][32]byte `json:"pcrs"`
 }
 
 // TDXClaims contains TDX-specific verified claims.
@@ -145,13 +145,13 @@ func Verify(attestationBytes, expectedReportData []byte) (*Claims, error) {
 
 	claims := &Claims{Platform: platform}
 
-	// Extract PCR 8 and PCR 9 from verified TPM quote (platform-agnostic)
-	pcr8, pcr9, err := extractPCRs(&attestation)
+	// Extract PCRs from verified TPM quote (platform-agnostic)
+	// Default to PCR 4, 8, 9 for base image validation
+	pcrs, err := extractPCRs(&attestation, []uint32{4, 8, 9})
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract PCRs: %w", err)
 	}
-	claims.PCR8 = pcr8
-	claims.PCR9 = pcr9
+	claims.PCRs = pcrs
 
 	// Extract GCE instance info
 	if p := machineState.GetPlatform(); p != nil {
@@ -262,12 +262,14 @@ func verifyAKBinding(attestation *attestpb.Attestation, platform Platform) error
 	return nil
 }
 
-// extractPCRs extracts PCR 8 and PCR 9 from the TPM quote.
-// These values are platform-agnostic (same for TDX and SEV-SNP with identical images).
+// extractPCRs extracts the specified PCR indices from the TPM quote.
+// PCR values are platform-agnostic (same for TDX and SEV-SNP with identical images).
+// Common PCRs:
+// - PCR 4: EFI boot applications (shim + GRUB)
 // - PCR 8: Kernel command line (includes dm-verity root hash = launcher identity)
 // - PCR 9: Files read by GRUB (kernel + initramfs = base image)
-func extractPCRs(attestation *attestpb.Attestation) ([32]byte, [32]byte, error) {
-	var pcr8, pcr9 [32]byte
+func extractPCRs(attestation *attestpb.Attestation, indices []uint32) (map[uint32][32]byte, error) {
+	result := make(map[uint32][32]byte)
 
 	// Find the SHA-256 quote (hash algorithm 0x000B)
 	var sha256PCRs *tpmpb.PCRs
@@ -279,26 +281,22 @@ func extractPCRs(attestation *attestpb.Attestation) ([32]byte, [32]byte, error) 
 	}
 
 	if sha256PCRs == nil {
-		return pcr8, pcr9, fmt.Errorf("no SHA-256 PCR bank found in attestation")
+		return nil, fmt.Errorf("no SHA-256 PCR bank found in attestation")
 	}
 
 	pcrs := sha256PCRs.GetPcrs()
 
-	// Extract PCR 8
-	if val, ok := pcrs[8]; ok && len(val) == 32 {
-		copy(pcr8[:], val)
-	} else {
-		return pcr8, pcr9, fmt.Errorf("PCR 8 not found or invalid length")
+	for _, idx := range indices {
+		val, ok := pcrs[idx]
+		if !ok || len(val) != 32 {
+			return nil, fmt.Errorf("PCR %d not found or invalid length", idx)
+		}
+		var pcrVal [32]byte
+		copy(pcrVal[:], val)
+		result[idx] = pcrVal
 	}
 
-	// Extract PCR 9
-	if val, ok := pcrs[9]; ok && len(val) == 32 {
-		copy(pcr9[:], val)
-	} else {
-		return pcr8, pcr9, fmt.Errorf("PCR 9 not found or invalid length")
-	}
-
-	return pcr8, pcr9, nil
+	return result, nil
 }
 
 // verifyTDXAttestation verifies the TDX quote and extracts claims.

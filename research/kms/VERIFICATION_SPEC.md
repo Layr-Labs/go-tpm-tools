@@ -74,12 +74,13 @@ ReportData[32:64] = SHA256(AK_pubkey_DER)   ── binds AK to hardware
 - Check against on-chain policy minimum
 
 ### Step 8: Base Image Allowlist
-- Extract **PCR 8** and **PCR 9** from verified TPM quote
+- Extract **PCR 4**, **PCR 8**, and **PCR 9** from verified TPM quote
 - **Platform-agnostic**: Same values for TDX and SEV-SNP with identical images
-- Check against on-chain allowlist: `isImageAllowed(pcr8, pcr9)`
+- Check against on-chain allowlist: `isImageAllowed(pcr4, pcr8, pcr9)`
 
 | PCR | What it measures | Used for |
 |-----|------------------|----------|
+| **PCR 4** | EFI boot applications (shim + GRUB) | Boot chain identity |
 | **PCR 8** | Kernel command line (includes dm-verity root hash) | Launcher identity |
 | **PCR 9** | Files read by GRUB (kernel, initramfs) | Base image identity |
 
@@ -110,12 +111,12 @@ ReportData[32:64] = SHA256(AK_pubkey_DER)   ── binds AK to hardware
 |------|-----|---------|
 | **Firmware** | MRTD (48 bytes) | MEASUREMENT (48 bytes) |
 | **Firmware validation** | Google endorsement | Google endorsement |
-| **Base image** | PCR 8 + PCR 9 from vTPM | PCR 8 + PCR 9 from vTPM |
+| **Base image** | PCR 4 + PCR 8 + PCR 9 from vTPM | PCR 4 + PCR 8 + PCR 9 from vTPM |
 | **Base image validation** | On-chain allowlist | On-chain allowlist |
 | **Container** | CEL → machineState.Cos | CEL → machineState.Cos |
 | **TCB** | TeeTcbSvn[0:3] packed | CurrentTcb |
 
-**Key insight:** PCR 8 and PCR 9 are **platform-agnostic** - the vTPM produces identical values for TDX and SEV-SNP when running the same image. This simplifies allowlist management.
+**Key insight:** PCR 4, PCR 8, and PCR 9 are **platform-agnostic** - the vTPM produces identical values for TDX and SEV-SNP when running the same image. This simplifies allowlist management.
 
 ---
 
@@ -129,7 +130,8 @@ enum CVM { TDX, SEV_SNP }
 checkTcb(CVM cvm, uint64 tcb) → bool
 
 // Base image allowlist (platform-agnostic - single entry per image)
-isImageAllowed(bytes32 pcr8, bytes32 pcr9) → bool
+isImageAllowed(bytes32 pcr4, bytes32 pcr8, bytes32 pcr9) → bool
+// PCR 4 = boot chain identity (shim + GRUB)
 // PCR 8 = launcher identity (kernel cmdline with dm-verity hash)
 // PCR 9 = base image identity (kernel + initramfs)
 
