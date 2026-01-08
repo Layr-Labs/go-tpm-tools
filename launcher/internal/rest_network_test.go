@@ -7,10 +7,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/containerd/containerd/namespaces"
 	"github.com/Layr-Labs/go-tpm-tools/proto/attest"
 	"github.com/Layr-Labs/go-tpm-tools/verifier"
 	"github.com/Layr-Labs/go-tpm-tools/verifier/util"
+	"github.com/containerd/containerd/namespaces"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )

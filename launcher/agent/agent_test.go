@@ -13,9 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
-	"github.com/golang-jwt/jwt/v4"
-	"github.com/google/go-cmp/cmp"
 	"github.com/Layr-Labs/go-tpm-tools/cel"
 	"github.com/Layr-Labs/go-tpm-tools/client"
 	"github.com/Layr-Labs/go-tpm-tools/internal/test"
@@ -28,6 +25,9 @@ import (
 	"github.com/Layr-Labs/go-tpm-tools/verifier/fake"
 	"github.com/Layr-Labs/go-tpm-tools/verifier/oci"
 	"github.com/Layr-Labs/go-tpm-tools/verifier/oci/cosign"
+	"github.com/cenkalti/backoff/v4"
+	"github.com/golang-jwt/jwt/v4"
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 

@@ -10,12 +10,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/Layr-Labs/go-tpm-tools/cel"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/agent"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
 	"github.com/Layr-Labs/go-tpm-tools/verifier"
 	"github.com/Layr-Labs/go-tpm-tools/verifier/models"
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

@@ -3,9 +3,9 @@ package spec
 import (
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/launchermount"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestLaunchPolicy(t *testing.T) {

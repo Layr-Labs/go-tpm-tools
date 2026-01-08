@@ -1,5 +1,5 @@
 // Package teeserver implements a server to be run in the launcher.
-// Used for communicate between the host/launcher and the container.
+// Used for communication between the host/launcher and the container.
 package teeserver
 
 import (
@@ -16,11 +16,13 @@ import (
 	"github.com/Layr-Labs/go-tpm-tools/verifier/models"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
-	gcaEndpoint = "/v1/token"
-	itaEndpoint = "/v1/intel/token"
+	gcaEndpoint         = "/v1/token"
+	itaEndpoint         = "/v1/intel/token"
+	attestationEndpoint = "/v1/attestation"
 )
 
 var clientErrorCodes = map[codes.Code]struct{}{
@@ -44,10 +46,9 @@ type AttestClients struct {
 type attestHandler struct {
 	ctx         context.Context
 	attestAgent agent.AttestationAgent
-	// defaultTokenFile string
-	logger     logging.Logger
-	launchSpec spec.LaunchSpec
-	clients    AttestClients
+	logger      logging.Logger
+	launchSpec  spec.LaunchSpec
+	clients     AttestClients
 }
 
 // TeeServer is a server that can be called from a container through a unix
@@ -90,6 +91,7 @@ func (a *attestHandler) Handler() http.Handler {
 
 	mux.HandleFunc(gcaEndpoint, a.getToken)
 	mux.HandleFunc(itaEndpoint, a.getITAToken)
+	mux.HandleFunc(attestationEndpoint, a.getAttestation)
 	return mux
 }
 
@@ -106,7 +108,7 @@ func (a *attestHandler) getToken(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 
 	a.logger.Info(fmt.Sprintf("%s called", gcaEndpoint))
-	// If the handler does not have a GCA client, create one.
+	// If the handler does not have a GCA client, return error.
 	if a.clients.GCA == nil {
 		errStr := "no GCA verifier client present, please try rebooting your VM"
 		a.logAndWriteError(errStr, http.StatusInternalServerError, w)
@@ -130,6 +132,70 @@ func (a *attestHandler) getITAToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.attest(w, r, a.clients.ITA)
+}
+
+// attestationRequest is the request body for /v1/attestation
+type attestationRequest struct {
+	// Nonce (up to 32 bytes) is embedded in ReportData[0:32].
+	// The launcher adds AK binding in ReportData[32:64] automatically.
+	Nonce []byte `json:"nonce"`
+}
+
+// attestationResponse is the response body for /v1/attestation
+type attestationResponse struct {
+	// Attestation is a serialized pb.Attestation proto.
+	Attestation []byte `json:"attestation"`
+}
+
+// getAttestation handles POST requests to retrieve a raw TPM attestation.
+// The client must provide a nonce (1-32 bytes) in the request body.
+// Returns a serialized pb.Attestation that can be verified using
+// the go-tpm-tools/server.VerifyAttestation() function.
+func (a *attestHandler) getAttestation(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	a.logger.Info(fmt.Sprintf("%s called", attestationEndpoint))
+
+	if r.Method != http.MethodPost {
+		a.logAndWriteHTTPError(w, http.StatusMethodNotAllowed, fmt.Errorf("method %s not allowed, use POST", r.Method))
+		return
+	}
+
+	var req attestationRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("failed to parse request body: %w", err))
+		return
+	}
+
+	if len(req.Nonce) == 0 || len(req.Nonce) > 32 {
+		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("nonce is required and must be <= 32 bytes"))
+		return
+	}
+
+	// Get attestation from the agent
+	var nonce [32]byte
+	copy(nonce[:], req.Nonce)
+	attestation, err := a.attestAgent.GetAttestation(nonce)
+	if err != nil {
+		a.logAndWriteHTTPError(w, http.StatusInternalServerError, fmt.Errorf("failed to get attestation: %w", err))
+		return
+	}
+
+	// Serialize the attestation proto
+	attestBytes, err := proto.Marshal(attestation)
+	if err != nil {
+		a.logAndWriteHTTPError(w, http.StatusInternalServerError, fmt.Errorf("failed to marshal attestation: %w", err))
+		return
+	}
+
+	resp := attestationResponse{Attestation: attestBytes}
+
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		a.logger.Error(fmt.Sprintf("failed to encode response: %v", err))
+	}
 }
 
 func (a *attestHandler) attest(w http.ResponseWriter, r *http.Request, client verifier.Client) {

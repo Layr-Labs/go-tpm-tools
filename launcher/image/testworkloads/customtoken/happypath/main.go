@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt/v4"
 	"github.com/Layr-Labs/go-tpm-tools/verifier/fake"
+	"github.com/golang-jwt/jwt/v4"
 )
 
 const (

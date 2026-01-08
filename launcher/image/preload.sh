@@ -108,8 +108,6 @@ main() {
 
   # Install container launcher entrypoint.
   configure_entrypoint "entrypoint.sh"
-  # Install experiment client.
-  copy_experiment_client
   # Install container launcher.
   copy_launcher
   setup_launcher_systemd_unit

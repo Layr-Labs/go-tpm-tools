@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/Layr-Labs/go-tpm-tools/launcher/registryauth"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/defaults"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/remotes"
 	"github.com/google/go-cmp/cmp"
-	"github.com/Layr-Labs/go-tpm-tools/launcher/registryauth"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
