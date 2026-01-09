@@ -52,9 +52,18 @@ type AttestationAgent interface {
 	MeasureEvent(cel.Content) error
 	Attest(context.Context, AttestAgentOpts) ([]byte, error)
 	AttestWithClient(ctx context.Context, opts AttestAgentOpts, client verifier.Client) ([]byte, error)
-	GetAttestation(nonce [32]byte) (*pb.Attestation, error)
+	RawAttest(opts RawAttestOpts) (*pb.Attestation, error)
 	Refresh(context.Context) error
 	Close() error
+}
+
+// RawAttestOpts contains options for RawAttest.
+type RawAttestOpts struct {
+	// Nonce is optional data for attestation freshness.
+	Nonce []byte
+	// UserData is optional application-specific data (up to 32 bytes)
+	// embedded in TEE ReportData[32:64].
+	UserData []byte
 }
 
 type attestRoot interface {
@@ -76,7 +85,6 @@ type AttestAgentOpts struct {
 type agent struct {
 	measuredRots     []attestRoot
 	avRot            attestRoot
-	teeDevice        client.TEEDevice // TEE quote provider (TDX or SEV-SNP), nil if unavailable
 	fetchedAK        *client.Key
 	client           verifier.Client
 	principalFetcher principalIDTokenFetcher
@@ -118,27 +126,30 @@ func CreateAttestationAgent(tpm io.ReadWriteCloser, akFetcher util.TpmKeyFetcher
 	}
 	attestAgent.measuredRots = append(attestAgent.measuredRots, tpmAR)
 
-	// Detect TEE platform: try TDX first, then SEV-SNP, fall back to TPM-only
-	if tdxQP, err := client.CreateTdxQuoteProvider(); err == nil {
+	// check if is a TDX machine
+	qp, err := tg.GetQuoteProvider()
+	if err != nil {
+		return nil, err
+	}
+
+	// Use qp.IsSupported to check the TDX RTMR interface is enabled
+	if qp.IsSupported() == nil {
 		logger.Info("Adding TDX RTMRs for measurement.")
+		// try to create tsm client for tdx rtmr
 		tsm, err := linuxtsm.MakeClient()
 		if err != nil {
 			return nil, fmt.Errorf("failed to create TSM for TDX: %v", err)
 		}
-		tdxAR := &tdxAttestRoot{
-			qp:        tdxQP.QuoteProvider,
+		var tdxAR = &tdxAttestRoot{
+			qp:        qp,
 			tsmClient: tsm,
 		}
 		attestAgent.measuredRots = append(attestAgent.measuredRots, tdxAR)
+
 		logger.Info("Using TDX RTMR as attestation root.")
 		attestAgent.avRot = tdxAR
-		attestAgent.teeDevice = tdxQP
-	} else if snpQP, err := client.CreateSevSnpQuoteProvider(); err == nil {
-		logger.Info("SEV-SNP detected, using TPM for CEL measurements.")
-		attestAgent.avRot = tpmAR
-		attestAgent.teeDevice = snpQP
 	} else {
-		logger.Info("No TEE detected, using TPM as attestation root.")
+		logger.Info("Using TPM PCR as attestation root.")
 		attestAgent.avRot = tpmAR
 	}
 
@@ -318,7 +329,7 @@ func (t *tpmAttestRoot) Attest(nonce []byte) (any, error) {
 
 type tdxAttestRoot struct {
 	tdxMu     sync.Mutex
-	qp        tg.QuoteProvider
+	qp        *tg.LinuxConfigFsQuoteProvider
 	tsmClient configfsi.Client
 	cosCel    cel.CEL
 }
@@ -368,23 +379,36 @@ func (a *agent) Refresh(ctx context.Context) error {
 	return nil
 }
 
-// GetAttestation returns a pb.Attestation with TPM quotes, event log, AK certs,
-// and TEE attestation. The nonce is embedded in the TEE quote's ReportData.
-func (a *agent) GetAttestation(nonce [32]byte) (*pb.Attestation, error) {
-	if a.teeDevice == nil {
-		return nil, fmt.Errorf("no TEE platform available for GetAttestation")
+// RawAttest returns a pb.Attestation with TPM quotes, event log, AK certs,
+// and TEE attestation for self-verification.
+//
+// TEE ReportData layout:
+//   - [0:32]  = SHA256(nonce + AK_pub_DER) - binds AK identity (and optional nonce)
+//   - [32:64] = UserData (optional, zero-padded)
+func (a *agent) RawAttest(opts RawAttestOpts) (*pb.Attestation, error) {
+	if len(opts.UserData) > 32 {
+		return nil, fmt.Errorf("user_data exceeds 32 bytes")
 	}
 
-	// Build TEE ReportData: user nonce in [0:32], AK binding in [32:64]
-	var teeReportData [maxReportDataSize]byte
-	copy(teeReportData[:32], nonce[:])
+	teeDevice, err := createTEEDevice()
+	if err != nil {
+		return nil, err
+	}
+	defer teeDevice.Close()
 
+	// Get AK public key for binding
 	akPubDER, err := x509.MarshalPKIXPublicKey(a.fetchedAK.PublicKey())
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal AK public key: %w", err)
 	}
-	akHash := sha256.Sum256(akPubDER)
-	copy(teeReportData[32:], akHash[:])
+
+	// Build TEE ReportData:
+	// [0:32]  = SHA256(nonce + AK_pub_DER) - proves freshness and AK binding
+	// [32:64] = UserData (zero-padded)
+	var teeReportData [maxReportDataSize]byte
+	bindingHash := sha256.Sum256(append(opts.Nonce, akPubDER...))
+	copy(teeReportData[:32], bindingHash[:])
+	copy(teeReportData[32:], opts.UserData)
 
 	// Encode the CEL for the attestation
 	var celBuf bytes.Buffer
@@ -392,14 +416,29 @@ func (a *agent) GetAttestation(nonce [32]byte) (*pb.Attestation, error) {
 		return nil, fmt.Errorf("failed to encode CEL: %w", err)
 	}
 
-	// Use the same nonce for TPM quote freshness as TEE report
-	return a.fetchedAK.Attest(client.AttestOpts{
-		Nonce:             nonce[:],
+	attestation, err := a.fetchedAK.Attest(client.AttestOpts{
+		Nonce:             opts.Nonce,
 		TEENonce:          teeReportData[:],
-		TEEDevice:         a.teeDevice,
+		TEEDevice:         teeDevice,
 		CertChainFetcher:  http.DefaultClient,
 		CanonicalEventLog: celBuf.Bytes(),
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	return attestation, nil
+}
+
+// createTEEDevice returns a TEE quote provider for the current platform.
+func createTEEDevice() (client.TEEDevice, error) {
+	if tdx, err := client.CreateTdxQuoteProvider(); err == nil {
+		return tdx, nil
+	}
+	if snp, err := client.CreateSevSnpQuoteProvider(); err == nil {
+		return snp, nil
+	}
+	return nil, fmt.Errorf("failed to create TEE device: no supported platform detected")
 }
 
 func fetchContainerImageSignatures(ctx context.Context, fetcher signaturediscovery.Fetcher, targetRepos []string, retry func() backoff.BackOff, logger logging.Logger) []oci.Signature {

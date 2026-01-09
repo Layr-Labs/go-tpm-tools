@@ -6,8 +6,7 @@ Verifies TEE attestations from Confidential Space workloads. For third parties (
 
 - TEE quote signature (Intel TDX or AMD SEV-SNP)
 - TPM quote signature and AK certificate chain
-- Nonce binding (ReportData[0:32])
-- AK binding (ReportData[32:64] proves TEE and TPM are from same VM)
+- Binding (ReportData[0:32] = SHA256(nonce + AK_pub) proves freshness and TEE/TPM from same VM)
 
 ## What you must verify (policy)
 
@@ -21,10 +20,14 @@ After cryptographic verification, apply your own policy:
 
 ```go
 // Verify attestation received from the TEE workload
+// nonce is the same value passed when requesting the attestation
 verified, err := teeverify.VerifyAttestation(attestationBytes, nonce)
 if err != nil {
     return err
 }
+
+// Access optional user data from ReportData[32:64]
+userData := verified.UserData
 
 // Extract claims
 claims, err := verified.ExtractClaims(teeverify.ExtractOptions{

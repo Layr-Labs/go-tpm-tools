@@ -108,6 +108,7 @@ func (a *attestHandler) getToken(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 
 	a.logger.Info(fmt.Sprintf("%s called", gcaEndpoint))
+
 	// If the handler does not have a GCA client, return error.
 	if a.clients.GCA == nil {
 		errStr := "no GCA verifier client present, please try rebooting your VM"
@@ -136,25 +137,27 @@ func (a *attestHandler) getITAToken(w http.ResponseWriter, r *http.Request) {
 
 // attestationRequest is the request body for /v1/attestation
 type attestationRequest struct {
-	// Nonce (up to 32 bytes) is embedded in ReportData[0:32].
-	// The launcher adds AK binding in ReportData[32:64] automatically.
+	// Nonce is optional data for attestation freshness.
 	Nonce []byte `json:"nonce"`
+	// UserData is optional application-specific data (up to 32 bytes)
+	// embedded in TEE ReportData[32:64].
+	UserData []byte `json:"user_data,omitempty"`
 }
 
-// attestationResponse is the response body for /v1/attestation
-type attestationResponse struct {
-	// Attestation is a serialized pb.Attestation proto.
-	Attestation []byte `json:"attestation"`
-}
-
-// getAttestation handles POST requests to retrieve a raw TPM attestation.
-// The client must provide a nonce (1-32 bytes) in the request body.
-// Returns a serialized pb.Attestation that can be verified using
-// the go-tpm-tools/server.VerifyAttestation() function.
+// getAttestation handles POST requests to retrieve a raw TEE attestation.
+// The client must provide a nonce (non-empty) in the request body.
+// Optional user_data (up to 32 bytes) is embedded in TEE ReportData[32:64].
+// Returns a serialized pb.Attestation that can be verified using the
+// teeverify.VerifyAttestation() function for self-verification.
 func (a *attestHandler) getAttestation(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/octet-stream")
 
 	a.logger.Info(fmt.Sprintf("%s called", attestationEndpoint))
+
+	if !a.launchSpec.SelfVerificationEnabled {
+		a.logAndWriteHTTPError(w, http.StatusNotFound, fmt.Errorf("self-verification not enabled"))
+		return
+	}
 
 	if r.Method != http.MethodPost {
 		a.logAndWriteHTTPError(w, http.StatusMethodNotAllowed, fmt.Errorf("method %s not allowed, use POST", r.Method))
@@ -169,15 +172,16 @@ func (a *attestHandler) getAttestation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.Nonce) == 0 || len(req.Nonce) > 32 {
-		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("nonce is required and must be <= 32 bytes"))
+	if len(req.UserData) > 32 {
+		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("user_data exceeds 32 bytes"))
 		return
 	}
 
 	// Get attestation from the agent
-	var nonce [32]byte
-	copy(nonce[:], req.Nonce)
-	attestation, err := a.attestAgent.GetAttestation(nonce)
+	attestation, err := a.attestAgent.RawAttest(agent.RawAttestOpts{
+		Nonce:    req.Nonce,
+		UserData: req.UserData,
+	})
 	if err != nil {
 		a.logAndWriteHTTPError(w, http.StatusInternalServerError, fmt.Errorf("failed to get attestation: %w", err))
 		return
@@ -190,12 +194,8 @@ func (a *attestHandler) getAttestation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := attestationResponse{Attestation: attestBytes}
-
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		a.logger.Error(fmt.Sprintf("failed to encode response: %v", err))
-	}
+	w.Write(attestBytes)
 }
 
 func (a *attestHandler) attest(w http.ResponseWriter, r *http.Request, client verifier.Client) {

@@ -19,6 +19,7 @@ import (
 	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/launcherfile"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/spec"
+	attestpb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
 	"github.com/Layr-Labs/go-tpm-tools/verifier"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/containerd/containerd"
@@ -41,6 +42,7 @@ const (
 type fakeAttestationAgent struct {
 	measureEventFunc func(cel.Content) error
 	attestFunc       func(context.Context, agent.AttestAgentOpts) ([]byte, error)
+	rawAttestFunc    func(opts agent.RawAttestOpts) (*attestpb.Attestation, error)
 	sigsCache        []string
 	sigsFetcherFunc  func(context.Context) []string
 
@@ -79,6 +81,13 @@ func (f *fakeAttestationAgent) Refresh(ctx context.Context) error {
 
 func (f *fakeAttestationAgent) Close() error {
 	return nil
+}
+
+func (f *fakeAttestationAgent) RawAttest(opts agent.RawAttestOpts) (*attestpb.Attestation, error) {
+	if f.rawAttestFunc != nil {
+		return f.rawAttestFunc(opts)
+	}
+	return nil, fmt.Errorf("unimplemented")
 }
 
 type fakeClaims struct {

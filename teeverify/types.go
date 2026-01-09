@@ -39,14 +39,15 @@ type ExtractOptions struct {
 // This type is returned by VerifyAttestation() after successful verification of:
 //   - TEE quote signature (TDX or SEV-SNP hardware root of trust)
 //   - TPM quote signature and AK certificate chain
-//   - Nonce binding: ReportData[0:32] matches the provided nonce
-//   - AK binding: ReportData[32:64] = SHA256(AK_public_key), proving TEE and TPM are from the same VM
+//   - Binding: ReportData[0:32] = SHA256(nonce + AK_public_key), proving freshness and TEE/TPM binding
 //
 // The private fields (attestation, machineState) are always non-nil after successful
 // verification. Claims can only be extracted via ExtractClaims(), ensuring callers
 // cannot accidentally use unverified data.
 type VerifiedAttestation struct {
-	Platform     Platform
+	Platform Platform
+	// UserData contains up to 32 bytes of application-specific data bound in ReportData[32:64].
+	UserData     []byte
 	attestation  *attestpb.Attestation
 	machineState *attestpb.MachineState
 }

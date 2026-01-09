@@ -393,6 +393,11 @@ func isHardened(kernelCmd string) bool {
 }
 
 func fetchExperiments(logger logging.Logger) experiments.Experiments {
+	// Skip experiment sync if the binary doesn't exist (e.g., custom images)
+	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
+		return experiments.Experiments{}
+	}
+
 	experimentsFile := path.Join(launcherfile.HostTmpPath, experimentDataFile)
 
 	args := fmt.Sprintf("-output=%s", experimentsFile)
