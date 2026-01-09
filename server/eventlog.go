@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"hash"
 
-	"github.com/google/go-attestation/attest"
-	"github.com/google/go-eventlog/register"
 	"github.com/Layr-Labs/go-tpm-tools/cel"
 	pb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
 	tpmpb "github.com/Layr-Labs/go-tpm-tools/proto/tpm"
+	"github.com/google/go-attestation/attest"
+	"github.com/google/go-eventlog/register"
 	"github.com/google/go-tpm/legacy/tpm2"
 )
 

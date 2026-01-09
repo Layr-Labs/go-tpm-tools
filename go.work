@@ -6,6 +6,7 @@ use (
 	.
 	./cmd
 	./launcher
+	./teeverify
 	./verifier
 )
 
