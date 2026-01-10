@@ -11,12 +11,20 @@ import (
 
 // testVector contains a test attestation with its expected inputs
 type testVector struct {
-	Attestation []byte // base64-decoded pb.Attestation
-	Nonce       []byte // hex-decoded nonce
-	UserData    []byte // hex-decoded user data
+	Attestation []byte // decoded pb.Attestation
+	Nonce       []byte // decoded nonce
+	UserData    []byte // decoded user data
 }
 
-type attestationsFile struct {
+// testCase contains a named test case with TDX and SEV-SNP attestations
+type testCase struct {
+	Name   string
+	TDX    testVector
+	SevSnp testVector
+}
+
+type testCaseJSON struct {
+	Name   string         `json:"name"`
 	TDX    testVectorJSON `json:"tdx"`
 	SevSnp testVectorJSON `json:"sevsnp"`
 }
@@ -27,8 +35,8 @@ type testVectorJSON struct {
 	UserData    string `json:"user_data"`   // hex-encoded
 }
 
-// loadTestVectors loads TDX and SEV-SNP test attestations from testdata
-func loadTestVectors(t *testing.T) (tdx, sevsnp testVector) {
+// loadTestCases loads all test cases from testdata/attestations.json
+func loadTestCases(t *testing.T) []testCase {
 	t.Helper()
 
 	data, err := os.ReadFile("testdata/attestations.json")
@@ -36,40 +44,45 @@ func loadTestVectors(t *testing.T) (tdx, sevsnp testVector) {
 		t.Fatalf("failed to read test data: %v", err)
 	}
 
-	var file attestationsFile
-	if err := json.Unmarshal(data, &file); err != nil {
+	var casesJSON []testCaseJSON
+	if err := json.Unmarshal(data, &casesJSON); err != nil {
 		t.Fatalf("failed to parse test data: %v", err)
 	}
 
-	// Decode TDX (attestation is base64, nonce/user_data are hex)
-	tdx.Attestation, err = base64.StdEncoding.DecodeString(file.TDX.Attestation)
-	if err != nil {
-		t.Fatalf("failed to decode TDX attestation: %v", err)
-	}
-	tdx.Nonce, err = hex.DecodeString(file.TDX.Nonce)
-	if err != nil {
-		t.Fatalf("failed to decode TDX nonce: %v", err)
-	}
-	tdx.UserData, err = hex.DecodeString(file.TDX.UserData)
-	if err != nil {
-		t.Fatalf("failed to decode TDX user data: %v", err)
+	cases := make([]testCase, len(casesJSON))
+	for i, cj := range casesJSON {
+		cases[i].Name = cj.Name
+
+		// Decode TDX
+		cases[i].TDX.Attestation, err = base64.StdEncoding.DecodeString(cj.TDX.Attestation)
+		if err != nil {
+			t.Fatalf("case %q: failed to decode TDX attestation: %v", cj.Name, err)
+		}
+		cases[i].TDX.Nonce, err = hex.DecodeString(cj.TDX.Nonce)
+		if err != nil {
+			t.Fatalf("case %q: failed to decode TDX nonce: %v", cj.Name, err)
+		}
+		cases[i].TDX.UserData, err = hex.DecodeString(cj.TDX.UserData)
+		if err != nil {
+			t.Fatalf("case %q: failed to decode TDX user data: %v", cj.Name, err)
+		}
+
+		// Decode SEV-SNP
+		cases[i].SevSnp.Attestation, err = base64.StdEncoding.DecodeString(cj.SevSnp.Attestation)
+		if err != nil {
+			t.Fatalf("case %q: failed to decode SEV-SNP attestation: %v", cj.Name, err)
+		}
+		cases[i].SevSnp.Nonce, err = hex.DecodeString(cj.SevSnp.Nonce)
+		if err != nil {
+			t.Fatalf("case %q: failed to decode SEV-SNP nonce: %v", cj.Name, err)
+		}
+		cases[i].SevSnp.UserData, err = hex.DecodeString(cj.SevSnp.UserData)
+		if err != nil {
+			t.Fatalf("case %q: failed to decode SEV-SNP user data: %v", cj.Name, err)
+		}
 	}
 
-	// Decode SEV-SNP (attestation is base64, nonce/user_data are hex)
-	sevsnp.Attestation, err = base64.StdEncoding.DecodeString(file.SevSnp.Attestation)
-	if err != nil {
-		t.Fatalf("failed to decode SEV-SNP attestation: %v", err)
-	}
-	sevsnp.Nonce, err = hex.DecodeString(file.SevSnp.Nonce)
-	if err != nil {
-		t.Fatalf("failed to decode SEV-SNP nonce: %v", err)
-	}
-	sevsnp.UserData, err = hex.DecodeString(file.SevSnp.UserData)
-	if err != nil {
-		t.Fatalf("failed to decode SEV-SNP user data: %v", err)
-	}
-
-	return tdx, sevsnp
+	return cases
 }
 
 // =============================================================================
@@ -77,24 +90,30 @@ func loadTestVectors(t *testing.T) (tdx, sevsnp testVector) {
 // =============================================================================
 
 func TestVerifyTDXAttestation(t *testing.T) {
-	tdx, _ := loadTestVectors(t)
+	for _, tc := range loadTestCases(t) {
+		t.Run(tc.Name, func(t *testing.T) {
+			verified, err := VerifyAttestation(tc.TDX.Attestation, tc.TDX.Nonce)
+			if err != nil {
+				t.Fatalf("VerifyAttestation failed: %v", err)
+			}
 
-	verified, err := VerifyAttestation(tdx.Attestation, tdx.Nonce)
-	if err != nil {
-		t.Fatalf("VerifyAttestation failed: %v", err)
-	}
+			if verified.Platform != PlatformTDX {
+				t.Errorf("expected platform TDX, got %v", verified.Platform)
+			}
 
-	if verified.Platform != PlatformTDX {
-		t.Errorf("expected platform TDX, got %v", verified.Platform)
-	}
-
-	if !bytes.Equal(verified.UserData, tdx.UserData) {
-		t.Errorf("UserData mismatch:\n  got:  %x\n  want: %x", verified.UserData, tdx.UserData)
+			if !userDataEqual(verified.UserData, tc.TDX.UserData) {
+				t.Errorf("UserData mismatch:\n  got:  %x\n  want: %x", verified.UserData, tc.TDX.UserData)
+			}
+		})
 	}
 }
 
 func TestVerifyTDXAttestation_WrongNonce(t *testing.T) {
-	tdx, _ := loadTestVectors(t)
+	cases := loadTestCases(t)
+	if len(cases) == 0 {
+		t.Fatal("no test cases found")
+	}
+	tdx := cases[0].TDX
 
 	// Use wrong nonce (all zeros)
 	wrongNonce := make([]byte, 32)
@@ -111,7 +130,11 @@ func TestVerifyTDXAttestation_WrongNonce(t *testing.T) {
 }
 
 func TestVerifyTDXAttestation_EmptyNonce(t *testing.T) {
-	tdx, _ := loadTestVectors(t)
+	cases := loadTestCases(t)
+	if len(cases) == 0 {
+		t.Fatal("no test cases found")
+	}
+	tdx := cases[0].TDX
 
 	_, err := VerifyAttestation(tdx.Attestation, nil)
 	if err == nil {
@@ -124,24 +147,30 @@ func TestVerifyTDXAttestation_EmptyNonce(t *testing.T) {
 // =============================================================================
 
 func TestVerifySevSnpAttestation(t *testing.T) {
-	_, sevsnp := loadTestVectors(t)
+	for _, tc := range loadTestCases(t) {
+		t.Run(tc.Name, func(t *testing.T) {
+			verified, err := VerifyAttestation(tc.SevSnp.Attestation, tc.SevSnp.Nonce)
+			if err != nil {
+				t.Fatalf("VerifyAttestation failed: %v", err)
+			}
 
-	verified, err := VerifyAttestation(sevsnp.Attestation, sevsnp.Nonce)
-	if err != nil {
-		t.Fatalf("VerifyAttestation failed: %v", err)
-	}
+			if verified.Platform != PlatformSevSnp {
+				t.Errorf("expected platform SEV-SNP, got %v", verified.Platform)
+			}
 
-	if verified.Platform != PlatformSevSnp {
-		t.Errorf("expected platform SEV-SNP, got %v", verified.Platform)
-	}
-
-	if !bytes.Equal(verified.UserData, sevsnp.UserData) {
-		t.Errorf("UserData mismatch:\n  got:  %x\n  want: %x", verified.UserData, sevsnp.UserData)
+			if !userDataEqual(verified.UserData, tc.SevSnp.UserData) {
+				t.Errorf("UserData mismatch:\n  got:  %x\n  want: %x", verified.UserData, tc.SevSnp.UserData)
+			}
+		})
 	}
 }
 
 func TestVerifySevSnpAttestation_WrongNonce(t *testing.T) {
-	_, sevsnp := loadTestVectors(t)
+	cases := loadTestCases(t)
+	if len(cases) == 0 {
+		t.Fatal("no test cases found")
+	}
+	sevsnp := cases[0].SevSnp
 
 	// Use wrong nonce (all zeros)
 	wrongNonce := make([]byte, 32)
@@ -161,73 +190,75 @@ func TestVerifySevSnpAttestation_WrongNonce(t *testing.T) {
 // =============================================================================
 
 func TestExtractTDXClaims(t *testing.T) {
-	tdx, _ := loadTestVectors(t)
+	for _, tc := range loadTestCases(t) {
+		t.Run(tc.Name, func(t *testing.T) {
+			verified, err := VerifyAttestation(tc.TDX.Attestation, tc.TDX.Nonce)
+			if err != nil {
+				t.Fatalf("VerifyAttestation failed: %v", err)
+			}
 
-	verified, err := VerifyAttestation(tdx.Attestation, tdx.Nonce)
-	if err != nil {
-		t.Fatalf("VerifyAttestation failed: %v", err)
-	}
+			claims, err := verified.ExtractClaims(ExtractOptions{
+				PCRIndices: []uint32{0, 4, 8, 9},
+			})
+			if err != nil {
+				t.Fatalf("ExtractClaims failed: %v", err)
+			}
 
-	claims, err := verified.ExtractClaims(ExtractOptions{
-		PCRIndices: []uint32{0, 4, 8, 9},
-	})
-	if err != nil {
-		t.Fatalf("ExtractClaims failed: %v", err)
-	}
+			// Verify platform
+			if claims.Platform != PlatformTDX {
+				t.Errorf("expected platform TDX, got %v", claims.Platform)
+			}
 
-	// Verify platform
-	if claims.Platform != PlatformTDX {
-		t.Errorf("expected platform TDX, got %v", claims.Platform)
-	}
+			// Verify TDX claims exist
+			if claims.TDX == nil {
+				t.Fatal("expected TDX claims, got nil")
+			}
 
-	// Verify TDX claims exist
-	if claims.TDX == nil {
-		t.Fatal("expected TDX claims, got nil")
-	}
+			// Verify MRTD is non-zero
+			if isZero(claims.TDX.MRTD[:]) {
+				t.Error("expected non-zero MRTD")
+			}
 
-	// Verify MRTD is non-zero
-	if isZero(claims.TDX.MRTD[:]) {
-		t.Error("expected non-zero MRTD")
-	}
+			// Verify RTMRs (at least RTMR0 should be non-zero for a running TD)
+			if isZero(claims.TDX.RTMR0[:]) && isZero(claims.TDX.RTMR1[:]) &&
+				isZero(claims.TDX.RTMR2[:]) && isZero(claims.TDX.RTMR3[:]) {
+				t.Error("expected at least one non-zero RTMR")
+			}
 
-	// Verify RTMRs (at least RTMR0 should be non-zero for a running TD)
-	if isZero(claims.TDX.RTMR0[:]) && isZero(claims.TDX.RTMR1[:]) &&
-		isZero(claims.TDX.RTMR2[:]) && isZero(claims.TDX.RTMR3[:]) {
-		t.Error("expected at least one non-zero RTMR")
-	}
+			// Verify TeeTcbSvn is present
+			if isZero(claims.TDX.TeeTcbSvn[:]) {
+				t.Error("expected non-zero TeeTcbSvn")
+			}
 
-	// Verify TeeTcbSvn is present
-	if isZero(claims.TDX.TeeTcbSvn[:]) {
-		t.Error("expected non-zero TeeTcbSvn")
-	}
+			// Production attestation should not be in debug mode
+			if claims.TDX.Attributes.Debug {
+				t.Error("expected Debug=false for production attestation")
+			}
 
-	// Production attestation should not be in debug mode
-	if claims.TDX.Attributes.Debug {
-		t.Error("expected Debug=false for production attestation")
-	}
+			// Verify PCRs were extracted
+			if len(claims.PCRs) != 4 {
+				t.Errorf("expected 4 PCRs, got %d", len(claims.PCRs))
+			}
+			for _, idx := range []uint32{0, 4, 8, 9} {
+				pcr, ok := claims.PCRs[idx]
+				if !ok {
+					t.Errorf("PCR %d not found", idx)
+					continue
+				}
+				if isZero(pcr[:]) {
+					t.Errorf("PCR %d is zero", idx)
+				}
+			}
 
-	// Verify PCRs were extracted
-	if len(claims.PCRs) != 4 {
-		t.Errorf("expected 4 PCRs, got %d", len(claims.PCRs))
-	}
-	for _, idx := range []uint32{0, 4, 8, 9} {
-		pcr, ok := claims.PCRs[idx]
-		if !ok {
-			t.Errorf("PCR %d not found", idx)
-			continue
-		}
-		if isZero(pcr[:]) {
-			t.Errorf("PCR %d is zero", idx)
-		}
-	}
-
-	// Log container and GCE info if present (informational)
-	if claims.Container != nil {
-		t.Logf("Container: %s@%s", claims.Container.ImageReference, claims.Container.ImageDigest)
-	}
-	if claims.GCE != nil {
-		t.Logf("GCE: project=%s zone=%s instance=%s",
-			claims.GCE.ProjectID, claims.GCE.Zone, claims.GCE.InstanceName)
+			// Log container and GCE info if present (informational)
+			if claims.Container != nil {
+				t.Logf("Container: %s@%s", claims.Container.ImageReference, claims.Container.ImageDigest)
+			}
+			if claims.GCE != nil {
+				t.Logf("GCE: project=%s zone=%s instance=%s",
+					claims.GCE.ProjectID, claims.GCE.Zone, claims.GCE.InstanceName)
+			}
+		})
 	}
 }
 
@@ -236,57 +267,59 @@ func TestExtractTDXClaims(t *testing.T) {
 // =============================================================================
 
 func TestExtractSevSnpClaims(t *testing.T) {
-	_, sevsnp := loadTestVectors(t)
+	for _, tc := range loadTestCases(t) {
+		t.Run(tc.Name, func(t *testing.T) {
+			verified, err := VerifyAttestation(tc.SevSnp.Attestation, tc.SevSnp.Nonce)
+			if err != nil {
+				t.Fatalf("VerifyAttestation failed: %v", err)
+			}
 
-	verified, err := VerifyAttestation(sevsnp.Attestation, sevsnp.Nonce)
-	if err != nil {
-		t.Fatalf("VerifyAttestation failed: %v", err)
-	}
+			claims, err := verified.ExtractClaims(ExtractOptions{
+				PCRIndices: []uint32{0, 4, 8, 9},
+			})
+			if err != nil {
+				t.Fatalf("ExtractClaims failed: %v", err)
+			}
 
-	claims, err := verified.ExtractClaims(ExtractOptions{
-		PCRIndices: []uint32{0, 4, 8, 9},
-	})
-	if err != nil {
-		t.Fatalf("ExtractClaims failed: %v", err)
-	}
+			// Verify platform
+			if claims.Platform != PlatformSevSnp {
+				t.Errorf("expected platform SEV-SNP, got %v", claims.Platform)
+			}
 
-	// Verify platform
-	if claims.Platform != PlatformSevSnp {
-		t.Errorf("expected platform SEV-SNP, got %v", claims.Platform)
-	}
+			// Verify SEV-SNP claims exist
+			if claims.SevSnp == nil {
+				t.Fatal("expected SEV-SNP claims, got nil")
+			}
 
-	// Verify SEV-SNP claims exist
-	if claims.SevSnp == nil {
-		t.Fatal("expected SEV-SNP claims, got nil")
-	}
+			// Verify Measurement is non-zero
+			if isZero(claims.SevSnp.Measurement[:]) {
+				t.Error("expected non-zero Measurement")
+			}
 
-	// Verify Measurement is non-zero
-	if isZero(claims.SevSnp.Measurement[:]) {
-		t.Error("expected non-zero Measurement")
-	}
+			// Production attestation should not be in debug mode
+			if claims.SevSnp.Policy.Debug {
+				t.Error("expected Debug=false for production attestation")
+			}
 
-	// Production attestation should not be in debug mode
-	if claims.SevSnp.Policy.Debug {
-		t.Error("expected Debug=false for production attestation")
-	}
+			// Verify TCB fields (at least one should be non-zero)
+			if claims.SevSnp.CurrentTcb == 0 && claims.SevSnp.ReportedTcb == 0 {
+				t.Error("expected non-zero TCB values")
+			}
 
-	// Verify TCB fields (at least one should be non-zero)
-	if claims.SevSnp.CurrentTcb == 0 && claims.SevSnp.ReportedTcb == 0 {
-		t.Error("expected non-zero TCB values")
-	}
+			// Verify PCRs were extracted
+			if len(claims.PCRs) != 4 {
+				t.Errorf("expected 4 PCRs, got %d", len(claims.PCRs))
+			}
 
-	// Verify PCRs were extracted
-	if len(claims.PCRs) != 4 {
-		t.Errorf("expected 4 PCRs, got %d", len(claims.PCRs))
-	}
-
-	// Log container and GCE info if present
-	if claims.Container != nil {
-		t.Logf("Container: %s@%s", claims.Container.ImageReference, claims.Container.ImageDigest)
-	}
-	if claims.GCE != nil {
-		t.Logf("GCE: project=%s zone=%s instance=%s",
-			claims.GCE.ProjectID, claims.GCE.Zone, claims.GCE.InstanceName)
+			// Log container and GCE info if present
+			if claims.Container != nil {
+				t.Logf("Container: %s@%s", claims.Container.ImageReference, claims.Container.ImageDigest)
+			}
+			if claims.GCE != nil {
+				t.Logf("GCE: project=%s zone=%s instance=%s",
+					claims.GCE.ProjectID, claims.GCE.Zone, claims.GCE.InstanceName)
+			}
+		})
 	}
 }
 
@@ -295,7 +328,11 @@ func TestExtractSevSnpClaims(t *testing.T) {
 // =============================================================================
 
 func TestExtractPCRs_ValidIndices(t *testing.T) {
-	tdx, _ := loadTestVectors(t)
+	cases := loadTestCases(t)
+	if len(cases) == 0 {
+		t.Fatal("no test cases found")
+	}
+	tdx := cases[0].TDX
 
 	verified, err := VerifyAttestation(tdx.Attestation, tdx.Nonce)
 	if err != nil {
@@ -324,7 +361,11 @@ func TestExtractPCRs_ValidIndices(t *testing.T) {
 }
 
 func TestExtractPCRs_InvalidIndex(t *testing.T) {
-	tdx, _ := loadTestVectors(t)
+	cases := loadTestCases(t)
+	if len(cases) == 0 {
+		t.Fatal("no test cases found")
+	}
+	tdx := cases[0].TDX
 
 	verified, err := VerifyAttestation(tdx.Attestation, tdx.Nonce)
 	if err != nil {
@@ -394,6 +435,11 @@ func isZero(b []byte) bool {
 		}
 	}
 	return true
+}
+
+// userDataEqual compares user data, treating all-zeros as equivalent to empty.
+func userDataEqual(got, want []byte) bool {
+	return bytes.Equal(got, want) || (len(want) == 0 && isZero(got))
 }
 
 func contains(s, substr string) bool {

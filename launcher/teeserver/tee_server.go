@@ -137,7 +137,7 @@ func (a *attestHandler) getITAToken(w http.ResponseWriter, r *http.Request) {
 
 // attestationRequest is the request body for /v1/attestation
 type attestationRequest struct {
-	// Nonce is optional data for attestation freshness.
+	// Nonce is used for attestation freshness. Required, non-empty.
 	Nonce []byte `json:"nonce"`
 	// UserData is optional application-specific data (up to 32 bytes)
 	// embedded in TEE ReportData[32:64].
@@ -169,6 +169,11 @@ func (a *attestHandler) getAttestation(w http.ResponseWriter, r *http.Request) {
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&req); err != nil {
 		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("failed to parse request body: %w", err))
+		return
+	}
+
+	if len(req.Nonce) == 0 {
+		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("nonce is required"))
 		return
 	}
 

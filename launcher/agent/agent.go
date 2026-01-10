@@ -59,7 +59,7 @@ type AttestationAgent interface {
 
 // RawAttestOpts contains options for RawAttest.
 type RawAttestOpts struct {
-	// Nonce is optional data for attestation freshness.
+	// Nonce is used for attestation freshness. Required, non-empty.
 	Nonce []byte
 	// UserData is optional application-specific data (up to 32 bytes)
 	// embedded in TEE ReportData[32:64].
@@ -383,7 +383,7 @@ func (a *agent) Refresh(ctx context.Context) error {
 // and TEE attestation for self-verification.
 //
 // TEE ReportData layout:
-//   - [0:32]  = SHA256(nonce + AK_pub_DER) - binds AK identity (and optional nonce)
+//   - [0:32]  = SHA256(nonce + AK_pub_DER) - binds nonce and AK identity
 //   - [32:64] = UserData (optional, zero-padded)
 func (a *agent) RawAttest(opts RawAttestOpts) (*pb.Attestation, error) {
 	if len(opts.UserData) > 32 {

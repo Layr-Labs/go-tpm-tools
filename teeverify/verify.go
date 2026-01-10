@@ -32,7 +32,7 @@ const (
 // - Binding: ReportData[0:32] == SHA256(nonce + AK_public_key_DER)
 //
 // The binding hash proves that the TEE and TPM are from the same VM (via AK public key).
-// The nonce is optional; if provided, it adds freshness to the binding.
+// The nonce must match the value used during attestation creation.
 //
 // This does NOT make policy decisions (debug mode, TCB versions, allowlists).
 // Policy checks should be performed by the caller after extracting claims.

@@ -617,20 +617,6 @@ func TestGetAttestation(t *testing.T) {
 			wantNonce:      testNonce,
 			wantUserData:   testUserData,
 		},
-		{
-			name:           "success with user_data only (no nonce)",
-			body:           fmt.Sprintf(`{"user_data":"%s"}`, base64.StdEncoding.EncodeToString(testUserData)),
-			wantStatusCode: http.StatusOK,
-			wantNonce:      nil,
-			wantUserData:   testUserData,
-		},
-		{
-			name:           "success with empty request body",
-			body:           `{}`,
-			wantStatusCode: http.StatusOK,
-			wantNonce:      nil,
-			wantUserData:   nil,
-		},
 	}
 
 	for _, tc := range testCases {
@@ -731,6 +717,22 @@ func TestGetAttestationErrors(t *testing.T) {
 			body:                    "",
 			wantStatusCode:          http.StatusBadRequest,
 			wantBodyContains:        "failed to parse request body",
+		},
+		{
+			name:                    "missing nonce",
+			selfVerificationEnabled: true,
+			method:                  http.MethodPost,
+			body:                    `{}`,
+			wantStatusCode:          http.StatusBadRequest,
+			wantBodyContains:        "nonce is required",
+		},
+		{
+			name:                    "empty nonce",
+			selfVerificationEnabled: true,
+			method:                  http.MethodPost,
+			body:                    `{"nonce":""}`,
+			wantStatusCode:          http.StatusBadRequest,
+			wantBodyContains:        "nonce is required",
 		},
 		{
 			name:                    "user_data exceeds 32 bytes",
