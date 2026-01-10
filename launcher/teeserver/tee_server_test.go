@@ -776,7 +776,7 @@ func TestGetAttestationErrors(t *testing.T) {
 				logger:     logging.SimpleLogger(),
 				launchSpec: spec.LaunchSpec{SelfVerificationEnabled: tc.selfVerificationEnabled},
 				attestAgent: fakeAttestationAgent{
-					rawAttestFunc: func(opts agent.RawAttestOpts) (*attestpb.Attestation, error) {
+					rawAttestFunc: func(_ agent.RawAttestOpts) (*attestpb.Attestation, error) {
 						if tc.agentErr != nil {
 							return nil, tc.agentErr
 						}
