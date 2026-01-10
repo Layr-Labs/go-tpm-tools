@@ -13,8 +13,8 @@ import (
 	"time"
 
 	logpb "cloud.google.com/go/logging/apiv2/loggingpb"
-	tspb "github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/Layr-Labs/go-tpm-tools/verifier/util"
+	tspb "github.com/golang/protobuf/ptypes/timestamp"
 	"google.golang.org/grpc"
 )
 

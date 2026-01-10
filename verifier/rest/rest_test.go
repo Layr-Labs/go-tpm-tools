@@ -3,23 +3,23 @@ package rest
 import (
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/Layr-Labs/go-tpm-tools/proto/tpm"
 	"github.com/Layr-Labs/go-tpm-tools/verifier"
 	"github.com/Layr-Labs/go-tpm-tools/verifier/models"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	"google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	ccpb "cloud.google.com/go/confidentialcomputing/apiv1/confidentialcomputingpb"
+	attestpb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
 	sabi "github.com/google/go-sev-guest/abi"
 	spb "github.com/google/go-sev-guest/proto/sevsnp"
 	tabi "github.com/google/go-tdx-guest/abi"
 	tpb "github.com/google/go-tdx-guest/proto/tdx"
 	tgtestdata "github.com/google/go-tdx-guest/testing/testdata"
-	attestpb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
 )
 
 var (

@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/Layr-Labs/go-tpm-tools/verifier"
 	"github.com/Layr-Labs/go-tpm-tools/verifier/models"
+	"github.com/google/go-cmp/cmp"
 )
 
 var testVerifierRequest = verifier.VerifyAttestationRequest{

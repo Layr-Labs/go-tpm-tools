@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/Layr-Labs/go-tpm-tools/internal"
+	pb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
 	sabi "github.com/google/go-sev-guest/abi"
 	sg "github.com/google/go-sev-guest/client"
 	tg "github.com/google/go-tdx-guest/client"
 	tabi "github.com/google/go-tdx-guest/client/linuxabi"
 	tpb "github.com/google/go-tdx-guest/proto/tdx"
-	"github.com/Layr-Labs/go-tpm-tools/internal"
-	pb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
 )
 
 // TEEDevice is an interface to add an attestation report from a TEE technology's

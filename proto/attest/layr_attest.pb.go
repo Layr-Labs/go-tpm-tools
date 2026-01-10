@@ -2,19 +2,20 @@
 // versions:
 // 	protoc-gen-go v1.36.6
 // 	protoc        v5.29.3
-// source: attest.proto
+// source: layr_attest.proto
 
 package attest
 
 import (
+	reflect "reflect"
+	sync "sync"
+	unsafe "unsafe"
+
 	tpm "github.com/Layr-Labs/go-tpm-tools/proto/tpm"
 	sevsnp "github.com/google/go-sev-guest/proto/sevsnp"
 	tdx "github.com/google/go-tdx-guest/proto/tdx"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	reflect "reflect"
-	sync "sync"
-	unsafe "unsafe"
 )
 
 const (
@@ -64,11 +65,11 @@ func (x GCEConfidentialTechnology) String() string {
 }
 
 func (GCEConfidentialTechnology) Descriptor() protoreflect.EnumDescriptor {
-	return file_attest_proto_enumTypes[0].Descriptor()
+	return file_layr_attest_proto_enumTypes[0].Descriptor()
 }
 
 func (GCEConfidentialTechnology) Type() protoreflect.EnumType {
-	return &file_attest_proto_enumTypes[0]
+	return &file_layr_attest_proto_enumTypes[0]
 }
 
 func (x GCEConfidentialTechnology) Number() protoreflect.EnumNumber {
@@ -77,7 +78,7 @@ func (x GCEConfidentialTechnology) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use GCEConfidentialTechnology.Descriptor instead.
 func (GCEConfidentialTechnology) EnumDescriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{0}
+	return file_layr_attest_proto_rawDescGZIP(), []int{0}
 }
 
 // Common, publicly-listed certificates by different vendors.
@@ -125,11 +126,11 @@ func (x WellKnownCertificate) String() string {
 }
 
 func (WellKnownCertificate) Descriptor() protoreflect.EnumDescriptor {
-	return file_attest_proto_enumTypes[1].Descriptor()
+	return file_layr_attest_proto_enumTypes[1].Descriptor()
 }
 
 func (WellKnownCertificate) Type() protoreflect.EnumType {
-	return &file_attest_proto_enumTypes[1]
+	return &file_layr_attest_proto_enumTypes[1]
 }
 
 func (x WellKnownCertificate) Number() protoreflect.EnumNumber {
@@ -138,7 +139,7 @@ func (x WellKnownCertificate) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use WellKnownCertificate.Descriptor instead.
 func (WellKnownCertificate) EnumDescriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{1}
+	return file_layr_attest_proto_rawDescGZIP(), []int{1}
 }
 
 // The container's restart policy.
@@ -180,11 +181,11 @@ func (x RestartPolicy) String() string {
 }
 
 func (RestartPolicy) Descriptor() protoreflect.EnumDescriptor {
-	return file_attest_proto_enumTypes[2].Descriptor()
+	return file_layr_attest_proto_enumTypes[2].Descriptor()
 }
 
 func (RestartPolicy) Type() protoreflect.EnumType {
-	return &file_attest_proto_enumTypes[2]
+	return &file_layr_attest_proto_enumTypes[2]
 }
 
 func (x RestartPolicy) Number() protoreflect.EnumNumber {
@@ -193,7 +194,7 @@ func (x RestartPolicy) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RestartPolicy.Descriptor instead.
 func (RestartPolicy) EnumDescriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{2}
+	return file_layr_attest_proto_rawDescGZIP(), []int{2}
 }
 
 // Confidential Computing mode for GPU device. Reference for these CC mode values: https://developer.nvidia.com/blog/confidential-computing-on-h100-gpus-for-secure-and-trustworthy-ai/#hardware_security_for_nvidia_h100_gpus
@@ -236,11 +237,11 @@ func (x GPUDeviceCCMode) String() string {
 }
 
 func (GPUDeviceCCMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_attest_proto_enumTypes[3].Descriptor()
+	return file_layr_attest_proto_enumTypes[3].Descriptor()
 }
 
 func (GPUDeviceCCMode) Type() protoreflect.EnumType {
-	return &file_attest_proto_enumTypes[3]
+	return &file_layr_attest_proto_enumTypes[3]
 }
 
 func (x GPUDeviceCCMode) Number() protoreflect.EnumNumber {
@@ -249,7 +250,7 @@ func (x GPUDeviceCCMode) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use GPUDeviceCCMode.Descriptor instead.
 func (GPUDeviceCCMode) EnumDescriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{3}
+	return file_layr_attest_proto_rawDescGZIP(), []int{3}
 }
 
 // Information uniquely identifying a GCE instance. Can be used to create an
@@ -269,7 +270,7 @@ type GCEInstanceInfo struct {
 
 func (x *GCEInstanceInfo) Reset() {
 	*x = GCEInstanceInfo{}
-	mi := &file_attest_proto_msgTypes[0]
+	mi := &file_layr_attest_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -281,7 +282,7 @@ func (x *GCEInstanceInfo) String() string {
 func (*GCEInstanceInfo) ProtoMessage() {}
 
 func (x *GCEInstanceInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[0]
+	mi := &file_layr_attest_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -294,7 +295,7 @@ func (x *GCEInstanceInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GCEInstanceInfo.ProtoReflect.Descriptor instead.
 func (*GCEInstanceInfo) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{0}
+	return file_layr_attest_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *GCEInstanceInfo) GetZone() string {
@@ -366,7 +367,7 @@ type Attestation struct {
 
 func (x *Attestation) Reset() {
 	*x = Attestation{}
-	mi := &file_attest_proto_msgTypes[1]
+	mi := &file_layr_attest_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -378,7 +379,7 @@ func (x *Attestation) String() string {
 func (*Attestation) ProtoMessage() {}
 
 func (x *Attestation) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[1]
+	mi := &file_layr_attest_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -391,7 +392,7 @@ func (x *Attestation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Attestation.ProtoReflect.Descriptor instead.
 func (*Attestation) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{1}
+	return file_layr_attest_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *Attestation) GetAkPub() []byte {
@@ -503,7 +504,7 @@ type SevSnpSvsmAttestation struct {
 
 func (x *SevSnpSvsmAttestation) Reset() {
 	*x = SevSnpSvsmAttestation{}
-	mi := &file_attest_proto_msgTypes[2]
+	mi := &file_layr_attest_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -515,7 +516,7 @@ func (x *SevSnpSvsmAttestation) String() string {
 func (*SevSnpSvsmAttestation) ProtoMessage() {}
 
 func (x *SevSnpSvsmAttestation) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[2]
+	mi := &file_layr_attest_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -528,7 +529,7 @@ func (x *SevSnpSvsmAttestation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SevSnpSvsmAttestation.ProtoReflect.Descriptor instead.
 func (*SevSnpSvsmAttestation) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{2}
+	return file_layr_attest_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *SevSnpSvsmAttestation) GetAttestation() *Attestation {
@@ -575,7 +576,7 @@ type PlatformState struct {
 	//	*PlatformState_GceVersion
 	Firmware isPlatformState_Firmware `protobuf_oneof:"firmware"`
 	// Set to NONE on non-GCE instances or non-Confidential Shielded GCE instances
-	Technology GCEConfidentialTechnology `protobuf:"varint,3,opt,name=technology,proto3,enum=attest.GCEConfidentialTechnology" json:"technology,omitempty"`
+	Technology GCEConfidentialTechnology `protobuf:"varint,3,opt,name=technology,proto3,enum=layr_attest.GCEConfidentialTechnology" json:"technology,omitempty"`
 	// Only set for GCE instances
 	InstanceInfo  *GCEInstanceInfo `protobuf:"bytes,4,opt,name=instance_info,json=instanceInfo,proto3" json:"instance_info,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -584,7 +585,7 @@ type PlatformState struct {
 
 func (x *PlatformState) Reset() {
 	*x = PlatformState{}
-	mi := &file_attest_proto_msgTypes[3]
+	mi := &file_layr_attest_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -596,7 +597,7 @@ func (x *PlatformState) String() string {
 func (*PlatformState) ProtoMessage() {}
 
 func (x *PlatformState) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[3]
+	mi := &file_layr_attest_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -609,7 +610,7 @@ func (x *PlatformState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlatformState.ProtoReflect.Descriptor instead.
 func (*PlatformState) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{3}
+	return file_layr_attest_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *PlatformState) GetFirmware() isPlatformState_Firmware {
@@ -681,7 +682,7 @@ type GrubFile struct {
 
 func (x *GrubFile) Reset() {
 	*x = GrubFile{}
-	mi := &file_attest_proto_msgTypes[4]
+	mi := &file_layr_attest_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -693,7 +694,7 @@ func (x *GrubFile) String() string {
 func (*GrubFile) ProtoMessage() {}
 
 func (x *GrubFile) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[4]
+	mi := &file_layr_attest_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -706,7 +707,7 @@ func (x *GrubFile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GrubFile.ProtoReflect.Descriptor instead.
 func (*GrubFile) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{4}
+	return file_layr_attest_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *GrubFile) GetDigest() []byte {
@@ -736,7 +737,7 @@ type GrubState struct {
 
 func (x *GrubState) Reset() {
 	*x = GrubState{}
-	mi := &file_attest_proto_msgTypes[5]
+	mi := &file_layr_attest_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -748,7 +749,7 @@ func (x *GrubState) String() string {
 func (*GrubState) ProtoMessage() {}
 
 func (x *GrubState) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[5]
+	mi := &file_layr_attest_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -761,7 +762,7 @@ func (x *GrubState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GrubState.ProtoReflect.Descriptor instead.
 func (*GrubState) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{5}
+	return file_layr_attest_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *GrubState) GetFiles() []*GrubFile {
@@ -791,7 +792,7 @@ type LinuxKernelState struct {
 
 func (x *LinuxKernelState) Reset() {
 	*x = LinuxKernelState{}
-	mi := &file_attest_proto_msgTypes[6]
+	mi := &file_layr_attest_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -803,7 +804,7 @@ func (x *LinuxKernelState) String() string {
 func (*LinuxKernelState) ProtoMessage() {}
 
 func (x *LinuxKernelState) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[6]
+	mi := &file_layr_attest_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -816,7 +817,7 @@ func (x *LinuxKernelState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinuxKernelState.ProtoReflect.Descriptor instead.
 func (*LinuxKernelState) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{6}
+	return file_layr_attest_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *LinuxKernelState) GetCommandLine() string {
@@ -848,7 +849,7 @@ type Event struct {
 
 func (x *Event) Reset() {
 	*x = Event{}
-	mi := &file_attest_proto_msgTypes[7]
+	mi := &file_layr_attest_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -860,7 +861,7 @@ func (x *Event) String() string {
 func (*Event) ProtoMessage() {}
 
 func (x *Event) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[7]
+	mi := &file_layr_attest_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -873,7 +874,7 @@ func (x *Event) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Event.ProtoReflect.Descriptor instead.
 func (*Event) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{7}
+	return file_layr_attest_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Event) GetPcrIndex() uint32 {
@@ -928,7 +929,7 @@ type Certificate struct {
 
 func (x *Certificate) Reset() {
 	*x = Certificate{}
-	mi := &file_attest_proto_msgTypes[8]
+	mi := &file_layr_attest_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -940,7 +941,7 @@ func (x *Certificate) String() string {
 func (*Certificate) ProtoMessage() {}
 
 func (x *Certificate) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[8]
+	mi := &file_layr_attest_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -953,7 +954,7 @@ func (x *Certificate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Certificate.ProtoReflect.Descriptor instead.
 func (*Certificate) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{8}
+	return file_layr_attest_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Certificate) GetRepresentation() isCertificate_Representation {
@@ -991,7 +992,7 @@ type Certificate_Der struct {
 }
 
 type Certificate_WellKnown struct {
-	WellKnown WellKnownCertificate `protobuf:"varint,2,opt,name=well_known,json=wellKnown,proto3,enum=attest.WellKnownCertificate,oneof"`
+	WellKnown WellKnownCertificate `protobuf:"varint,2,opt,name=well_known,json=wellKnown,proto3,enum=layr_attest.WellKnownCertificate,oneof"`
 }
 
 func (*Certificate_Der) isCertificate_Representation() {}
@@ -1010,7 +1011,7 @@ type Database struct {
 
 func (x *Database) Reset() {
 	*x = Database{}
-	mi := &file_attest_proto_msgTypes[9]
+	mi := &file_layr_attest_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1022,7 +1023,7 @@ func (x *Database) String() string {
 func (*Database) ProtoMessage() {}
 
 func (x *Database) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[9]
+	mi := &file_layr_attest_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1035,7 +1036,7 @@ func (x *Database) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Database.ProtoReflect.Descriptor instead.
 func (*Database) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{9}
+	return file_layr_attest_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Database) GetCerts() []*Certificate {
@@ -1074,7 +1075,7 @@ type SecureBootState struct {
 
 func (x *SecureBootState) Reset() {
 	*x = SecureBootState{}
-	mi := &file_attest_proto_msgTypes[10]
+	mi := &file_layr_attest_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1086,7 +1087,7 @@ func (x *SecureBootState) String() string {
 func (*SecureBootState) ProtoMessage() {}
 
 func (x *SecureBootState) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[10]
+	mi := &file_layr_attest_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1099,7 +1100,7 @@ func (x *SecureBootState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SecureBootState.ProtoReflect.Descriptor instead.
 func (*SecureBootState) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{10}
+	return file_layr_attest_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *SecureBootState) GetEnabled() bool {
@@ -1150,7 +1151,7 @@ type ContainerState struct {
 	// Digest of the registry's image manifest, which contains a list of the
 	// layers comprising the image.
 	ImageDigest   string        `protobuf:"bytes,2,opt,name=image_digest,json=imageDigest,proto3" json:"image_digest,omitempty"`
-	RestartPolicy RestartPolicy `protobuf:"varint,3,opt,name=restart_policy,json=restartPolicy,proto3,enum=attest.RestartPolicy" json:"restart_policy,omitempty"`
+	RestartPolicy RestartPolicy `protobuf:"varint,3,opt,name=restart_policy,json=restartPolicy,proto3,enum=layr_attest.RestartPolicy" json:"restart_policy,omitempty"`
 	// Digest of the local image configuration object, containing config items
 	// such as local layer digests.
 	ImageId string            `protobuf:"bytes,4,opt,name=image_id,json=imageId,proto3" json:"image_id,omitempty"`
@@ -1166,7 +1167,7 @@ type ContainerState struct {
 
 func (x *ContainerState) Reset() {
 	*x = ContainerState{}
-	mi := &file_attest_proto_msgTypes[11]
+	mi := &file_layr_attest_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1178,7 +1179,7 @@ func (x *ContainerState) String() string {
 func (*ContainerState) ProtoMessage() {}
 
 func (x *ContainerState) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[11]
+	mi := &file_layr_attest_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1191,7 +1192,7 @@ func (x *ContainerState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContainerState.ProtoReflect.Descriptor instead.
 func (*ContainerState) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{11}
+	return file_layr_attest_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ContainerState) GetImageReference() string {
@@ -1261,7 +1262,7 @@ type SemanticVersion struct {
 
 func (x *SemanticVersion) Reset() {
 	*x = SemanticVersion{}
-	mi := &file_attest_proto_msgTypes[12]
+	mi := &file_layr_attest_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1273,7 +1274,7 @@ func (x *SemanticVersion) String() string {
 func (*SemanticVersion) ProtoMessage() {}
 
 func (x *SemanticVersion) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[12]
+	mi := &file_layr_attest_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1286,7 +1287,7 @@ func (x *SemanticVersion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SemanticVersion.ProtoReflect.Descriptor instead.
 func (*SemanticVersion) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{12}
+	return file_layr_attest_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *SemanticVersion) GetMajor() uint32 {
@@ -1320,7 +1321,7 @@ type HealthMonitoringState struct {
 
 func (x *HealthMonitoringState) Reset() {
 	*x = HealthMonitoringState{}
-	mi := &file_attest_proto_msgTypes[13]
+	mi := &file_layr_attest_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1332,7 +1333,7 @@ func (x *HealthMonitoringState) String() string {
 func (*HealthMonitoringState) ProtoMessage() {}
 
 func (x *HealthMonitoringState) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[13]
+	mi := &file_layr_attest_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1345,7 +1346,7 @@ func (x *HealthMonitoringState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthMonitoringState.ProtoReflect.Descriptor instead.
 func (*HealthMonitoringState) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{13}
+	return file_layr_attest_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *HealthMonitoringState) GetMemoryEnabled() bool {
@@ -1358,14 +1359,14 @@ func (x *HealthMonitoringState) GetMemoryEnabled() bool {
 type GpuDeviceState struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Whether Confidential Computing mode is enabled for GPU.
-	CcMode        GPUDeviceCCMode `protobuf:"varint,1,opt,name=cc_mode,json=ccMode,proto3,enum=attest.GPUDeviceCCMode" json:"cc_mode,omitempty"`
+	CcMode        GPUDeviceCCMode `protobuf:"varint,1,opt,name=cc_mode,json=ccMode,proto3,enum=layr_attest.GPUDeviceCCMode" json:"cc_mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GpuDeviceState) Reset() {
 	*x = GpuDeviceState{}
-	mi := &file_attest_proto_msgTypes[14]
+	mi := &file_layr_attest_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1377,7 +1378,7 @@ func (x *GpuDeviceState) String() string {
 func (*GpuDeviceState) ProtoMessage() {}
 
 func (x *GpuDeviceState) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[14]
+	mi := &file_layr_attest_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1390,7 +1391,7 @@ func (x *GpuDeviceState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GpuDeviceState.ProtoReflect.Descriptor instead.
 func (*GpuDeviceState) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{14}
+	return file_layr_attest_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *GpuDeviceState) GetCcMode() GPUDeviceCCMode {
@@ -1413,7 +1414,7 @@ type AttestedCosState struct {
 
 func (x *AttestedCosState) Reset() {
 	*x = AttestedCosState{}
-	mi := &file_attest_proto_msgTypes[15]
+	mi := &file_layr_attest_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1425,7 +1426,7 @@ func (x *AttestedCosState) String() string {
 func (*AttestedCosState) ProtoMessage() {}
 
 func (x *AttestedCosState) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[15]
+	mi := &file_layr_attest_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1438,7 +1439,7 @@ func (x *AttestedCosState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttestedCosState.ProtoReflect.Descriptor instead.
 func (*AttestedCosState) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{15}
+	return file_layr_attest_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *AttestedCosState) GetContainer() *ContainerState {
@@ -1486,7 +1487,7 @@ type EfiApp struct {
 
 func (x *EfiApp) Reset() {
 	*x = EfiApp{}
-	mi := &file_attest_proto_msgTypes[16]
+	mi := &file_layr_attest_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1498,7 +1499,7 @@ func (x *EfiApp) String() string {
 func (*EfiApp) ProtoMessage() {}
 
 func (x *EfiApp) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[16]
+	mi := &file_layr_attest_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1511,7 +1512,7 @@ func (x *EfiApp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EfiApp.ProtoReflect.Descriptor instead.
 func (*EfiApp) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{16}
+	return file_layr_attest_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *EfiApp) GetDigest() []byte {
@@ -1536,7 +1537,7 @@ type EfiState struct {
 
 func (x *EfiState) Reset() {
 	*x = EfiState{}
-	mi := &file_attest_proto_msgTypes[17]
+	mi := &file_layr_attest_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1548,7 +1549,7 @@ func (x *EfiState) String() string {
 func (*EfiState) ProtoMessage() {}
 
 func (x *EfiState) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[17]
+	mi := &file_layr_attest_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1561,7 +1562,7 @@ func (x *EfiState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EfiState.ProtoReflect.Descriptor instead.
 func (*EfiState) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{17}
+	return file_layr_attest_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *EfiState) GetApps() []*EfiApp {
@@ -1582,7 +1583,7 @@ type MachineState struct {
 	// The hash algorithm used when verifying the Attestation. This indicates:
 	//   - which PCR bank was used for for quote validation and event log replay
 	//   - the hash algorithm used to calculate event digests
-	Hash        tpm.HashAlgo      `protobuf:"varint,4,opt,name=hash,proto3,enum=tpm.HashAlgo" json:"hash,omitempty"`
+	Hash        tpm.HashAlgo      `protobuf:"varint,4,opt,name=hash,proto3,enum=layr_tpm.HashAlgo" json:"hash,omitempty"`
 	Grub        *GrubState        `protobuf:"bytes,5,opt,name=grub,proto3" json:"grub,omitempty"`
 	LinuxKernel *LinuxKernelState `protobuf:"bytes,6,opt,name=linux_kernel,json=linuxKernel,proto3" json:"linux_kernel,omitempty"`
 	Cos         *AttestedCosState `protobuf:"bytes,7,opt,name=cos,proto3" json:"cos,omitempty"`
@@ -1601,7 +1602,7 @@ type MachineState struct {
 
 func (x *MachineState) Reset() {
 	*x = MachineState{}
-	mi := &file_attest_proto_msgTypes[18]
+	mi := &file_layr_attest_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1613,7 +1614,7 @@ func (x *MachineState) String() string {
 func (*MachineState) ProtoMessage() {}
 
 func (x *MachineState) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[18]
+	mi := &file_layr_attest_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1626,7 +1627,7 @@ func (x *MachineState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MachineState.ProtoReflect.Descriptor instead.
 func (*MachineState) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{18}
+	return file_layr_attest_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *MachineState) GetPlatform() *PlatformState {
@@ -1738,14 +1739,14 @@ type PlatformPolicy struct {
 	MinimumGceFirmwareVersion uint32 `protobuf:"varint,2,opt,name=minimum_gce_firmware_version,json=minimumGceFirmwareVersion,proto3" json:"minimum_gce_firmware_version,omitempty"`
 	// The PlatformState's technology must be at least as secure as
 	// the specified minimum_technology (i.e. AMD_SEV_ES > AMD_SEV > NONE).
-	MinimumTechnology GCEConfidentialTechnology `protobuf:"varint,3,opt,name=minimum_technology,json=minimumTechnology,proto3,enum=attest.GCEConfidentialTechnology" json:"minimum_technology,omitempty"`
+	MinimumTechnology GCEConfidentialTechnology `protobuf:"varint,3,opt,name=minimum_technology,json=minimumTechnology,proto3,enum=layr_attest.GCEConfidentialTechnology" json:"minimum_technology,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
 
 func (x *PlatformPolicy) Reset() {
 	*x = PlatformPolicy{}
-	mi := &file_attest_proto_msgTypes[19]
+	mi := &file_layr_attest_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1757,7 +1758,7 @@ func (x *PlatformPolicy) String() string {
 func (*PlatformPolicy) ProtoMessage() {}
 
 func (x *PlatformPolicy) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[19]
+	mi := &file_layr_attest_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1770,7 +1771,7 @@ func (x *PlatformPolicy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlatformPolicy.ProtoReflect.Descriptor instead.
 func (*PlatformPolicy) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{19}
+	return file_layr_attest_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *PlatformPolicy) GetAllowedScrtmVersionIds() [][]byte {
@@ -1814,7 +1815,7 @@ type RIMPolicy struct {
 
 func (x *RIMPolicy) Reset() {
 	*x = RIMPolicy{}
-	mi := &file_attest_proto_msgTypes[20]
+	mi := &file_layr_attest_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1826,7 +1827,7 @@ func (x *RIMPolicy) String() string {
 func (*RIMPolicy) ProtoMessage() {}
 
 func (x *RIMPolicy) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[20]
+	mi := &file_layr_attest_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1839,7 +1840,7 @@ func (x *RIMPolicy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RIMPolicy.ProtoReflect.Descriptor instead.
 func (*RIMPolicy) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{20}
+	return file_layr_attest_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *RIMPolicy) GetRequireSigned() bool {
@@ -1868,7 +1869,7 @@ type SevSnpPolicy struct {
 
 func (x *SevSnpPolicy) Reset() {
 	*x = SevSnpPolicy{}
-	mi := &file_attest_proto_msgTypes[21]
+	mi := &file_layr_attest_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1880,7 +1881,7 @@ func (x *SevSnpPolicy) String() string {
 func (*SevSnpPolicy) ProtoMessage() {}
 
 func (x *SevSnpPolicy) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[21]
+	mi := &file_layr_attest_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1893,7 +1894,7 @@ func (x *SevSnpPolicy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SevSnpPolicy.ProtoReflect.Descriptor instead.
 func (*SevSnpPolicy) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{21}
+	return file_layr_attest_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *SevSnpPolicy) GetUefi() *RIMPolicy {
@@ -1916,7 +1917,7 @@ type Policy struct {
 
 func (x *Policy) Reset() {
 	*x = Policy{}
-	mi := &file_attest_proto_msgTypes[22]
+	mi := &file_layr_attest_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1928,7 +1929,7 @@ func (x *Policy) String() string {
 func (*Policy) ProtoMessage() {}
 
 func (x *Policy) ProtoReflect() protoreflect.Message {
-	mi := &file_attest_proto_msgTypes[22]
+	mi := &file_layr_attest_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1941,7 +1942,7 @@ func (x *Policy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Policy.ProtoReflect.Descriptor instead.
 func (*Policy) Descriptor() ([]byte, []int) {
-	return file_attest_proto_rawDescGZIP(), []int{22}
+	return file_layr_attest_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *Policy) GetPlatform() *PlatformPolicy {
@@ -1958,11 +1959,11 @@ func (x *Policy) GetSevSnp() *SevSnpPolicy {
 	return nil
 }
 
-var File_attest_proto protoreflect.FileDescriptor
+var File_layr_attest_proto protoreflect.FileDescriptor
 
-const file_attest_proto_rawDesc = "" +
+const file_layr_attest_proto_rawDesc = "" +
 	"\n" +
-	"\fattest.proto\x12\x06attest\x1a\x12proto/sevsnp.proto\x1a\x0fproto/tdx.proto\x1a\ttpm.proto\"\xb1\x01\n" +
+	"\x11layr_attest.proto\x12\vlayr_attest\x1a\x12proto/sevsnp.proto\x1a\x0fproto/tdx.proto\x1a\x0elayr_tpm.proto\"\xb1\x01\n" +
 	"\x0fGCEInstanceInfo\x12\x12\n" +
 	"\x04zone\x18\x01 \x01(\tR\x04zone\x12\x1d\n" +
 	"\n" +
@@ -1970,40 +1971,39 @@ const file_attest_proto_rawDesc = "" +
 	"\x0eproject_number\x18\x03 \x01(\x04R\rprojectNumber\x12#\n" +
 	"\rinstance_name\x18\x04 \x01(\tR\finstanceName\x12\x1f\n" +
 	"\vinstance_id\x18\x05 \x01(\x04R\n" +
-	"instanceId\"\xae\x03\n" +
+	"instanceId\"\xb8\x03\n" +
 	"\vAttestation\x12\x15\n" +
-	"\x06ak_pub\x18\x01 \x01(\fR\x05akPub\x12\"\n" +
-	"\x06quotes\x18\x02 \x03(\v2\n" +
-	".tpm.QuoteR\x06quotes\x12\x1b\n" +
-	"\tevent_log\x18\x03 \x01(\fR\beventLog\x12<\n" +
-	"\rinstance_info\x18\x04 \x01(\v2\x17.attest.GCEInstanceInfoR\finstanceInfo\x12.\n" +
+	"\x06ak_pub\x18\x01 \x01(\fR\x05akPub\x12'\n" +
+	"\x06quotes\x18\x02 \x03(\v2\x0f.layr_tpm.QuoteR\x06quotes\x12\x1b\n" +
+	"\tevent_log\x18\x03 \x01(\fR\beventLog\x12A\n" +
+	"\rinstance_info\x18\x04 \x01(\v2\x1c.layr_attest.GCEInstanceInfoR\finstanceInfo\x12.\n" +
 	"\x13canonical_event_log\x18\x05 \x01(\fR\x11canonicalEventLog\x12\x17\n" +
 	"\aak_cert\x18\x06 \x01(\fR\x06akCert\x12-\n" +
 	"\x12intermediate_certs\x18\a \x03(\fR\x11intermediateCerts\x12E\n" +
 	"\x13sev_snp_attestation\x18\b \x01(\v2\x13.sevsnp.AttestationH\x00R\x11sevSnpAttestation\x127\n" +
 	"\x0ftdx_attestation\x18\t \x01(\v2\f.tdx.QuoteV4H\x00R\x0etdxAttestationB\x11\n" +
-	"\x0ftee_attestation\"\xb9\x02\n" +
-	"\x15SevSnpSvsmAttestation\x125\n" +
-	"\vattestation\x18\x01 \x01(\v2\x13.attest.AttestationR\vattestation\x12C\n" +
+	"\x0ftee_attestation\"\xbe\x02\n" +
+	"\x15SevSnpSvsmAttestation\x12:\n" +
+	"\vattestation\x18\x01 \x01(\v2\x18.layr_attest.AttestationR\vattestation\x12C\n" +
 	"\x13sev_snp_attestation\x18\x02 \x01(\v2\x13.sevsnp.AttestationR\x11sevSnpAttestation\x122\n" +
 	"\x15vtpm_service_manifest\x18\x03 \x01(\fR\x13vtpmServiceManifest\x12A\n" +
 	"\x1dvtpm_service_manifest_version\x18\x04 \x01(\tR\x1avtpmServiceManifestVersion\x12-\n" +
-	"\x12launch_endorsement\x18\x05 \x01(\fR\x11launchEndorsement\"\xeb\x01\n" +
+	"\x12launch_endorsement\x18\x05 \x01(\fR\x11launchEndorsement\"\xf5\x01\n" +
 	"\rPlatformState\x12*\n" +
 	"\x10scrtm_version_id\x18\x01 \x01(\fH\x00R\x0escrtmVersionId\x12!\n" +
 	"\vgce_version\x18\x02 \x01(\rH\x00R\n" +
-	"gceVersion\x12A\n" +
+	"gceVersion\x12F\n" +
 	"\n" +
-	"technology\x18\x03 \x01(\x0e2!.attest.GCEConfidentialTechnologyR\n" +
-	"technology\x12<\n" +
-	"\rinstance_info\x18\x04 \x01(\v2\x17.attest.GCEInstanceInfoR\finstanceInfoB\n" +
+	"technology\x18\x03 \x01(\x0e2&.layr_attest.GCEConfidentialTechnologyR\n" +
+	"technology\x12A\n" +
+	"\rinstance_info\x18\x04 \x01(\v2\x1c.layr_attest.GCEInstanceInfoR\finstanceInfoB\n" +
 	"\n" +
 	"\bfirmware\"Q\n" +
 	"\bGrubFile\x12\x16\n" +
 	"\x06digest\x18\x01 \x01(\fR\x06digest\x12-\n" +
-	"\x12untrusted_filename\x18\x02 \x01(\fR\x11untrustedFilename\"O\n" +
-	"\tGrubState\x12&\n" +
-	"\x05files\x18\x01 \x03(\v2\x10.attest.GrubFileR\x05files\x12\x1a\n" +
+	"\x12untrusted_filename\x18\x02 \x01(\fR\x11untrustedFilename\"T\n" +
+	"\tGrubState\x12+\n" +
+	"\x05files\x18\x01 \x03(\v2\x15.layr_attest.GrubFileR\x05files\x12\x1a\n" +
 	"\bcommands\x18\x02 \x03(\tR\bcommands\"5\n" +
 	"\x10LinuxKernelState\x12!\n" +
 	"\fcommand_line\x18\x01 \x01(\tR\vcommandLine\"\xa0\x01\n" +
@@ -2012,31 +2012,31 @@ const file_attest_proto_rawDesc = "" +
 	"\x0euntrusted_type\x18\x02 \x01(\rR\runtrustedType\x12\x12\n" +
 	"\x04data\x18\x03 \x01(\fR\x04data\x12\x16\n" +
 	"\x06digest\x18\x04 \x01(\fR\x06digest\x12'\n" +
-	"\x0fdigest_verified\x18\x05 \x01(\bR\x0edigestVerified\"r\n" +
+	"\x0fdigest_verified\x18\x05 \x01(\bR\x0edigestVerified\"w\n" +
 	"\vCertificate\x12\x12\n" +
-	"\x03der\x18\x01 \x01(\fH\x00R\x03der\x12=\n" +
+	"\x03der\x18\x01 \x01(\fH\x00R\x03der\x12B\n" +
 	"\n" +
-	"well_known\x18\x02 \x01(\x0e2\x1c.attest.WellKnownCertificateH\x00R\twellKnownB\x10\n" +
-	"\x0erepresentation\"M\n" +
-	"\bDatabase\x12)\n" +
-	"\x05certs\x18\x01 \x03(\v2\x13.attest.CertificateR\x05certs\x12\x16\n" +
-	"\x06hashes\x18\x02 \x03(\fR\x06hashes\"\xe7\x01\n" +
+	"well_known\x18\x02 \x01(\x0e2!.layr_attest.WellKnownCertificateH\x00R\twellKnownB\x10\n" +
+	"\x0erepresentation\"R\n" +
+	"\bDatabase\x12.\n" +
+	"\x05certs\x18\x01 \x03(\v2\x18.layr_attest.CertificateR\x05certs\x12\x16\n" +
+	"\x06hashes\x18\x02 \x03(\fR\x06hashes\"\x80\x02\n" +
 	"\x0fSecureBootState\x12\x18\n" +
-	"\aenabled\x18\x01 \x01(\bR\aenabled\x12 \n" +
-	"\x02db\x18\x02 \x01(\v2\x10.attest.DatabaseR\x02db\x12\"\n" +
-	"\x03dbx\x18\x03 \x01(\v2\x10.attest.DatabaseR\x03dbx\x12.\n" +
-	"\tauthority\x18\x04 \x01(\v2\x10.attest.DatabaseR\tauthority\x12 \n" +
-	"\x02pk\x18\x05 \x01(\v2\x10.attest.DatabaseR\x02pk\x12\"\n" +
-	"\x03kek\x18\x06 \x01(\v2\x10.attest.DatabaseR\x03kek\"\x93\x04\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\x12%\n" +
+	"\x02db\x18\x02 \x01(\v2\x15.layr_attest.DatabaseR\x02db\x12'\n" +
+	"\x03dbx\x18\x03 \x01(\v2\x15.layr_attest.DatabaseR\x03dbx\x123\n" +
+	"\tauthority\x18\x04 \x01(\v2\x15.layr_attest.DatabaseR\tauthority\x12%\n" +
+	"\x02pk\x18\x05 \x01(\v2\x15.layr_attest.DatabaseR\x02pk\x12'\n" +
+	"\x03kek\x18\x06 \x01(\v2\x15.layr_attest.DatabaseR\x03kek\"\xa2\x04\n" +
 	"\x0eContainerState\x12'\n" +
 	"\x0fimage_reference\x18\x01 \x01(\tR\x0eimageReference\x12!\n" +
-	"\fimage_digest\x18\x02 \x01(\tR\vimageDigest\x12<\n" +
-	"\x0erestart_policy\x18\x03 \x01(\x0e2\x15.attest.RestartPolicyR\rrestartPolicy\x12\x19\n" +
+	"\fimage_digest\x18\x02 \x01(\tR\vimageDigest\x12A\n" +
+	"\x0erestart_policy\x18\x03 \x01(\x0e2\x1a.layr_attest.RestartPolicyR\rrestartPolicy\x12\x19\n" +
 	"\bimage_id\x18\x04 \x01(\tR\aimageId\x12\x12\n" +
-	"\x04args\x18\x05 \x03(\tR\x04args\x12>\n" +
-	"\benv_vars\x18\x06 \x03(\v2#.attest.ContainerState.EnvVarsEntryR\aenvVars\x12'\n" +
-	"\x0foverridden_args\x18\a \x03(\tR\x0eoverriddenArgs\x12]\n" +
-	"\x13overridden_env_vars\x18\b \x03(\v2-.attest.ContainerState.OverriddenEnvVarsEntryR\x11overriddenEnvVars\x1a:\n" +
+	"\x04args\x18\x05 \x03(\tR\x04args\x12C\n" +
+	"\benv_vars\x18\x06 \x03(\v2(.layr_attest.ContainerState.EnvVarsEntryR\aenvVars\x12'\n" +
+	"\x0foverridden_args\x18\a \x03(\tR\x0eoverriddenArgs\x12b\n" +
+	"\x13overridden_env_vars\x18\b \x03(\v22.layr_attest.ContainerState.OverriddenEnvVarsEntryR\x11overriddenEnvVars\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aD\n" +
@@ -2049,48 +2049,48 @@ const file_attest_proto_rawDesc = "" +
 	"\x05patch\x18\x03 \x01(\rR\x05patch\"V\n" +
 	"\x15HealthMonitoringState\x12*\n" +
 	"\x0ememory_enabled\x18\x01 \x01(\bH\x00R\rmemoryEnabled\x88\x01\x01B\x11\n" +
-	"\x0f_memory_enabled\"B\n" +
-	"\x0eGpuDeviceState\x120\n" +
-	"\acc_mode\x18\x01 \x01(\x0e2\x17.attest.GPUDeviceCCModeR\x06ccMode\"\xd4\x02\n" +
-	"\x10AttestedCosState\x124\n" +
-	"\tcontainer\x18\x01 \x01(\v2\x16.attest.ContainerStateR\tcontainer\x128\n" +
-	"\vcos_version\x18\x02 \x01(\v2\x17.attest.SemanticVersionR\n" +
-	"cosVersion\x12B\n" +
-	"\x10launcher_version\x18\x03 \x01(\v2\x17.attest.SemanticVersionR\x0flauncherVersion\x12J\n" +
-	"\x11health_monitoring\x18\x04 \x01(\v2\x1d.attest.HealthMonitoringStateR\x10healthMonitoring\x12@\n" +
-	"\x10gpu_device_state\x18\x05 \x01(\v2\x16.attest.GpuDeviceStateR\x0egpuDeviceState\" \n" +
+	"\x0f_memory_enabled\"G\n" +
+	"\x0eGpuDeviceState\x125\n" +
+	"\acc_mode\x18\x01 \x01(\x0e2\x1c.layr_attest.GPUDeviceCCModeR\x06ccMode\"\xed\x02\n" +
+	"\x10AttestedCosState\x129\n" +
+	"\tcontainer\x18\x01 \x01(\v2\x1b.layr_attest.ContainerStateR\tcontainer\x12=\n" +
+	"\vcos_version\x18\x02 \x01(\v2\x1c.layr_attest.SemanticVersionR\n" +
+	"cosVersion\x12G\n" +
+	"\x10launcher_version\x18\x03 \x01(\v2\x1c.layr_attest.SemanticVersionR\x0flauncherVersion\x12O\n" +
+	"\x11health_monitoring\x18\x04 \x01(\v2\".layr_attest.HealthMonitoringStateR\x10healthMonitoring\x12E\n" +
+	"\x10gpu_device_state\x18\x05 \x01(\v2\x1b.layr_attest.GpuDeviceStateR\x0egpuDeviceState\" \n" +
 	"\x06EfiApp\x12\x16\n" +
-	"\x06digest\x18\x01 \x01(\fR\x06digest\".\n" +
-	"\bEfiState\x12\"\n" +
-	"\x04apps\x18\x01 \x03(\v2\x0e.attest.EfiAppR\x04apps\"\x93\x04\n" +
-	"\fMachineState\x121\n" +
-	"\bplatform\x18\x01 \x01(\v2\x15.attest.PlatformStateR\bplatform\x128\n" +
-	"\vsecure_boot\x18\x02 \x01(\v2\x17.attest.SecureBootStateR\n" +
-	"secureBoot\x12,\n" +
+	"\x06digest\x18\x01 \x01(\fR\x06digest\"3\n" +
+	"\bEfiState\x12'\n" +
+	"\x04apps\x18\x01 \x03(\v2\x13.layr_attest.EfiAppR\x04apps\"\xbb\x04\n" +
+	"\fMachineState\x126\n" +
+	"\bplatform\x18\x01 \x01(\v2\x1a.layr_attest.PlatformStateR\bplatform\x12=\n" +
+	"\vsecure_boot\x18\x02 \x01(\v2\x1c.layr_attest.SecureBootStateR\n" +
+	"secureBoot\x121\n" +
 	"\n" +
-	"raw_events\x18\x03 \x03(\v2\r.attest.EventR\trawEvents\x12!\n" +
-	"\x04hash\x18\x04 \x01(\x0e2\r.tpm.HashAlgoR\x04hash\x12%\n" +
-	"\x04grub\x18\x05 \x01(\v2\x11.attest.GrubStateR\x04grub\x12;\n" +
-	"\flinux_kernel\x18\x06 \x01(\v2\x18.attest.LinuxKernelStateR\vlinuxKernel\x12*\n" +
-	"\x03cos\x18\a \x01(\v2\x18.attest.AttestedCosStateR\x03cos\x12\"\n" +
-	"\x03efi\x18\b \x01(\v2\x10.attest.EfiStateR\x03efi\x12E\n" +
+	"raw_events\x18\x03 \x03(\v2\x12.layr_attest.EventR\trawEvents\x12&\n" +
+	"\x04hash\x18\x04 \x01(\x0e2\x12.layr_tpm.HashAlgoR\x04hash\x12*\n" +
+	"\x04grub\x18\x05 \x01(\v2\x16.layr_attest.GrubStateR\x04grub\x12@\n" +
+	"\flinux_kernel\x18\x06 \x01(\v2\x1d.layr_attest.LinuxKernelStateR\vlinuxKernel\x12/\n" +
+	"\x03cos\x18\a \x01(\v2\x1d.layr_attest.AttestedCosStateR\x03cos\x12'\n" +
+	"\x03efi\x18\b \x01(\v2\x15.layr_attest.EfiStateR\x03efi\x12E\n" +
 	"\x13sev_snp_attestation\x18\t \x01(\v2\x13.sevsnp.AttestationH\x00R\x11sevSnpAttestation\x127\n" +
 	"\x0ftdx_attestation\x18\n" +
 	" \x01(\v2\f.tdx.QuoteV4H\x00R\x0etdxAttestationB\x11\n" +
-	"\x0ftee_attestation\"\xde\x01\n" +
+	"\x0ftee_attestation\"\xe3\x01\n" +
 	"\x0ePlatformPolicy\x129\n" +
 	"\x19allowed_scrtm_version_ids\x18\x01 \x03(\fR\x16allowedScrtmVersionIds\x12?\n" +
-	"\x1cminimum_gce_firmware_version\x18\x02 \x01(\rR\x19minimumGceFirmwareVersion\x12P\n" +
-	"\x12minimum_technology\x18\x03 \x01(\x0e2!.attest.GCEConfidentialTechnologyR\x11minimumTechnology\"Q\n" +
+	"\x1cminimum_gce_firmware_version\x18\x02 \x01(\rR\x19minimumGceFirmwareVersion\x12U\n" +
+	"\x12minimum_technology\x18\x03 \x01(\x0e2&.layr_attest.GCEConfidentialTechnologyR\x11minimumTechnology\"Q\n" +
 	"\tRIMPolicy\x12%\n" +
 	"\x0erequire_signed\x18\x01 \x01(\bR\rrequireSigned\x12\x1d\n" +
 	"\n" +
-	"root_certs\x18\x02 \x03(\fR\trootCerts\"5\n" +
-	"\fSevSnpPolicy\x12%\n" +
-	"\x04uefi\x18\x01 \x01(\v2\x11.attest.RIMPolicyR\x04uefi\"k\n" +
-	"\x06Policy\x122\n" +
-	"\bplatform\x18\x01 \x01(\v2\x16.attest.PlatformPolicyR\bplatform\x12-\n" +
-	"\asev_snp\x18\x03 \x01(\v2\x14.attest.SevSnpPolicyR\x06sevSnp*b\n" +
+	"root_certs\x18\x02 \x03(\fR\trootCerts\":\n" +
+	"\fSevSnpPolicy\x12*\n" +
+	"\x04uefi\x18\x01 \x01(\v2\x16.layr_attest.RIMPolicyR\x04uefi\"u\n" +
+	"\x06Policy\x127\n" +
+	"\bplatform\x18\x01 \x01(\v2\x1b.layr_attest.PlatformPolicyR\bplatform\x122\n" +
+	"\asev_snp\x18\x03 \x01(\v2\x19.layr_attest.SevSnpPolicyR\x06sevSnp*b\n" +
 	"\x19GCEConfidentialTechnology\x12\b\n" +
 	"\x04NONE\x10\x00\x12\v\n" +
 	"\aAMD_SEV\x10\x01\x12\x0e\n" +
@@ -2116,95 +2116,95 @@ const file_attest_proto_rawDesc = "" +
 	"\bDEVTOOLS\x10\x03B0Z.github.com/Layr-Labs/go-tpm-tools/proto/attestb\x06proto3"
 
 var (
-	file_attest_proto_rawDescOnce sync.Once
-	file_attest_proto_rawDescData []byte
+	file_layr_attest_proto_rawDescOnce sync.Once
+	file_layr_attest_proto_rawDescData []byte
 )
 
-func file_attest_proto_rawDescGZIP() []byte {
-	file_attest_proto_rawDescOnce.Do(func() {
-		file_attest_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_attest_proto_rawDesc), len(file_attest_proto_rawDesc)))
+func file_layr_attest_proto_rawDescGZIP() []byte {
+	file_layr_attest_proto_rawDescOnce.Do(func() {
+		file_layr_attest_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_layr_attest_proto_rawDesc), len(file_layr_attest_proto_rawDesc)))
 	})
-	return file_attest_proto_rawDescData
+	return file_layr_attest_proto_rawDescData
 }
 
-var file_attest_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_attest_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
-var file_attest_proto_goTypes = []any{
-	(GCEConfidentialTechnology)(0), // 0: attest.GCEConfidentialTechnology
-	(WellKnownCertificate)(0),      // 1: attest.WellKnownCertificate
-	(RestartPolicy)(0),             // 2: attest.RestartPolicy
-	(GPUDeviceCCMode)(0),           // 3: attest.GPUDeviceCCMode
-	(*GCEInstanceInfo)(nil),        // 4: attest.GCEInstanceInfo
-	(*Attestation)(nil),            // 5: attest.Attestation
-	(*SevSnpSvsmAttestation)(nil),  // 6: attest.SevSnpSvsmAttestation
-	(*PlatformState)(nil),          // 7: attest.PlatformState
-	(*GrubFile)(nil),               // 8: attest.GrubFile
-	(*GrubState)(nil),              // 9: attest.GrubState
-	(*LinuxKernelState)(nil),       // 10: attest.LinuxKernelState
-	(*Event)(nil),                  // 11: attest.Event
-	(*Certificate)(nil),            // 12: attest.Certificate
-	(*Database)(nil),               // 13: attest.Database
-	(*SecureBootState)(nil),        // 14: attest.SecureBootState
-	(*ContainerState)(nil),         // 15: attest.ContainerState
-	(*SemanticVersion)(nil),        // 16: attest.SemanticVersion
-	(*HealthMonitoringState)(nil),  // 17: attest.HealthMonitoringState
-	(*GpuDeviceState)(nil),         // 18: attest.GpuDeviceState
-	(*AttestedCosState)(nil),       // 19: attest.AttestedCosState
-	(*EfiApp)(nil),                 // 20: attest.EfiApp
-	(*EfiState)(nil),               // 21: attest.EfiState
-	(*MachineState)(nil),           // 22: attest.MachineState
-	(*PlatformPolicy)(nil),         // 23: attest.PlatformPolicy
-	(*RIMPolicy)(nil),              // 24: attest.RIMPolicy
-	(*SevSnpPolicy)(nil),           // 25: attest.SevSnpPolicy
-	(*Policy)(nil),                 // 26: attest.Policy
-	nil,                            // 27: attest.ContainerState.EnvVarsEntry
-	nil,                            // 28: attest.ContainerState.OverriddenEnvVarsEntry
-	(*tpm.Quote)(nil),              // 29: tpm.Quote
+var file_layr_attest_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_layr_attest_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_layr_attest_proto_goTypes = []any{
+	(GCEConfidentialTechnology)(0), // 0: layr_attest.GCEConfidentialTechnology
+	(WellKnownCertificate)(0),      // 1: layr_attest.WellKnownCertificate
+	(RestartPolicy)(0),             // 2: layr_attest.RestartPolicy
+	(GPUDeviceCCMode)(0),           // 3: layr_attest.GPUDeviceCCMode
+	(*GCEInstanceInfo)(nil),        // 4: layr_attest.GCEInstanceInfo
+	(*Attestation)(nil),            // 5: layr_attest.Attestation
+	(*SevSnpSvsmAttestation)(nil),  // 6: layr_attest.SevSnpSvsmAttestation
+	(*PlatformState)(nil),          // 7: layr_attest.PlatformState
+	(*GrubFile)(nil),               // 8: layr_attest.GrubFile
+	(*GrubState)(nil),              // 9: layr_attest.GrubState
+	(*LinuxKernelState)(nil),       // 10: layr_attest.LinuxKernelState
+	(*Event)(nil),                  // 11: layr_attest.Event
+	(*Certificate)(nil),            // 12: layr_attest.Certificate
+	(*Database)(nil),               // 13: layr_attest.Database
+	(*SecureBootState)(nil),        // 14: layr_attest.SecureBootState
+	(*ContainerState)(nil),         // 15: layr_attest.ContainerState
+	(*SemanticVersion)(nil),        // 16: layr_attest.SemanticVersion
+	(*HealthMonitoringState)(nil),  // 17: layr_attest.HealthMonitoringState
+	(*GpuDeviceState)(nil),         // 18: layr_attest.GpuDeviceState
+	(*AttestedCosState)(nil),       // 19: layr_attest.AttestedCosState
+	(*EfiApp)(nil),                 // 20: layr_attest.EfiApp
+	(*EfiState)(nil),               // 21: layr_attest.EfiState
+	(*MachineState)(nil),           // 22: layr_attest.MachineState
+	(*PlatformPolicy)(nil),         // 23: layr_attest.PlatformPolicy
+	(*RIMPolicy)(nil),              // 24: layr_attest.RIMPolicy
+	(*SevSnpPolicy)(nil),           // 25: layr_attest.SevSnpPolicy
+	(*Policy)(nil),                 // 26: layr_attest.Policy
+	nil,                            // 27: layr_attest.ContainerState.EnvVarsEntry
+	nil,                            // 28: layr_attest.ContainerState.OverriddenEnvVarsEntry
+	(*tpm.Quote)(nil),              // 29: layr_tpm.Quote
 	(*sevsnp.Attestation)(nil),     // 30: sevsnp.Attestation
 	(*tdx.QuoteV4)(nil),            // 31: tdx.QuoteV4
-	(tpm.HashAlgo)(0),              // 32: tpm.HashAlgo
+	(tpm.HashAlgo)(0),              // 32: layr_tpm.HashAlgo
 }
-var file_attest_proto_depIdxs = []int32{
-	29, // 0: attest.Attestation.quotes:type_name -> tpm.Quote
-	4,  // 1: attest.Attestation.instance_info:type_name -> attest.GCEInstanceInfo
-	30, // 2: attest.Attestation.sev_snp_attestation:type_name -> sevsnp.Attestation
-	31, // 3: attest.Attestation.tdx_attestation:type_name -> tdx.QuoteV4
-	5,  // 4: attest.SevSnpSvsmAttestation.attestation:type_name -> attest.Attestation
-	30, // 5: attest.SevSnpSvsmAttestation.sev_snp_attestation:type_name -> sevsnp.Attestation
-	0,  // 6: attest.PlatformState.technology:type_name -> attest.GCEConfidentialTechnology
-	4,  // 7: attest.PlatformState.instance_info:type_name -> attest.GCEInstanceInfo
-	8,  // 8: attest.GrubState.files:type_name -> attest.GrubFile
-	1,  // 9: attest.Certificate.well_known:type_name -> attest.WellKnownCertificate
-	12, // 10: attest.Database.certs:type_name -> attest.Certificate
-	13, // 11: attest.SecureBootState.db:type_name -> attest.Database
-	13, // 12: attest.SecureBootState.dbx:type_name -> attest.Database
-	13, // 13: attest.SecureBootState.authority:type_name -> attest.Database
-	13, // 14: attest.SecureBootState.pk:type_name -> attest.Database
-	13, // 15: attest.SecureBootState.kek:type_name -> attest.Database
-	2,  // 16: attest.ContainerState.restart_policy:type_name -> attest.RestartPolicy
-	27, // 17: attest.ContainerState.env_vars:type_name -> attest.ContainerState.EnvVarsEntry
-	28, // 18: attest.ContainerState.overridden_env_vars:type_name -> attest.ContainerState.OverriddenEnvVarsEntry
-	3,  // 19: attest.GpuDeviceState.cc_mode:type_name -> attest.GPUDeviceCCMode
-	15, // 20: attest.AttestedCosState.container:type_name -> attest.ContainerState
-	16, // 21: attest.AttestedCosState.cos_version:type_name -> attest.SemanticVersion
-	16, // 22: attest.AttestedCosState.launcher_version:type_name -> attest.SemanticVersion
-	17, // 23: attest.AttestedCosState.health_monitoring:type_name -> attest.HealthMonitoringState
-	18, // 24: attest.AttestedCosState.gpu_device_state:type_name -> attest.GpuDeviceState
-	20, // 25: attest.EfiState.apps:type_name -> attest.EfiApp
-	7,  // 26: attest.MachineState.platform:type_name -> attest.PlatformState
-	14, // 27: attest.MachineState.secure_boot:type_name -> attest.SecureBootState
-	11, // 28: attest.MachineState.raw_events:type_name -> attest.Event
-	32, // 29: attest.MachineState.hash:type_name -> tpm.HashAlgo
-	9,  // 30: attest.MachineState.grub:type_name -> attest.GrubState
-	10, // 31: attest.MachineState.linux_kernel:type_name -> attest.LinuxKernelState
-	19, // 32: attest.MachineState.cos:type_name -> attest.AttestedCosState
-	21, // 33: attest.MachineState.efi:type_name -> attest.EfiState
-	30, // 34: attest.MachineState.sev_snp_attestation:type_name -> sevsnp.Attestation
-	31, // 35: attest.MachineState.tdx_attestation:type_name -> tdx.QuoteV4
-	0,  // 36: attest.PlatformPolicy.minimum_technology:type_name -> attest.GCEConfidentialTechnology
-	24, // 37: attest.SevSnpPolicy.uefi:type_name -> attest.RIMPolicy
-	23, // 38: attest.Policy.platform:type_name -> attest.PlatformPolicy
-	25, // 39: attest.Policy.sev_snp:type_name -> attest.SevSnpPolicy
+var file_layr_attest_proto_depIdxs = []int32{
+	29, // 0: layr_attest.Attestation.quotes:type_name -> layr_tpm.Quote
+	4,  // 1: layr_attest.Attestation.instance_info:type_name -> layr_attest.GCEInstanceInfo
+	30, // 2: layr_attest.Attestation.sev_snp_attestation:type_name -> sevsnp.Attestation
+	31, // 3: layr_attest.Attestation.tdx_attestation:type_name -> tdx.QuoteV4
+	5,  // 4: layr_attest.SevSnpSvsmAttestation.attestation:type_name -> layr_attest.Attestation
+	30, // 5: layr_attest.SevSnpSvsmAttestation.sev_snp_attestation:type_name -> sevsnp.Attestation
+	0,  // 6: layr_attest.PlatformState.technology:type_name -> layr_attest.GCEConfidentialTechnology
+	4,  // 7: layr_attest.PlatformState.instance_info:type_name -> layr_attest.GCEInstanceInfo
+	8,  // 8: layr_attest.GrubState.files:type_name -> layr_attest.GrubFile
+	1,  // 9: layr_attest.Certificate.well_known:type_name -> layr_attest.WellKnownCertificate
+	12, // 10: layr_attest.Database.certs:type_name -> layr_attest.Certificate
+	13, // 11: layr_attest.SecureBootState.db:type_name -> layr_attest.Database
+	13, // 12: layr_attest.SecureBootState.dbx:type_name -> layr_attest.Database
+	13, // 13: layr_attest.SecureBootState.authority:type_name -> layr_attest.Database
+	13, // 14: layr_attest.SecureBootState.pk:type_name -> layr_attest.Database
+	13, // 15: layr_attest.SecureBootState.kek:type_name -> layr_attest.Database
+	2,  // 16: layr_attest.ContainerState.restart_policy:type_name -> layr_attest.RestartPolicy
+	27, // 17: layr_attest.ContainerState.env_vars:type_name -> layr_attest.ContainerState.EnvVarsEntry
+	28, // 18: layr_attest.ContainerState.overridden_env_vars:type_name -> layr_attest.ContainerState.OverriddenEnvVarsEntry
+	3,  // 19: layr_attest.GpuDeviceState.cc_mode:type_name -> layr_attest.GPUDeviceCCMode
+	15, // 20: layr_attest.AttestedCosState.container:type_name -> layr_attest.ContainerState
+	16, // 21: layr_attest.AttestedCosState.cos_version:type_name -> layr_attest.SemanticVersion
+	16, // 22: layr_attest.AttestedCosState.launcher_version:type_name -> layr_attest.SemanticVersion
+	17, // 23: layr_attest.AttestedCosState.health_monitoring:type_name -> layr_attest.HealthMonitoringState
+	18, // 24: layr_attest.AttestedCosState.gpu_device_state:type_name -> layr_attest.GpuDeviceState
+	20, // 25: layr_attest.EfiState.apps:type_name -> layr_attest.EfiApp
+	7,  // 26: layr_attest.MachineState.platform:type_name -> layr_attest.PlatformState
+	14, // 27: layr_attest.MachineState.secure_boot:type_name -> layr_attest.SecureBootState
+	11, // 28: layr_attest.MachineState.raw_events:type_name -> layr_attest.Event
+	32, // 29: layr_attest.MachineState.hash:type_name -> layr_tpm.HashAlgo
+	9,  // 30: layr_attest.MachineState.grub:type_name -> layr_attest.GrubState
+	10, // 31: layr_attest.MachineState.linux_kernel:type_name -> layr_attest.LinuxKernelState
+	19, // 32: layr_attest.MachineState.cos:type_name -> layr_attest.AttestedCosState
+	21, // 33: layr_attest.MachineState.efi:type_name -> layr_attest.EfiState
+	30, // 34: layr_attest.MachineState.sev_snp_attestation:type_name -> sevsnp.Attestation
+	31, // 35: layr_attest.MachineState.tdx_attestation:type_name -> tdx.QuoteV4
+	0,  // 36: layr_attest.PlatformPolicy.minimum_technology:type_name -> layr_attest.GCEConfidentialTechnology
+	24, // 37: layr_attest.SevSnpPolicy.uefi:type_name -> layr_attest.RIMPolicy
+	23, // 38: layr_attest.Policy.platform:type_name -> layr_attest.PlatformPolicy
+	25, // 39: layr_attest.Policy.sev_snp:type_name -> layr_attest.SevSnpPolicy
 	40, // [40:40] is the sub-list for method output_type
 	40, // [40:40] is the sub-list for method input_type
 	40, // [40:40] is the sub-list for extension type_name
@@ -2212,25 +2212,25 @@ var file_attest_proto_depIdxs = []int32{
 	0,  // [0:40] is the sub-list for field type_name
 }
 
-func init() { file_attest_proto_init() }
-func file_attest_proto_init() {
-	if File_attest_proto != nil {
+func init() { file_layr_attest_proto_init() }
+func file_layr_attest_proto_init() {
+	if File_layr_attest_proto != nil {
 		return
 	}
-	file_attest_proto_msgTypes[1].OneofWrappers = []any{
+	file_layr_attest_proto_msgTypes[1].OneofWrappers = []any{
 		(*Attestation_SevSnpAttestation)(nil),
 		(*Attestation_TdxAttestation)(nil),
 	}
-	file_attest_proto_msgTypes[3].OneofWrappers = []any{
+	file_layr_attest_proto_msgTypes[3].OneofWrappers = []any{
 		(*PlatformState_ScrtmVersionId)(nil),
 		(*PlatformState_GceVersion)(nil),
 	}
-	file_attest_proto_msgTypes[8].OneofWrappers = []any{
+	file_layr_attest_proto_msgTypes[8].OneofWrappers = []any{
 		(*Certificate_Der)(nil),
 		(*Certificate_WellKnown)(nil),
 	}
-	file_attest_proto_msgTypes[13].OneofWrappers = []any{}
-	file_attest_proto_msgTypes[18].OneofWrappers = []any{
+	file_layr_attest_proto_msgTypes[13].OneofWrappers = []any{}
+	file_layr_attest_proto_msgTypes[18].OneofWrappers = []any{
 		(*MachineState_SevSnpAttestation)(nil),
 		(*MachineState_TdxAttestation)(nil),
 	}
@@ -2238,18 +2238,18 @@ func file_attest_proto_init() {
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_attest_proto_rawDesc), len(file_attest_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_layr_attest_proto_rawDesc), len(file_layr_attest_proto_rawDesc)),
 			NumEnums:      4,
 			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_attest_proto_goTypes,
-		DependencyIndexes: file_attest_proto_depIdxs,
-		EnumInfos:         file_attest_proto_enumTypes,
-		MessageInfos:      file_attest_proto_msgTypes,
+		GoTypes:           file_layr_attest_proto_goTypes,
+		DependencyIndexes: file_layr_attest_proto_depIdxs,
+		EnumInfos:         file_layr_attest_proto_enumTypes,
+		MessageInfos:      file_layr_attest_proto_msgTypes,
 	}.Build()
-	File_attest_proto = out.File
-	file_attest_proto_goTypes = nil
-	file_attest_proto_depIdxs = nil
+	File_layr_attest_proto = out.File
+	file_layr_attest_proto_goTypes = nil
+	file_layr_attest_proto_depIdxs = nil
 }

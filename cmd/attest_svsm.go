@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Layr-Labs/go-tpm-tools/client"
+	apb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
 	"github.com/google/gce-tcb-verifier/extract"
 	"github.com/google/go-configfs-tsm/configfs/configfsi"
 	"github.com/google/go-configfs-tsm/configfs/linuxtsm"
 	"github.com/google/go-configfs-tsm/report"
 	sabi "github.com/google/go-sev-guest/abi"
 	sevpb "github.com/google/go-sev-guest/proto/sevsnp"
-	"github.com/Layr-Labs/go-tpm-tools/client"
-	apb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"
 )

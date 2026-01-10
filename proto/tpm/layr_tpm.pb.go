@@ -2,16 +2,17 @@
 // versions:
 // 	protoc-gen-go v1.36.6
 // 	protoc        v5.29.3
-// source: tpm.proto
+// source: layr_tpm.proto
 
 package tpm
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -55,11 +56,11 @@ func (x ObjectType) String() string {
 }
 
 func (ObjectType) Descriptor() protoreflect.EnumDescriptor {
-	return file_tpm_proto_enumTypes[0].Descriptor()
+	return file_layr_tpm_proto_enumTypes[0].Descriptor()
 }
 
 func (ObjectType) Type() protoreflect.EnumType {
-	return &file_tpm_proto_enumTypes[0]
+	return &file_layr_tpm_proto_enumTypes[0]
 }
 
 func (x ObjectType) Number() protoreflect.EnumNumber {
@@ -68,7 +69,7 @@ func (x ObjectType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ObjectType.Descriptor instead.
 func (ObjectType) EnumDescriptor() ([]byte, []int) {
-	return file_tpm_proto_rawDescGZIP(), []int{0}
+	return file_layr_tpm_proto_rawDescGZIP(), []int{0}
 }
 
 type HashAlgo int32
@@ -110,11 +111,11 @@ func (x HashAlgo) String() string {
 }
 
 func (HashAlgo) Descriptor() protoreflect.EnumDescriptor {
-	return file_tpm_proto_enumTypes[1].Descriptor()
+	return file_layr_tpm_proto_enumTypes[1].Descriptor()
 }
 
 func (HashAlgo) Type() protoreflect.EnumType {
-	return &file_tpm_proto_enumTypes[1]
+	return &file_layr_tpm_proto_enumTypes[1]
 }
 
 func (x HashAlgo) Number() protoreflect.EnumNumber {
@@ -123,7 +124,7 @@ func (x HashAlgo) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use HashAlgo.Descriptor instead.
 func (HashAlgo) EnumDescriptor() ([]byte, []int) {
-	return file_tpm_proto_rawDescGZIP(), []int{1}
+	return file_layr_tpm_proto_rawDescGZIP(), []int{1}
 }
 
 // SealedBytes stores the result of a TPM2_Seal. The private portion (priv) has
@@ -134,8 +135,8 @@ type SealedBytes struct {
 	Priv          []byte                 `protobuf:"bytes,1,opt,name=priv,proto3" json:"priv,omitempty"`
 	Pub           []byte                 `protobuf:"bytes,2,opt,name=pub,proto3" json:"pub,omitempty"`
 	Pcrs          []uint32               `protobuf:"varint,3,rep,packed,name=pcrs,proto3" json:"pcrs,omitempty"`
-	Hash          HashAlgo               `protobuf:"varint,4,opt,name=hash,proto3,enum=tpm.HashAlgo" json:"hash,omitempty"`
-	Srk           ObjectType             `protobuf:"varint,5,opt,name=srk,proto3,enum=tpm.ObjectType" json:"srk,omitempty"`
+	Hash          HashAlgo               `protobuf:"varint,4,opt,name=hash,proto3,enum=layr_tpm.HashAlgo" json:"hash,omitempty"`
+	Srk           ObjectType             `protobuf:"varint,5,opt,name=srk,proto3,enum=layr_tpm.ObjectType" json:"srk,omitempty"`
 	CertifiedPcrs *PCRs                  `protobuf:"bytes,6,opt,name=certified_pcrs,json=certifiedPcrs,proto3" json:"certified_pcrs,omitempty"`
 	CreationData  []byte                 `protobuf:"bytes,7,opt,name=creation_data,json=creationData,proto3" json:"creation_data,omitempty"`
 	Ticket        []byte                 `protobuf:"bytes,8,opt,name=ticket,proto3" json:"ticket,omitempty"`
@@ -145,7 +146,7 @@ type SealedBytes struct {
 
 func (x *SealedBytes) Reset() {
 	*x = SealedBytes{}
-	mi := &file_tpm_proto_msgTypes[0]
+	mi := &file_layr_tpm_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -157,7 +158,7 @@ func (x *SealedBytes) String() string {
 func (*SealedBytes) ProtoMessage() {}
 
 func (x *SealedBytes) ProtoReflect() protoreflect.Message {
-	mi := &file_tpm_proto_msgTypes[0]
+	mi := &file_layr_tpm_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -170,7 +171,7 @@ func (x *SealedBytes) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SealedBytes.ProtoReflect.Descriptor instead.
 func (*SealedBytes) Descriptor() ([]byte, []int) {
-	return file_tpm_proto_rawDescGZIP(), []int{0}
+	return file_layr_tpm_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *SealedBytes) GetPriv() []byte {
@@ -241,7 +242,7 @@ type ImportBlob struct {
 
 func (x *ImportBlob) Reset() {
 	*x = ImportBlob{}
-	mi := &file_tpm_proto_msgTypes[1]
+	mi := &file_layr_tpm_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -253,7 +254,7 @@ func (x *ImportBlob) String() string {
 func (*ImportBlob) ProtoMessage() {}
 
 func (x *ImportBlob) ProtoReflect() protoreflect.Message {
-	mi := &file_tpm_proto_msgTypes[1]
+	mi := &file_layr_tpm_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -266,7 +267,7 @@ func (x *ImportBlob) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportBlob.ProtoReflect.Descriptor instead.
 func (*ImportBlob) Descriptor() ([]byte, []int) {
-	return file_tpm_proto_rawDescGZIP(), []int{1}
+	return file_layr_tpm_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *ImportBlob) GetDuplicate() []byte {
@@ -311,7 +312,7 @@ type Quote struct {
 
 func (x *Quote) Reset() {
 	*x = Quote{}
-	mi := &file_tpm_proto_msgTypes[2]
+	mi := &file_layr_tpm_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -323,7 +324,7 @@ func (x *Quote) String() string {
 func (*Quote) ProtoMessage() {}
 
 func (x *Quote) ProtoReflect() protoreflect.Message {
-	mi := &file_tpm_proto_msgTypes[2]
+	mi := &file_layr_tpm_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -336,7 +337,7 @@ func (x *Quote) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Quote.ProtoReflect.Descriptor instead.
 func (*Quote) Descriptor() ([]byte, []int) {
-	return file_tpm_proto_rawDescGZIP(), []int{2}
+	return file_layr_tpm_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Quote) GetQuote() []byte {
@@ -362,7 +363,7 @@ func (x *Quote) GetPcrs() *PCRs {
 
 type PCRs struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Hash          HashAlgo               `protobuf:"varint,1,opt,name=hash,proto3,enum=tpm.HashAlgo" json:"hash,omitempty"`
+	Hash          HashAlgo               `protobuf:"varint,1,opt,name=hash,proto3,enum=layr_tpm.HashAlgo" json:"hash,omitempty"`
 	Pcrs          map[uint32][]byte      `protobuf:"bytes,2,rep,name=pcrs,proto3" json:"pcrs,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -370,7 +371,7 @@ type PCRs struct {
 
 func (x *PCRs) Reset() {
 	*x = PCRs{}
-	mi := &file_tpm_proto_msgTypes[3]
+	mi := &file_layr_tpm_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -382,7 +383,7 @@ func (x *PCRs) String() string {
 func (*PCRs) ProtoMessage() {}
 
 func (x *PCRs) ProtoReflect() protoreflect.Message {
-	mi := &file_tpm_proto_msgTypes[3]
+	mi := &file_layr_tpm_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -395,7 +396,7 @@ func (x *PCRs) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PCRs.ProtoReflect.Descriptor instead.
 func (*PCRs) Descriptor() ([]byte, []int) {
-	return file_tpm_proto_rawDescGZIP(), []int{3}
+	return file_layr_tpm_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *PCRs) GetHash() HashAlgo {
@@ -427,7 +428,7 @@ type CertifiedBlob struct {
 
 func (x *CertifiedBlob) Reset() {
 	*x = CertifiedBlob{}
-	mi := &file_tpm_proto_msgTypes[4]
+	mi := &file_layr_tpm_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -439,7 +440,7 @@ func (x *CertifiedBlob) String() string {
 func (*CertifiedBlob) ProtoMessage() {}
 
 func (x *CertifiedBlob) ProtoReflect() protoreflect.Message {
-	mi := &file_tpm_proto_msgTypes[4]
+	mi := &file_layr_tpm_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -452,7 +453,7 @@ func (x *CertifiedBlob) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CertifiedBlob.ProtoReflect.Descriptor instead.
 func (*CertifiedBlob) Descriptor() ([]byte, []int) {
-	return file_tpm_proto_rawDescGZIP(), []int{4}
+	return file_layr_tpm_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *CertifiedBlob) GetPubArea() []byte {
@@ -476,34 +477,34 @@ func (x *CertifiedBlob) GetRawSig() []byte {
 	return nil
 }
 
-var File_tpm_proto protoreflect.FileDescriptor
+var File_layr_tpm_proto protoreflect.FileDescriptor
 
-const file_tpm_proto_rawDesc = "" +
+const file_layr_tpm_proto_rawDesc = "" +
 	"\n" +
-	"\ttpm.proto\x12\x03tpm\"\xfc\x01\n" +
+	"\x0elayr_tpm.proto\x12\blayr_tpm\"\x8b\x02\n" +
 	"\vSealedBytes\x12\x12\n" +
 	"\x04priv\x18\x01 \x01(\fR\x04priv\x12\x10\n" +
 	"\x03pub\x18\x02 \x01(\fR\x03pub\x12\x12\n" +
-	"\x04pcrs\x18\x03 \x03(\rR\x04pcrs\x12!\n" +
-	"\x04hash\x18\x04 \x01(\x0e2\r.tpm.HashAlgoR\x04hash\x12!\n" +
-	"\x03srk\x18\x05 \x01(\x0e2\x0f.tpm.ObjectTypeR\x03srk\x120\n" +
-	"\x0ecertified_pcrs\x18\x06 \x01(\v2\t.tpm.PCRsR\rcertifiedPcrs\x12#\n" +
+	"\x04pcrs\x18\x03 \x03(\rR\x04pcrs\x12&\n" +
+	"\x04hash\x18\x04 \x01(\x0e2\x12.layr_tpm.HashAlgoR\x04hash\x12&\n" +
+	"\x03srk\x18\x05 \x01(\x0e2\x14.layr_tpm.ObjectTypeR\x03srk\x125\n" +
+	"\x0ecertified_pcrs\x18\x06 \x01(\v2\x0e.layr_tpm.PCRsR\rcertifiedPcrs\x12#\n" +
 	"\rcreation_data\x18\a \x01(\fR\fcreationData\x12\x16\n" +
-	"\x06ticket\x18\b \x01(\fR\x06ticket\"\x91\x01\n" +
+	"\x06ticket\x18\b \x01(\fR\x06ticket\"\x96\x01\n" +
 	"\n" +
 	"ImportBlob\x12\x1c\n" +
 	"\tduplicate\x18\x01 \x01(\fR\tduplicate\x12%\n" +
 	"\x0eencrypted_seed\x18\x02 \x01(\fR\rencryptedSeed\x12\x1f\n" +
 	"\vpublic_area\x18\x03 \x01(\fR\n" +
-	"publicArea\x12\x1d\n" +
-	"\x04pcrs\x18\x04 \x01(\v2\t.tpm.PCRsR\x04pcrs\"U\n" +
+	"publicArea\x12\"\n" +
+	"\x04pcrs\x18\x04 \x01(\v2\x0e.layr_tpm.PCRsR\x04pcrs\"Z\n" +
 	"\x05Quote\x12\x14\n" +
 	"\x05quote\x18\x01 \x01(\fR\x05quote\x12\x17\n" +
-	"\araw_sig\x18\x02 \x01(\fR\x06rawSig\x12\x1d\n" +
-	"\x04pcrs\x18\x03 \x01(\v2\t.tpm.PCRsR\x04pcrs\"\x8b\x01\n" +
-	"\x04PCRs\x12!\n" +
-	"\x04hash\x18\x01 \x01(\x0e2\r.tpm.HashAlgoR\x04hash\x12'\n" +
-	"\x04pcrs\x18\x02 \x03(\v2\x13.tpm.PCRs.PcrsEntryR\x04pcrs\x1a7\n" +
+	"\araw_sig\x18\x02 \x01(\fR\x06rawSig\x12\"\n" +
+	"\x04pcrs\x18\x03 \x01(\v2\x0e.layr_tpm.PCRsR\x04pcrs\"\x95\x01\n" +
+	"\x04PCRs\x12&\n" +
+	"\x04hash\x18\x01 \x01(\x0e2\x12.layr_tpm.HashAlgoR\x04hash\x12,\n" +
+	"\x04pcrs\x18\x02 \x03(\v2\x18.layr_tpm.PCRs.PcrsEntryR\x04pcrs\x1a7\n" +
 	"\tPcrsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\fR\x05value:\x028\x01\"f\n" +
@@ -527,37 +528,37 @@ const file_tpm_proto_rawDesc = "" +
 	"\x06SHA512\x10\rB-Z+github.com/Layr-Labs/go-tpm-tools/proto/tpmb\x06proto3"
 
 var (
-	file_tpm_proto_rawDescOnce sync.Once
-	file_tpm_proto_rawDescData []byte
+	file_layr_tpm_proto_rawDescOnce sync.Once
+	file_layr_tpm_proto_rawDescData []byte
 )
 
-func file_tpm_proto_rawDescGZIP() []byte {
-	file_tpm_proto_rawDescOnce.Do(func() {
-		file_tpm_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_tpm_proto_rawDesc), len(file_tpm_proto_rawDesc)))
+func file_layr_tpm_proto_rawDescGZIP() []byte {
+	file_layr_tpm_proto_rawDescOnce.Do(func() {
+		file_layr_tpm_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_layr_tpm_proto_rawDesc), len(file_layr_tpm_proto_rawDesc)))
 	})
-	return file_tpm_proto_rawDescData
+	return file_layr_tpm_proto_rawDescData
 }
 
-var file_tpm_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_tpm_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
-var file_tpm_proto_goTypes = []any{
-	(ObjectType)(0),       // 0: tpm.ObjectType
-	(HashAlgo)(0),         // 1: tpm.HashAlgo
-	(*SealedBytes)(nil),   // 2: tpm.SealedBytes
-	(*ImportBlob)(nil),    // 3: tpm.ImportBlob
-	(*Quote)(nil),         // 4: tpm.Quote
-	(*PCRs)(nil),          // 5: tpm.PCRs
-	(*CertifiedBlob)(nil), // 6: tpm.CertifiedBlob
-	nil,                   // 7: tpm.PCRs.PcrsEntry
+var file_layr_tpm_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_layr_tpm_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_layr_tpm_proto_goTypes = []any{
+	(ObjectType)(0),       // 0: layr_tpm.ObjectType
+	(HashAlgo)(0),         // 1: layr_tpm.HashAlgo
+	(*SealedBytes)(nil),   // 2: layr_tpm.SealedBytes
+	(*ImportBlob)(nil),    // 3: layr_tpm.ImportBlob
+	(*Quote)(nil),         // 4: layr_tpm.Quote
+	(*PCRs)(nil),          // 5: layr_tpm.PCRs
+	(*CertifiedBlob)(nil), // 6: layr_tpm.CertifiedBlob
+	nil,                   // 7: layr_tpm.PCRs.PcrsEntry
 }
-var file_tpm_proto_depIdxs = []int32{
-	1, // 0: tpm.SealedBytes.hash:type_name -> tpm.HashAlgo
-	0, // 1: tpm.SealedBytes.srk:type_name -> tpm.ObjectType
-	5, // 2: tpm.SealedBytes.certified_pcrs:type_name -> tpm.PCRs
-	5, // 3: tpm.ImportBlob.pcrs:type_name -> tpm.PCRs
-	5, // 4: tpm.Quote.pcrs:type_name -> tpm.PCRs
-	1, // 5: tpm.PCRs.hash:type_name -> tpm.HashAlgo
-	7, // 6: tpm.PCRs.pcrs:type_name -> tpm.PCRs.PcrsEntry
+var file_layr_tpm_proto_depIdxs = []int32{
+	1, // 0: layr_tpm.SealedBytes.hash:type_name -> layr_tpm.HashAlgo
+	0, // 1: layr_tpm.SealedBytes.srk:type_name -> layr_tpm.ObjectType
+	5, // 2: layr_tpm.SealedBytes.certified_pcrs:type_name -> layr_tpm.PCRs
+	5, // 3: layr_tpm.ImportBlob.pcrs:type_name -> layr_tpm.PCRs
+	5, // 4: layr_tpm.Quote.pcrs:type_name -> layr_tpm.PCRs
+	1, // 5: layr_tpm.PCRs.hash:type_name -> layr_tpm.HashAlgo
+	7, // 6: layr_tpm.PCRs.pcrs:type_name -> layr_tpm.PCRs.PcrsEntry
 	7, // [7:7] is the sub-list for method output_type
 	7, // [7:7] is the sub-list for method input_type
 	7, // [7:7] is the sub-list for extension type_name
@@ -565,27 +566,27 @@ var file_tpm_proto_depIdxs = []int32{
 	0, // [0:7] is the sub-list for field type_name
 }
 
-func init() { file_tpm_proto_init() }
-func file_tpm_proto_init() {
-	if File_tpm_proto != nil {
+func init() { file_layr_tpm_proto_init() }
+func file_layr_tpm_proto_init() {
+	if File_layr_tpm_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_tpm_proto_rawDesc), len(file_tpm_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_layr_tpm_proto_rawDesc), len(file_layr_tpm_proto_rawDesc)),
 			NumEnums:      2,
 			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_tpm_proto_goTypes,
-		DependencyIndexes: file_tpm_proto_depIdxs,
-		EnumInfos:         file_tpm_proto_enumTypes,
-		MessageInfos:      file_tpm_proto_msgTypes,
+		GoTypes:           file_layr_tpm_proto_goTypes,
+		DependencyIndexes: file_layr_tpm_proto_depIdxs,
+		EnumInfos:         file_layr_tpm_proto_enumTypes,
+		MessageInfos:      file_layr_tpm_proto_msgTypes,
 	}.Build()
-	File_tpm_proto = out.File
-	file_tpm_proto_goTypes = nil
-	file_tpm_proto_depIdxs = nil
+	File_layr_tpm_proto = out.File
+	file_layr_tpm_proto_goTypes = nil
+	file_layr_tpm_proto_depIdxs = nil
 }

@@ -12,6 +12,8 @@ import (
 	apb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
 	"google.golang.org/protobuf/proto"
 
+	tpb "github.com/Layr-Labs/go-tpm-tools/proto/tpm"
+	"github.com/Layr-Labs/go-tpm-tools/server"
 	"github.com/google/gce-tcb-verifier/gcetcbendorsement"
 	epb "github.com/google/gce-tcb-verifier/proto/endorsement"
 	tcbv "github.com/google/gce-tcb-verifier/verify"
@@ -19,8 +21,6 @@ import (
 	"github.com/google/go-sev-guest/validate"
 	"github.com/google/go-sev-guest/verify"
 	"github.com/google/go-sev-guest/verify/trust"
-	tpb "github.com/Layr-Labs/go-tpm-tools/proto/tpm"
-	"github.com/Layr-Labs/go-tpm-tools/server"
 	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/spf13/cobra"
 )
