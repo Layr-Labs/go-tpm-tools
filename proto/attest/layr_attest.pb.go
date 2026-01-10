@@ -7,15 +7,14 @@
 package attest
 
 import (
-	reflect "reflect"
-	sync "sync"
-	unsafe "unsafe"
-
 	tpm "github.com/Layr-Labs/go-tpm-tools/proto/tpm"
 	sevsnp "github.com/google/go-sev-guest/proto/sevsnp"
 	tdx "github.com/google/go-tdx-guest/proto/tdx"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	reflect "reflect"
+	sync "sync"
+	unsafe "unsafe"
 )
 
 const (
