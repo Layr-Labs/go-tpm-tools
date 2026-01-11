@@ -235,6 +235,11 @@ func TestExtractTDXClaims(t *testing.T) {
 				t.Error("expected Debug=false for production attestation")
 			}
 
+			// Test attestation is from a debug Confidential Space image
+			if claims.Hardened {
+				t.Error("expected Hardened=false for debug image attestation")
+			}
+
 			// Verify PCRs were extracted
 			if len(claims.PCRs) != 4 {
 				t.Errorf("expected 4 PCRs, got %d", len(claims.PCRs))
@@ -299,6 +304,11 @@ func TestExtractSevSnpClaims(t *testing.T) {
 			// Production attestation should not be in debug mode
 			if claims.SevSnp.Policy.Debug {
 				t.Error("expected Debug=false for production attestation")
+			}
+
+			// Test attestation is from a debug Confidential Space image
+			if claims.Hardened {
+				t.Error("expected Hardened=false for debug image attestation")
 			}
 
 			// Verify TCB fields (at least one should be non-zero)

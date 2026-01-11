@@ -8,9 +8,9 @@ import (
 type Platform int
 
 const (
-	PlatformUnknown Platform = iota
-	PlatformTDX
-	PlatformSevSnp
+	PlatformUnknown Platform = -1
+	PlatformTDX     Platform = 0
+	PlatformSevSnp  Platform = 1
 )
 
 func (p Platform) String() string {
@@ -62,6 +62,7 @@ type VerifiedAttestation struct {
 // are rejected during extraction.
 type Claims struct {
 	Platform  Platform       `json:"platform"`
+	Hardened  bool           `json:"hardened"`
 	Container *ContainerInfo `json:"container,omitempty"`
 	GCE       *GCEInfo       `json:"gce,omitempty"`
 	TDX       *TDXClaims     `json:"tdx,omitempty"`

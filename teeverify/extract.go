@@ -2,6 +2,8 @@ package teeverify
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 
 	attestpb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
 	tpmpb "github.com/Layr-Labs/go-tpm-tools/proto/tpm"
@@ -10,7 +12,10 @@ import (
 
 // ExtractClaims extracts claims from a verified attestation.
 func (v *VerifiedAttestation) ExtractClaims(opts ExtractOptions) (*Claims, error) {
-	claims := &Claims{Platform: v.Platform}
+	claims := &Claims{
+		Platform: v.Platform,
+		Hardened: isHardened(v.machineState.GetLinuxKernel().GetCommandLine()),
+	}
 
 	pcrs, err := extractPCRs(v.attestation, opts.PCRIndices)
 	if err != nil {
@@ -211,4 +216,8 @@ func extractSevSnpClaims(attestation *attestpb.Attestation) (*SevSnpClaims, erro
 	}
 
 	return claims, nil
+}
+
+func isHardened(cmdline string) bool {
+	return slices.Contains(strings.Fields(cmdline), "confidential-space.hardened=true")
 }
