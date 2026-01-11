@@ -18,15 +18,17 @@ type testVector struct {
 
 // testCase contains a named test case with TDX and SEV-SNP attestations
 type testCase struct {
-	Name   string
-	TDX    testVector
-	SevSnp testVector
+	Name     string
+	Hardened bool
+	TDX      testVector
+	SevSnp   testVector
 }
 
 type testCaseJSON struct {
-	Name   string         `json:"name"`
-	TDX    testVectorJSON `json:"tdx"`
-	SevSnp testVectorJSON `json:"sevsnp"`
+	Name     string         `json:"name"`
+	Hardened bool           `json:"hardened"`
+	TDX      testVectorJSON `json:"tdx"`
+	SevSnp   testVectorJSON `json:"sevsnp"`
 }
 
 type testVectorJSON struct {
@@ -52,6 +54,7 @@ func loadTestCases(t *testing.T) []testCase {
 	cases := make([]testCase, len(casesJSON))
 	for i, cj := range casesJSON {
 		cases[i].Name = cj.Name
+		cases[i].Hardened = cj.Hardened
 
 		// Decode TDX
 		cases[i].TDX.Attestation, err = base64.StdEncoding.DecodeString(cj.TDX.Attestation)
@@ -235,9 +238,9 @@ func TestExtractTDXClaims(t *testing.T) {
 				t.Error("expected Debug=false for production attestation")
 			}
 
-			// Test attestation is from a debug Confidential Space image
-			if claims.Hardened {
-				t.Error("expected Hardened=false for debug image attestation")
+			// Verify Hardened flag matches expected value
+			if claims.Hardened != tc.Hardened {
+				t.Errorf("Hardened mismatch: got %v, want %v", claims.Hardened, tc.Hardened)
 			}
 
 			// Verify PCRs were extracted
@@ -306,9 +309,9 @@ func TestExtractSevSnpClaims(t *testing.T) {
 				t.Error("expected Debug=false for production attestation")
 			}
 
-			// Test attestation is from a debug Confidential Space image
-			if claims.Hardened {
-				t.Error("expected Hardened=false for debug image attestation")
+			// Verify Hardened flag matches expected value
+			if claims.Hardened != tc.Hardened {
+				t.Errorf("Hardened mismatch: got %v, want %v", claims.Hardened, tc.Hardened)
 			}
 
 			// Verify TCB fields (at least one should be non-zero)
