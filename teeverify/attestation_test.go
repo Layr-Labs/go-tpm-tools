@@ -7,7 +7,45 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
+
+	attestpb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
+
+// logTeeAttestation logs the raw TEE attestation (TDX or SEV-SNP) in JSON format.
+func logTeeAttestation(t *testing.T, attestationBytes []byte) {
+	t.Helper()
+
+	var attestation attestpb.Attestation
+	if err := proto.Unmarshal(attestationBytes, &attestation); err != nil {
+		t.Logf("Failed to unmarshal attestation: %v", err)
+		return
+	}
+
+	opts := protojson.MarshalOptions{
+		Multiline: true,
+		Indent:    "  ",
+	}
+
+	if tdx := attestation.GetTdxAttestation(); tdx != nil {
+		jsonBytes, err := opts.Marshal(tdx)
+		if err != nil {
+			t.Logf("Failed to marshal TDX attestation: %v", err)
+			return
+		}
+		t.Logf("TDX Attestation (QuoteV4):\n%s", string(jsonBytes))
+	} else if snp := attestation.GetSevSnpAttestation(); snp != nil {
+		jsonBytes, err := opts.Marshal(snp)
+		if err != nil {
+			t.Logf("Failed to marshal SEV-SNP attestation: %v", err)
+			return
+		}
+		t.Logf("SEV-SNP Attestation:\n%s", string(jsonBytes))
+	} else {
+		t.Log("No TEE attestation found")
+	}
+}
 
 // testVector contains a test attestation with its expected inputs
 type testVector struct {
@@ -195,6 +233,9 @@ func TestVerifySevSnpAttestation_WrongNonce(t *testing.T) {
 func TestExtractTDXClaims(t *testing.T) {
 	for _, tc := range loadTestCases(t) {
 		t.Run(tc.Name, func(t *testing.T) {
+			// Log the raw TEE attestation
+			logTeeAttestation(t, tc.TDX.Attestation)
+
 			verified, err := VerifyAttestation(tc.TDX.Attestation, tc.TDX.Nonce)
 			if err != nil {
 				t.Fatalf("VerifyAttestation failed: %v", err)
@@ -277,6 +318,9 @@ func TestExtractTDXClaims(t *testing.T) {
 func TestExtractSevSnpClaims(t *testing.T) {
 	for _, tc := range loadTestCases(t) {
 		t.Run(tc.Name, func(t *testing.T) {
+			// Log the raw TEE attestation
+			logTeeAttestation(t, tc.SevSnp.Attestation)
+
 			verified, err := VerifyAttestation(tc.SevSnp.Attestation, tc.SevSnp.Nonce)
 			if err != nil {
 				t.Fatalf("VerifyAttestation failed: %v", err)

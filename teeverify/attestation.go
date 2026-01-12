@@ -187,7 +187,13 @@ func verifyBinding(attestation *attestpb.Attestation, nonce []byte, platform Pla
 
 func verifyTDXSignature(attestation *attestpb.Attestation) error {
 	quote := attestation.GetTdxAttestation()
-	if err := tdxverify.TdxQuote(quote, tdxverify.DefaultOptions()); err != nil {
+	opts := &tdxverify.Options{
+		CheckRevocations: true, // Check Intel CRLs for revoked certificates
+		GetCollateral:    true, // Fetch TCB Info from Intel PCS to verify TCB status
+		Getter:           tdxGetter,
+		Now:              time.Now(),
+	}
+	if err := tdxverify.TdxQuote(quote, opts); err != nil {
 		return fmt.Errorf("TDX quote signature verification failed: %w", err)
 	}
 	return nil
@@ -195,7 +201,12 @@ func verifyTDXSignature(attestation *attestpb.Attestation) error {
 
 func verifySevSnpSignature(attestation *attestpb.Attestation) error {
 	snpAttestation := attestation.GetSevSnpAttestation()
-	if err := sevverify.SnpAttestation(snpAttestation, sevverify.DefaultOptions()); err != nil {
+	opts := &sevverify.Options{
+		CheckRevocations: true, // Check AMD CRLs for revoked VCEK/ASK certificates
+		Getter:           sevsnpGetter,
+		Now:              time.Now(),
+	}
+	if err := sevverify.SnpAttestation(snpAttestation, opts); err != nil {
 		return fmt.Errorf("SEV-SNP report signature verification failed: %w", err)
 	}
 	return nil
