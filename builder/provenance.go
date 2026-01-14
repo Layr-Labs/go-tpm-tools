@@ -72,7 +72,10 @@ func downloadImageContents(ctx context.Context, imageRef, filePath string) (dige
 
 	// For a FROM scratch image, iterate through layers to find the file
 	for _, layer := range layers {
-		layerDigest, _ := layer.Digest()
+		layerDigest, err := layer.Digest()
+		if err != nil {
+			return "", nil, fmt.Errorf("failed to get layer digest: %w", err)
+		}
 		slog.Debug("checking layer", "digest", layerDigest.String())
 
 		// Get uncompressed layer content (library handles decompression)
@@ -155,7 +158,7 @@ func downloadLauncherFromDockerImage(ctx context.Context, dockerPath string) ([]
 	imageRef := fmt.Sprintf("%s-docker.pkg.dev/%s/%s/%s:%s", region, project, repo, image, version)
 	slog.Info("downloading launcher from docker image", "ref", imageRef)
 
-	// Download image contents (single manifest fetch, single token fetch)
+	// Download image contents and extract the launcher binary
 	digest, data, err := downloadImageContents(ctx, imageRef, "/launcher")
 	if err != nil {
 		return nil, "", "", fmt.Errorf("failed to download launcher from image: %w", err)
@@ -195,7 +198,7 @@ func extractFileFromTar(r io.Reader, targetPath string) ([]byte, error) {
 // fetchBuilderProvenance gets the builder container's digest and SLSA provenance signature.
 // The digest is obtained from a GCA token, and provenance signature is fetched from Container Analysis API.
 func fetchBuilderProvenance(ctx context.Context, config *Config) (*BuilderResult, error) {
-	// Request a GCA token with a dummy nonce to get the container info
+	// Request a GCA token to get the container info
 	slog.Info("requesting GCA token for container digest")
 	token, err := requestGCAAttestation(ctx, config, []byte("digest-lookup"))
 	if err != nil {
@@ -287,6 +290,17 @@ func base64URLDecode(s string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(s)
 }
 
+// matchesDigest checks if any subject in the list matches the expected digest.
+func matchesDigest(subjects []*grafeas.Subject, digest string) bool {
+	expected := strings.TrimPrefix(digest, "sha256:")
+	for _, s := range subjects {
+		if s.Digest["sha256"] == expected {
+			return true
+		}
+	}
+	return false
+}
+
 // fetchProvenanceSignature queries Container Analysis for provenance signature on a container image.
 // Returns the DSSE signature for offline verification.
 func fetchProvenanceSignature(ctx context.Context, projectID, resourceURL, digest string) (*ProvenanceSignature, error) {
@@ -326,37 +340,16 @@ func fetchProvenanceSignature(ctx context.Context, projectID, resourceURL, diges
 			continue
 		}
 
-		// Check if this occurrence matches our digest
+		// Check if this occurrence matches our digest (try SLSA v1, then v0.1 format)
 		var foundMatch bool
-
-		// Try SLSA v1 format first
 		if prov := occ.GetBuild().GetInTotoSlsaProvenanceV1(); prov != nil {
-			for _, subject := range prov.Subject {
-				if sha256Hash, ok := subject.Digest["sha256"]; ok {
-					expectedHash := strings.TrimPrefix(digest, "sha256:")
-					if sha256Hash == expectedHash {
-						foundMatch = true
-						break
-					}
-				}
-			}
+			foundMatch = matchesDigest(prov.Subject, digest)
 		}
-
-		// Try older intoto statement format (v0.1)
 		if !foundMatch {
 			if stmt := occ.GetBuild().GetIntotoStatement(); stmt != nil {
-				for _, subject := range stmt.Subject {
-					if sha256Hash, ok := subject.Digest["sha256"]; ok {
-						expectedHash := strings.TrimPrefix(digest, "sha256:")
-						if sha256Hash == expectedHash {
-							foundMatch = true
-							break
-						}
-					}
-				}
+				foundMatch = matchesDigest(stmt.Subject, digest)
 			}
 		}
-
 		if !foundMatch {
 			continue
 		}
@@ -373,8 +366,8 @@ func fetchProvenanceSignature(ctx context.Context, projectID, resourceURL, diges
 			}, nil
 		}
 
-		// If no envelope, the provenance is verified by Container Analysis
-		// Return a placeholder indicating Google-verified provenance
+		// If no DSSE envelope, provenance was verified by Container Analysis itself.
+		// Return a sentinel value indicating Google-verified provenance.
 		slog.Info("no DSSE envelope, provenance verified by container analysis")
 		return &ProvenanceSignature{
 			KeyID:     "google-cloud-build",

@@ -70,7 +70,7 @@ func triggerImageBuild(ctx context.Context, config *Config, launcherImage string
 				Entrypoint: "chmod",
 				Args:       []string{"+x", "./launcher/image/launcher"},
 			},
-			// Step 3: Start cos-customizer image build
+			// Step 4: Start cos-customizer image build
 			{
 				Name: "gcr.io/cos-cloud/cos-customizer",
 				Id:   "StartImageBuild",
@@ -168,11 +168,15 @@ func triggerImageBuild(ctx context.Context, config *Config, launcherImage string
 		return nil, fmt.Errorf("failed to create build: %w", err)
 	}
 
-	// Wait for the build to complete
+	// Wait for the build to complete with a timeout slightly longer than the build timeout
+	// to allow for network overhead and result retrieval
 	slog.Info("build started, waiting for completion")
 	startTime := time.Now()
 
-	resp, err := op.Wait(ctx)
+	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(config.BuildTimeout+60)*time.Second)
+	defer cancel()
+
+	resp, err := op.Wait(waitCtx)
 	if err != nil {
 		return nil, fmt.Errorf("build failed: %w", err)
 	}
