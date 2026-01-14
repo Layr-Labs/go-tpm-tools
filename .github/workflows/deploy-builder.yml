@@ -1,0 +1,219 @@
+name: Deploy Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      builder_version:
+        description: 'Builder version (e.g., v0.12.0)'
+        required: true
+        type: string
+      launcher_version:
+        description: 'Launcher version (e.g., v0.3.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}
+  STAGING_BUCKET: ${{ secrets.GCP_STAGING_BUCKET }}
+  PROVENANCE_BUCKET: ${{ secrets.GCP_PROVENANCE_BUCKET }}
+  REGION: us-central1
+  ZONE: us-central1-a
+  AR_REPO_BUILDER: confidential-space-builder
+  BASE_IMAGE: cos-tdx-113-18244-521-56
+  BASE_IMAGE_PROJECT: confidential-vm-images
+  MACHINE_TYPE: c3-standard-4
+
+jobs:
+  build:
+    name: Build Artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Inputs
+        run: |
+          REGEX="^v[0-9]+\.[0-9]+\.[0-9]+.*$"
+          if [[ ! "${{ inputs.builder_version }}" =~ $REGEX ]]; then
+             echo "::error::Builder version '${{ inputs.builder_version }}' invalid. Expected vX.Y.Z"
+             exit 1
+          fi
+          if [[ ! "${{ inputs.launcher_version }}" =~ $REGEX ]]; then
+             echo "::error::Launcher version '${{ inputs.launcher_version }}' invalid. Expected vX.Y.Z"
+             exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build Images
+        run: |
+          echo "::group::Building Launcher ${{ inputs.launcher_version }}"
+          gcloud builds submit --config=builder/cloudbuild-launcher.yaml \
+            --substitutions="_VERSION=${{ inputs.launcher_version }},_REGION=${{ env.REGION }}" \
+            --project="${{ env.PROJECT_ID }}"
+          echo "::endgroup::"
+
+          echo "::group::Building Builder Container ${{ inputs.builder_version }}"
+          gcloud builds submit --config=builder/cloudbuild-builder.yaml \
+            --substitutions="_VERSION=${{ inputs.builder_version }},_REGION=${{ env.REGION }}" \
+            --project="${{ env.PROJECT_ID }}"
+          echo "::endgroup::"
+
+  deploy:
+    name: Deploy ${{ matrix.image_env }}
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image_env: [debug, hardened]
+
+    steps:
+      - name: Configure Deployment
+        id: config
+        run: |
+          # Strip dots (v0.12.0 -> v0120) and remove 'v' prefix for instance name
+          B_VER=$(echo "${{ inputs.builder_version }}" | tr -d '.' | sed 's/^v//')
+          L_VER=$(echo "${{ inputs.launcher_version }}" | tr -d '.' | sed 's/^v//')
+
+          # Convert dots to dashes for image name (GCE doesn't allow dots)
+          B_VER_DASHED=$(echo "${{ inputs.builder_version }}" | tr '.' '-')
+          IMAGE_NAME="cs-image-${B_VER_DASHED}-${{ matrix.image_env }}"
+          INSTANCE_NAME="cs-builder-${B_VER}-${L_VER}-${{ matrix.image_env }}"
+
+          echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
+          echo "instance_name=$INSTANCE_NAME" >> $GITHUB_OUTPUT
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Clean Previous Resources
+        run: |
+          gcloud compute images delete "${{ steps.config.outputs.image_name }}" \
+            --project="${{ env.PROJECT_ID }}" --quiet > /dev/null 2>&1 || true
+
+          gcloud compute instances delete "${{ steps.config.outputs.instance_name }}" \
+            --zone="${{ env.ZONE }}" --project="${{ env.PROJECT_ID }}" --quiet > /dev/null 2>&1 || true
+
+      - name: Deploy Builder VM
+        run: |
+          AR_IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO_BUILDER }}/builder:${{ inputs.builder_version }}"
+          # docker:// format: docker://REGION/PROJECT/REPO/IMAGE/VERSION
+          LAUNCHER_ARTIFACT="docker://${{ env.REGION }}/${{ env.PROJECT_ID }}/confidential-space-launcher/launcher/${{ inputs.launcher_version }}"
+
+          # Clean Metadata Array
+          METADATA_PAIRS=(
+            "tee-image-reference=${AR_IMAGE}"
+            "tee-restart-policy=Never"
+            "tee-container-log-redirect=true"
+            "tee-env-PROJECT_ID=${{ env.PROJECT_ID }}"
+            "tee-env-PROJECT_NUMBER=${{ env.PROJECT_NUMBER }}"
+            "tee-env-LAUNCHER_ARTIFACT=${LAUNCHER_ARTIFACT}"
+            "tee-env-BASE_IMAGE=${{ env.BASE_IMAGE }}"
+            "tee-env-BASE_IMAGE_PROJECT=${{ env.BASE_IMAGE_PROJECT }}"
+            "tee-env-OUTPUT_IMAGE_NAME=${{ steps.config.outputs.image_name }}"
+            "tee-env-OUTPUT_IMAGE_FAMILY=custom-cs-images"
+            "tee-env-STAGING_BUCKET=${{ env.STAGING_BUCKET }}"
+            "tee-env-PROVENANCE_BUCKET=${{ env.PROVENANCE_BUCKET }}"
+            "tee-env-GCA_ENDPOINT=https://confidentialcomputing.googleapis.com"
+            "tee-env-IMAGE_ENV=${{ matrix.image_env }}"
+          )
+          
+          IFS="~"
+          METADATA_STRING="${METADATA_PAIRS[*]}"
+
+          echo "Deploying ${{ steps.config.outputs.instance_name }}..."
+          
+          gcloud compute instances create "${{ steps.config.outputs.instance_name }}" \
+            --zone="${{ env.ZONE }}" \
+            --machine-type="${{ env.MACHINE_TYPE }}" \
+            --confidential-compute-type=TDX \
+            --shielded-secure-boot \
+            --maintenance-policy=TERMINATE \
+            --image-family=confidential-space-debug \
+            --image-project=confidential-space-images \
+            --scopes=cloud-platform \
+            --project="${{ env.PROJECT_ID }}" \
+            --metadata="^~^${METADATA_STRING}"
+
+      - name: Wait for Build
+        run: |
+          INSTANCE="${{ steps.config.outputs.instance_name }}"
+          IMAGE_NAME="${{ steps.config.outputs.image_name }}"
+          ATTESTATION_PATH="gs://${{ env.PROVENANCE_BUCKET }}/${IMAGE_NAME}/attestation.json"
+          TIMEOUT=3600  # 1 hour
+          INTERVAL=30
+          ELAPSED=0
+
+          echo "Waiting for build to complete (timeout: ${TIMEOUT}s)..."
+          while [ $ELAPSED -lt $TIMEOUT ]; do
+            # Check if attestation exists (build succeeded)
+            if gsutil -q stat "$ATTESTATION_PATH" 2>/dev/null; then
+              echo "Build succeeded!"
+              exit 0
+            fi
+
+            # Check VM status
+            STATUS=$(gcloud compute instances describe "$INSTANCE" \
+              --zone="${{ env.ZONE }}" --project="${{ env.PROJECT_ID }}" \
+              --format='value(status)' 2>/dev/null || echo "NOT_FOUND")
+
+            # If VM terminated without attestation, it failed
+            if [ "$STATUS" = "TERMINATED" ] || [ "$STATUS" = "NOT_FOUND" ]; then
+              break
+            fi
+
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+            echo "  Status: $STATUS (${ELAPSED}s / ${TIMEOUT}s)"
+          done
+
+          # Check for timeout
+          if [ $ELAPSED -ge $TIMEOUT ]; then
+            echo "::error::Build timed out after ${TIMEOUT}s"
+            exit 1
+          fi
+
+          # VM terminated but no attestation found
+          echo "::error::Build failed (no attestation found)"
+          echo ""
+          echo "Serial output (last 100 lines):"
+          gcloud compute instances get-serial-port-output "$INSTANCE" \
+            --zone="${{ env.ZONE }}" --project="${{ env.PROJECT_ID }}" 2>/dev/null | tail -100
+          exit 1
+
+      - name: Summary
+        if: success()
+        run: |
+          cat <<EOF >> $GITHUB_STEP_SUMMARY
+          ### ${{ matrix.image_env }} Build Complete
+
+          | Property | Value |
+          |:--- |:--- |
+          | **Builder** | \`${{ inputs.builder_version }}\` |
+          | **Launcher** | \`${{ inputs.launcher_version }}\` |
+          | **Image** | \`${{ steps.config.outputs.image_name }}\` |
+
+          **View attestation:**
+          \`\`\`bash
+          gsutil cat gs://${{ env.PROVENANCE_BUCKET }}/${{ steps.config.outputs.image_name }}/attestation.json | jq .
+          \`\`\`
+          EOF
