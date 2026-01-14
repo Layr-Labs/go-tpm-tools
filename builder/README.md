@@ -33,7 +33,7 @@ gcloud builds submit \
   --substitutions=_VERSION=v1.0.0,_REGION=us-central1
 ```
 
-This pushes to `${REGION}-docker.pkg.dev/${PROJECT_ID}/confidential-space-launcher/launcher:${VERSION}`
+This pushes to `${REGION}-docker.pkg.dev/${PROJECT_ID}/cs-launcher/launcher:${VERSION}`
 
 ### 2. Build Builder Container (with SLSA Provenance)
 
@@ -55,7 +55,7 @@ gcloud compute instances create cs-builder \
   --image-family=confidential-space \
   --image-project=confidential-space-images \
   --scopes=cloud-platform \
-  --metadata=^~^tee-image-reference=$BUILDER_IMAGE~tee-restart-policy=Never~tee-container-log-redirect=true~tee-env-PROJECT_ID=$PROJECT_ID~tee-env-PROJECT_NUMBER=$PROJECT_NUMBER~tee-env-LAUNCHER_ARTIFACT=docker://us-central1/$PROJECT_ID/confidential-space-launcher/launcher/v1.0.0~tee-env-BASE_IMAGE=cos-tdx-113-18244-521-56~tee-env-BASE_IMAGE_PROJECT=confidential-vm-images~tee-env-OUTPUT_IMAGE_NAME=my-cs-image~tee-env-OUTPUT_IMAGE_FAMILY=custom-cs-images~tee-env-IMAGE_ENV=hardened~tee-env-STAGING_BUCKET=$STAGING_BUCKET~tee-env-PROVENANCE_BUCKET=$PROVENANCE_BUCKET
+  --metadata=^~^tee-image-reference=$BUILDER_IMAGE~tee-restart-policy=Never~tee-container-log-redirect=true~tee-env-PROJECT_ID=$PROJECT_ID~tee-env-PROJECT_NUMBER=$PROJECT_NUMBER~tee-env-LAUNCHER_ARTIFACT=docker://us-central1/$PROJECT_ID/cs-launcher/launcher/v1.0.0~tee-env-BASE_IMAGE=cos-tdx-113-18244-521-56~tee-env-BASE_IMAGE_PROJECT=confidential-vm-images~tee-env-OUTPUT_IMAGE_NAME=my-cs-image~tee-env-OUTPUT_IMAGE_FAMILY=custom-cs-images~tee-env-IMAGE_ENV=hardened~tee-env-STAGING_BUCKET=$STAGING_BUCKET~tee-env-PROVENANCE_BUCKET=$PROVENANCE_BUCKET
 ```
 
 Output: GCE image + attestation in `gs://$PROVENANCE_BUCKET/$OUTPUT_IMAGE_NAME/attestation.json`
@@ -68,7 +68,7 @@ Output: GCE image + attestation in `gs://$PROVENANCE_BUCKET/$OUTPUT_IMAGE_NAME/a
 |----------|-------------|
 | `PROJECT_ID` | GCP project ID |
 | `PROJECT_NUMBER` | GCP project number |
-| `LAUNCHER_ARTIFACT` | `docker://REGION/PROJECT/REPO/IMAGE/VERSION` (e.g., `docker://us-central1/my-project/confidential-space-launcher/launcher/v1.0.0`) |
+| `LAUNCHER_ARTIFACT` | `docker://REGION/PROJECT/REPO/IMAGE/VERSION` (e.g., `docker://us-central1/my-project/cs-launcher/launcher/v1.0.0`) |
 | `BASE_IMAGE` | Source COS image name |
 | `BASE_IMAGE_PROJECT` | Project containing base image |
 | `OUTPUT_IMAGE_NAME` | Name for the output image |

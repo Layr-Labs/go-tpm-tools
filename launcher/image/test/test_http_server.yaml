@@ -6,7 +6,7 @@ substitutions:
   '_CLEANUP': 'true'
   '_VM_NAME_PREFIX': 'cs-http-server-test'
   '_ZONE': 'asia-east1-a'
-  '_WORKLOAD_IMAGE': 'us-west1-docker.pkg.dev/confidential-space-images-dev/cs-integ-test-images/ipc/happypath:latest'
+  '_WORKLOAD_IMAGE': 'us-west1-docker.pkg.dev/tee-compute-global/cs-integration-test-images/ipc/happypath:latest'
 steps:
 - name: 'gcr.io/cloud-builders/gcloud'
   id: CreateVM
@@ -36,7 +36,3 @@ steps:
   env:
   - 'BUILD_ID=$BUILD_ID'
   args: ['check_failure.sh']
-
-options:
-  pool:
-    name: 'projects/confidential-space-images-dev/locations/us-west1/workerPools/cs-image-build-vpc'

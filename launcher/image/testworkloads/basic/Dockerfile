@@ -1,6 +1,6 @@
 # From current directory:
 # GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o main .
-# gcloud builds submit --tag us-west1-docker.pkg.dev/confidential-space-images-dev/cs-integ-test-images/basic_test:latest
+# gcloud builds submit --tag us-west1-docker.pkg.dev/tee-compute-global/cs-integration-test-images/basic_test:latest
 FROM alpine
 
 COPY main /

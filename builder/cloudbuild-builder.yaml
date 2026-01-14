@@ -4,7 +4,7 @@
 # Usage:
 #   gcloud builds submit --config=builder/cloudbuild-builder.yaml \
 #     --substitutions=_VERSION=v0.5.0 \
-#     --project=${PROJECT_ID}
+#     --project=tee-compute-global
 
 steps:
   # Copy cos-customizer scripts into builder context
@@ -28,13 +28,13 @@ steps:
     args:
       - 'build'
       - '-t'
-      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/confidential-space-builder/builder:${_VERSION}'
+      - '${_REGION}-docker.pkg.dev/tee-compute-global/cs-builder/builder:${_VERSION}'
       - '-f'
       - 'builder/Dockerfile'
       - 'builder/'
 
 images:
-  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/confidential-space-builder/builder:${_VERSION}'
+  - '${_REGION}-docker.pkg.dev/tee-compute-global/cs-builder/builder:${_VERSION}'
 
 options:
   # Enable SLSA provenance generation

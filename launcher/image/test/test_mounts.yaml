@@ -4,7 +4,7 @@ substitutions:
   '_CLEANUP': 'true'
   '_VM_NAME_PREFIX': 'cs-mounts-test'
   '_ZONE': 'us-west1-a'
-  '_WORKLOAD_IMAGE': 'us-west1-docker.pkg.dev/confidential-space-images-dev/cs-integ-test-images/mounts_workload:latest'
+  '_WORKLOAD_IMAGE': 'us-west1-docker.pkg.dev/tee-compute-global/cs-integration-test-images/mounts_workload:latest'
   '_DEV_SHM_SIZE_KB': '128000'
   '_TMPFS_SIZE_KB': '222'
 steps:

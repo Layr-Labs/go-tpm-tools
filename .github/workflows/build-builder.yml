@@ -12,7 +12,7 @@ permissions:
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-central1
-  AR_REPO: confidential-space-builder
+  AR_REPO: cs-builder
 
 jobs:
   build:
