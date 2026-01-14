@@ -19,9 +19,6 @@ type BuildResult struct {
 	// BuildID is the Cloud Build ID
 	BuildID string
 
-	// ResultingImage is the full path to the created image
-	ResultingImage string
-
 	// ImageID is the unique GCE image ID (immutable identifier)
 	ImageID string
 
@@ -183,11 +180,10 @@ func triggerImageBuild(ctx context.Context, config *Config, launcherImage string
 	duration := time.Since(startTime)
 
 	result := &BuildResult{
-		BuildID:        resp.Id,
-		Status:         resp.Status.String(),
-		Duration:       duration,
-		ResultingImage: fmt.Sprintf("projects/%s/global/images/%s", config.ProjectID, config.OutputImageName),
-		ImageID:        extractImageID(resp),
+		BuildID:  resp.Id,
+		Status:   resp.Status.String(),
+		Duration: duration,
+		ImageID:  extractImageID(resp),
 	}
 
 	if resp.Status != cloudbuildpb.Build_SUCCESS {

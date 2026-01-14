@@ -194,9 +194,6 @@ func loadConfig(ctx context.Context) (*Config, error) {
 	}
 
 	if c.ImageEnv != "debug" && c.ImageEnv != "hardened" {
-		if c.ImageEnv == "" {
-			return nil, fmt.Errorf("IMAGE_ENV required (debug or hardened)")
-		}
 		return nil, fmt.Errorf("IMAGE_ENV must be debug or hardened, got %q", c.ImageEnv)
 	}
 
