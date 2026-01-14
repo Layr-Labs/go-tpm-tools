@@ -120,6 +120,17 @@ func requestTokenFromLauncher(ctx context.Context, nonce []byte, audience string
 	return string(tokenBytes), nil
 }
 
+// writeToGCS writes data to a GCS object with the specified content type.
+func writeToGCS(ctx context.Context, bucket *storage.BucketHandle, path, contentType string, data []byte) error {
+	writer := bucket.Object(path).NewWriter(ctx)
+	writer.ContentType = contentType
+	if _, err := writer.Write(data); err != nil {
+		writer.Close()
+		return err
+	}
+	return writer.Close()
+}
+
 // storeAttestation stores the build attestation to GCS.
 func storeAttestation(ctx context.Context, config *Config, attestation *BuildAttestation) (string, error) {
 	client, err := storage.NewClient(ctx)
@@ -128,67 +139,37 @@ func storeAttestation(ctx context.Context, config *Config, attestation *BuildAtt
 	}
 	defer client.Close()
 
-	// Create the attestation JSON
+	bucket := client.Bucket(config.ProvenanceBucket)
+
+	// Store attestation.json
 	attestationJSON, err := json.MarshalIndent(attestation, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal attestation: %w", err)
 	}
-
-	// Store path: gs://{bucket}/{image-name}/attestation.json
-	objectPath := fmt.Sprintf("%s/attestation.json", config.OutputImageName)
-
-	// Upload to GCS
-	bucket := client.Bucket(config.ProvenanceBucket)
-	obj := bucket.Object(objectPath)
-
-	writer := obj.NewWriter(ctx)
-	writer.ContentType = "application/json"
-
-	if _, err := io.Copy(writer, bytes.NewReader(attestationJSON)); err != nil {
-		writer.Close()
+	attestationPath := fmt.Sprintf("%s/attestation.json", config.OutputImageName)
+	if err := writeToGCS(ctx, bucket, attestationPath, "application/json", attestationJSON); err != nil {
 		return "", fmt.Errorf("failed to write attestation: %w", err)
 	}
-
-	if err := writer.Close(); err != nil {
-		return "", fmt.Errorf("failed to close writer: %w", err)
-	}
-
-	fullPath := fmt.Sprintf("gs://%s/%s", config.ProvenanceBucket, objectPath)
+	fullPath := fmt.Sprintf("gs://%s/%s", config.ProvenanceBucket, attestationPath)
 	slog.Info("stored attestation JSON", "path", fullPath)
 
-	// Also store the GCA token separately for easy verification
+	// Store GCA token separately for easy verification
 	if attestation.GCAToken != "" {
 		tokenPath := fmt.Sprintf("%s/gca_token.jwt", config.OutputImageName)
-		tokenObj := bucket.Object(tokenPath)
-		tokenWriter := tokenObj.NewWriter(ctx)
-		tokenWriter.ContentType = "application/jwt"
-
-		if _, err := tokenWriter.Write([]byte(attestation.GCAToken)); err != nil {
-			tokenWriter.Close()
+		if err := writeToGCS(ctx, bucket, tokenPath, "application/jwt", []byte(attestation.GCAToken)); err != nil {
 			return fullPath, fmt.Errorf("failed to write token: %w", err)
-		}
-		if err := tokenWriter.Close(); err != nil {
-			return fullPath, fmt.Errorf("failed to close token writer: %w", err)
 		}
 		slog.Info("stored GCA token", "path", fmt.Sprintf("gs://%s/%s", config.ProvenanceBucket, tokenPath))
 	}
 
-	// Store the manifest separately for easy access
+	// Store manifest separately for easy access
 	manifestJSON, err := json.MarshalIndent(attestation.Manifest, "", "  ")
 	if err != nil {
 		return fullPath, fmt.Errorf("failed to marshal manifest: %w", err)
 	}
 	manifestPath := fmt.Sprintf("%s/manifest.json", config.OutputImageName)
-	manifestObj := bucket.Object(manifestPath)
-	manifestWriter := manifestObj.NewWriter(ctx)
-	manifestWriter.ContentType = "application/json"
-
-	if _, err := io.Copy(manifestWriter, bytes.NewReader(manifestJSON)); err != nil {
-		manifestWriter.Close()
+	if err := writeToGCS(ctx, bucket, manifestPath, "application/json", manifestJSON); err != nil {
 		return fullPath, fmt.Errorf("failed to write manifest: %w", err)
-	}
-	if err := manifestWriter.Close(); err != nil {
-		return fullPath, fmt.Errorf("failed to close manifest writer: %w", err)
 	}
 	slog.Info("stored manifest", "path", fmt.Sprintf("gs://%s/%s", config.ProvenanceBucket, manifestPath))
 

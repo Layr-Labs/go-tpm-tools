@@ -15,7 +15,6 @@ import (
 	"time"
 
 	containeranalysis "cloud.google.com/go/containeranalysis/apiv1"
-	"cloud.google.com/go/storage"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/google"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -191,26 +190,6 @@ func extractFileFromTar(r io.Reader, targetPath string) ([]byte, error) {
 	}
 
 	return nil, fmt.Errorf("file %s not found in archive", targetPath)
-}
-
-// uploadToGCS uploads data to a GCS object.
-func uploadToGCS(ctx context.Context, bucket, object string, data []byte) error {
-	client, err := storage.NewClient(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create GCS client: %w", err)
-	}
-	defer client.Close()
-
-	writer := client.Bucket(bucket).Object(object).NewWriter(ctx)
-	if _, err := writer.Write(data); err != nil {
-		writer.Close()
-		return fmt.Errorf("failed to write data: %w", err)
-	}
-	if err := writer.Close(); err != nil {
-		return fmt.Errorf("failed to close writer: %w", err)
-	}
-
-	return nil
 }
 
 // fetchBuilderProvenance gets the builder container's digest and SLSA provenance signature.
