@@ -50,7 +50,7 @@ jobs:
       - name: Summary
         if: success()
         run: |
-          IMAGE_PATH="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/confidential-space-launcher/launcher:${{ steps.config.outputs.version }}"
+          IMAGE_PATH="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/cs-launcher/launcher:${{ steps.config.outputs.version }}"
           cat <<EOF >> $GITHUB_STEP_SUMMARY
           ### Launcher Build Complete
 

@@ -58,7 +58,7 @@ steps:
     args:
       - 'build'
       - '-t'
-      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/confidential-space-launcher/launcher:${_VERSION}'
+      - '${_REGION}-docker.pkg.dev/tee-compute-global/cs-launcher/launcher:${_VERSION}'
       - '-f'
       - '/workspace/Dockerfile.launcher'
       - '/workspace'
@@ -67,10 +67,10 @@ steps:
     id: Push
     args:
       - 'push'
-      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/confidential-space-launcher/launcher:${_VERSION}'
+      - '${_REGION}-docker.pkg.dev/tee-compute-global/cs-launcher/launcher:${_VERSION}'
 
 images:
-  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/confidential-space-launcher/launcher:${_VERSION}'
+  - '${_REGION}-docker.pkg.dev/tee-compute-global/cs-launcher/launcher:${_VERSION}'
 
 timeout: '600s'
 

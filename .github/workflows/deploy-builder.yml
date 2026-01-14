@@ -23,7 +23,7 @@ env:
   PROVENANCE_BUCKET: ${{ secrets.GCP_PROVENANCE_BUCKET }}
   REGION: us-central1
   ZONE: us-central1-a
-  AR_REPO_BUILDER: confidential-space-builder
+  AR_REPO_BUILDER: cs-builder
   BASE_IMAGE: cos-tdx-113-18244-521-56
   BASE_IMAGE_PROJECT: confidential-vm-images
   MACHINE_TYPE: c3-standard-4
@@ -117,7 +117,7 @@ jobs:
         run: |
           AR_IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO_BUILDER }}/builder:${{ inputs.builder_version }}"
           # docker:// format: docker://REGION/PROJECT/REPO/IMAGE/VERSION
-          LAUNCHER_ARTIFACT="docker://${{ env.REGION }}/${{ env.PROJECT_ID }}/confidential-space-launcher/launcher/${{ inputs.launcher_version }}"
+          LAUNCHER_ARTIFACT="docker://${{ env.REGION }}/${{ env.PROJECT_ID }}/cs-launcher/launcher/${{ inputs.launcher_version }}"
 
           # Clean Metadata Array
           METADATA_PAIRS=(

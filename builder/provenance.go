@@ -131,7 +131,7 @@ func fetchLauncherWithProvenance(ctx context.Context, config *Config) (*Launcher
 
 	// Fetch provenance signature
 	slog.Info("querying provenance", "resourceUri", provenanceRef)
-	signature, err := fetchProvenanceSignature(ctx, config.ProjectID, provenanceRef, imageDigest)
+	signature, err := fetchProvenanceSignature(ctx, config.ProjectID, provenanceRef)
 	if err != nil {
 		slog.Warn("could not fetch launcher provenance signature", "error", err)
 	} else {
@@ -226,7 +226,7 @@ func fetchBuilderProvenance(ctx context.Context, config *Config) (*BuilderResult
 
 	// Query Container Analysis for provenance signature
 	slog.Info("querying provenance", "resourceUri", provenanceRef)
-	signature, err := fetchProvenanceSignature(ctx, config.ProjectID, provenanceRef, digest)
+	signature, err := fetchProvenanceSignature(ctx, config.ProjectID, provenanceRef)
 	if err != nil {
 		slog.Warn("could not fetch builder provenance signature",
 			"error", err,
@@ -290,90 +290,50 @@ func base64URLDecode(s string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(s)
 }
 
-// matchesDigest checks if any subject in the list matches the expected digest.
-func matchesDigest(subjects []*grafeas.Subject, digest string) bool {
-	expected := strings.TrimPrefix(digest, "sha256:")
-	for _, s := range subjects {
-		if s.Digest["sha256"] == expected {
-			return true
-		}
-	}
-	return false
-}
-
 // fetchProvenanceSignature queries Container Analysis for provenance signature on a container image.
 // Returns the DSSE signature for offline verification.
-func fetchProvenanceSignature(ctx context.Context, projectID, resourceURL, digest string) (*ProvenanceSignature, error) {
+func fetchProvenanceSignature(ctx context.Context, projectID, resourceURL string) (*ProvenanceSignature, error) {
 	client, err := containeranalysis.NewClient(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Container Analysis client: %w", err)
 	}
 	defer client.Close()
 
-	grafeasClient := client.GetGrafeasClient()
-
-	// Query for BUILD occurrences with specific resourceUri (efficient server-side filter)
+	// Query for BUILD occurrences with specific resourceUri
 	filter := fmt.Sprintf(`kind="BUILD" AND resourceUri="%s"`, resourceURL)
-	parent := fmt.Sprintf("projects/%s", projectID)
-
-	slog.Info("querying container analysis", "filter", filter)
-
 	req := &grafeas.ListOccurrencesRequest{
-		Parent:   parent,
+		Parent:   fmt.Sprintf("projects/%s", projectID),
 		Filter:   filter,
-		PageSize: 10, // We only need the first match
+		PageSize: 1,
 	}
 
-	it := grafeasClient.ListOccurrences(ctx, req)
-	occCount := 0
-	for {
-		occ, err := it.Next()
-		if err != nil {
-			slog.Debug("iterator done", "occurrences", occCount)
-			break
-		}
-		occCount++
-		slog.Debug("found occurrence with matching resourceUri")
+	slog.Info("querying container analysis", "resourceUri", resourceURL)
 
-		if occ.GetBuild() == nil {
-			slog.Debug("no build data in occurrence")
-			continue
-		}
+	it := client.GetGrafeasClient().ListOccurrences(ctx, req)
+	occ, err := it.Next()
+	if err != nil {
+		return nil, fmt.Errorf("no provenance found for %s", resourceURL)
+	}
 
-		// Check if this occurrence matches our digest (try SLSA v1, then v0.1 format)
-		var foundMatch bool
-		if prov := occ.GetBuild().GetInTotoSlsaProvenanceV1(); prov != nil {
-			foundMatch = matchesDigest(prov.Subject, digest)
-		}
-		if !foundMatch {
-			if stmt := occ.GetBuild().GetIntotoStatement(); stmt != nil {
-				foundMatch = matchesDigest(stmt.Subject, digest)
-			}
-		}
-		if !foundMatch {
-			continue
-		}
+	if occ.GetBuild() == nil {
+		return nil, fmt.Errorf("occurrence has no build data for %s", resourceURL)
+	}
 
-		slog.Info("found matching provenance")
-
-		// Extract signature from envelope if available
-		if envelope := occ.GetEnvelope(); envelope != nil && len(envelope.Signatures) > 0 {
-			sig := envelope.Signatures[0]
-			slog.Info("found DSSE signature", "keyid", sig.Keyid)
-			return &ProvenanceSignature{
-				KeyID:     sig.Keyid,
-				Signature: base64.StdEncoding.EncodeToString(sig.Sig),
-			}, nil
-		}
-
-		// If no DSSE envelope, provenance was verified by Container Analysis itself.
-		// Return a sentinel value indicating Google-verified provenance.
-		slog.Info("no DSSE envelope, provenance verified by container analysis")
+	// Extract signature from envelope if available
+	if envelope := occ.GetEnvelope(); envelope != nil && len(envelope.Signatures) > 0 {
+		sig := envelope.Signatures[0]
+		slog.Info("found DSSE signature", "keyid", sig.Keyid)
 		return &ProvenanceSignature{
-			KeyID:     "google-cloud-build",
-			Signature: "verified-by-container-analysis",
+			KeyID:     sig.Keyid,
+			Signature: base64.StdEncoding.EncodeToString(sig.Sig),
 		}, nil
 	}
 
-	return nil, fmt.Errorf("no provenance found for container %s (checked %d occurrences)", resourceURL, occCount)
+	// If no DSSE envelope, provenance was verified by Container Analysis itself.
+	// Return a sentinel value indicating Google-verified provenance.
+	slog.Info("no DSSE envelope, provenance verified by container analysis")
+	return &ProvenanceSignature{
+		KeyID:     "google-cloud-build",
+		Signature: "verified-by-container-analysis",
+	}, nil
 }
