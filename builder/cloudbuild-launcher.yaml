@@ -1,0 +1,80 @@
+# Cloud Build config for building the launcher binary with SLSA provenance.
+#
+# This builds the launcher binary and packages it in a minimal container image
+# to enable SLSA provenance generation via Container Analysis.
+#
+# Usage:
+#   gcloud builds submit --config=builder/cloudbuild-launcher.yaml \
+#     --substitutions=_VERSION=v1.0.0,_REGION=us-central1
+#
+# The CVM builder (builder/) then fetches this artifact and its provenance
+# to create a verifiable image build.
+
+substitutions:
+  # Version tag (e.g., v1.0.0 or commit SHA)
+  '_VERSION': '${SHORT_SHA}'
+  # Region for Artifact Registry
+  '_REGION': 'us-central1'
+
+steps:
+  # Step 1: Build the launcher binary
+  # Build from launcher module root (where go.mod is) with GOWORK=off
+  # so that the replace directives in go.mod work correctly
+  - name: golang:1.23
+    id: BuildLauncher
+    entrypoint: /bin/bash
+    args:
+      - -c
+      - |
+        cd launcher
+        CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOWORK=off go build \
+          -o /workspace/launcher-bin \
+          -ldflags="-X 'main.BuildCommit=${SHORT_SHA}'" \
+          ./launcher
+        echo "Built launcher binary:"
+        ls -la /workspace/launcher-bin
+        sha256sum /workspace/launcher-bin
+
+  # Step 2: Create a minimal Dockerfile for the launcher
+  - name: 'gcr.io/cloud-builders/docker'
+    id: CreateDockerfile
+    entrypoint: /bin/bash
+    args:
+      - -c
+      - |
+        cat > /workspace/Dockerfile.launcher << 'EOF'
+        FROM scratch
+        COPY launcher-bin /launcher
+        # This is a binary-only image for provenance tracking
+        # The launcher is extracted by the builder, not run as a container
+        ENTRYPOINT ["/launcher"]
+        EOF
+        cat /workspace/Dockerfile.launcher
+
+  # Step 3: Build and push container image to Artifact Registry
+  # This enables SLSA provenance storage in Container Analysis
+  - name: 'gcr.io/cloud-builders/docker'
+    id: BuildAndPush
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/confidential-space-launcher/launcher:${_VERSION}'
+      - '-f'
+      - '/workspace/Dockerfile.launcher'
+      - '/workspace'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: Push
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/confidential-space-launcher/launcher:${_VERSION}'
+
+images:
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/confidential-space-launcher/launcher:${_VERSION}'
+
+timeout: '600s'
+
+options:
+  # Enable provenance generation (SLSA Level 3)
+  requestedVerifyOption: VERIFIED
+  logging: CLOUD_LOGGING_ONLY

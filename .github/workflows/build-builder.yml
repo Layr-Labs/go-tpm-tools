@@ -1,0 +1,79 @@
+name: Build Builder
+
+on:
+  push:
+    tags:
+      - 'builder-v*'
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: us-central1
+  AR_REPO: confidential-space-builder
+
+jobs:
+  build:
+    name: Build Builder Container
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Parse Version
+        id: config
+        run: |
+          VERSION="${GITHUB_REF_NAME#builder-}"
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+            echo "::error::Invalid version: $VERSION (expected v<major>.<minor>.<patch>)"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Ensure Artifact Registry exists
+        run: |
+          if ! gcloud artifacts repositories describe "${{ env.AR_REPO }}" \
+              --location="${{ env.REGION }}" \
+              --project="${{ env.PROJECT_ID }}" --quiet > /dev/null 2>&1; then
+            echo "Creating repository: ${{ env.AR_REPO }}"
+            gcloud artifacts repositories create "${{ env.AR_REPO }}" \
+              --repository-format=docker \
+              --location="${{ env.REGION }}" \
+              --project="${{ env.PROJECT_ID }}"
+          fi
+
+      - name: Build with SLSA provenance
+        run: |
+          gcloud builds submit \
+            --config=builder/cloudbuild-builder.yaml \
+            --substitutions="_VERSION=${{ steps.config.outputs.version }},_REGION=${{ env.REGION }}" \
+            --project="${{ env.PROJECT_ID }}"
+
+      - name: Summary
+        if: success()
+        run: |
+          FULL_IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/builder:${{ steps.config.outputs.version }}"
+          cat <<EOF >> $GITHUB_STEP_SUMMARY
+          ### Builder Build Complete
+
+          | Property | Value |
+          |:--- |:--- |
+          | **Version** | \`${{ steps.config.outputs.version }}\` |
+          | **Image** | \`${FULL_IMAGE}\` |
+
+          **Provenance:**
+          \`\`\`bash
+          gcloud artifacts docker images describe $FULL_IMAGE --show-provenance
+          \`\`\`
+          EOF
