@@ -4,12 +4,14 @@ substitutions:
   '_CLEANUP': 'true'
   '_VM_NAME_PREFIX': 'oda-signedcontainer'
   '_ZONE': 'us-central1-a'
-  # If the workload image changes, re-sign it with:
-  #   cosign sign --key gcpkms://projects/tee-compute-global/locations/global/keyRings/cosign-test/cryptoKeys/ecdsa/cryptoKeyVersions/1 \
-  #     -y --tlog-upload=false <IMAGE>@sha256:<DIGEST>
+  # If the workload image changes, re-sign it and add the .sig tag:
+  #   1. Create signing config: curl -s https://raw.githubusercontent.com/sigstore/root-signing/refs/heads/main/targets/signing_config.v0.2.json | jq 'del(.rekorTlogUrls)' > /tmp/no_tlog.json
+  #   2. Sign: cosign sign --key gcpkms://projects/tee-compute-global/locations/global/keyRings/cosign-test/cryptoKeys/ecdsa/cryptoKeyVersions/1 -y --signing-config=/tmp/no_tlog.json <IMAGE>@sha256:<DIGEST>
+  #   3. Add tag: gcloud artifacts docker tags add <SIGNATURE_DIGEST> <IMAGE>:sha256-<DIGEST>.sig
+  #   4. Get new sig: cosign download signature <IMAGE>@sha256:<DIGEST> | jq -r '.dsseEnvelope.signatures[0].sig'
   '_WORKLOAD_IMAGE': 'us-central1-docker.pkg.dev/tee-compute-global/cs-test/ipc/happypath@sha256:c7e8b1878fc50231c7b0079ff2579fc6f707445f41e112cfe77ce045b1eb4f70'
   '_IMAGE_REPO': 'us-central1-docker.pkg.dev/tee-compute-global/cs-test/ipc/happypath'
-  '_EXPECTED_SIG': 'MEUCIQDb3WXW20wYV0GFFQAuFRgq8YrO+vekNxkgDwvlSJpbEAIgdgEsjjA+Ty+9GBN7UMMEq6FISefkn76E0cDepUvwNh4='
+  '_EXPECTED_SIG': 'MEUCIQD9MSTMXjW/MKUqXcnopBH7y2n999hQhYoTTF4SsjkHiAIgULNwporrVxOuTFNW4czfDg+czDOVggNH5EAmDuOBDGU='
 
 steps:
 - name: 'gcr.io/cloud-builders/gcloud'
