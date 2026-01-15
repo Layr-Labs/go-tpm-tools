@@ -3,11 +3,13 @@ substitutions:
   '_IMAGE_PROJECT': ''
   '_CLEANUP': 'true'
   '_VM_NAME_PREFIX': 'oda-signedcontainer'
-  '_ZONE': 'us-west1-a'
-  # If the workload image changes, the commit author should change the cosign signature as well to not break tests.
-  '_WORKLOAD_IMAGE': 'us-west1-docker.pkg.dev/confidential-space-images-dev/cs-integ-test-images/ipc/happypath@sha256:836d4ad39fa0fec5b386c4051a175036bd13d74a75d57933d30f6b804e509c8c'
-  '_SIGNATURE_REPO': 'us-docker.pkg.dev/confidential-space-images-dev/cs-cosign-tests/oda'
-  '_EXPECTED_SIG': 'MEUCIFoV6g8jU+EDQZJsySY5KcHYh/yRepxDFSUjhcJZ5du8AiEAooEHwjKsPIxO24NYE565E56DLU9H9vNX+jTP1nYwfNE='
+  '_ZONE': 'us-central1-a'
+  # If the workload image changes, re-sign it with:
+  #   cosign sign --key gcpkms://projects/tee-compute-global/locations/global/keyRings/cosign-test/cryptoKeys/ecdsa/cryptoKeyVersions/1 \
+  #     -y --tlog-upload=false <IMAGE>@sha256:<DIGEST>
+  '_WORKLOAD_IMAGE': 'us-central1-docker.pkg.dev/tee-compute-global/cs-test/ipc/happypath@sha256:c7e8b1878fc50231c7b0079ff2579fc6f707445f41e112cfe77ce045b1eb4f70'
+  '_IMAGE_REPO': 'us-central1-docker.pkg.dev/tee-compute-global/cs-test'
+  '_EXPECTED_SIG': 'MEUCIQDb3WXW20wYV0GFFQAuFRgq8YrO+vekNxkgDwvlSJpbEAIgdgEsjjA+Ty+9GBN7UMMEq6FISefkn76E0cDepUvwNh4='
 
 steps:
 - name: 'gcr.io/cloud-builders/gcloud'
@@ -17,7 +19,7 @@ steps:
   - 'BUILD_ID=$BUILD_ID'
   args: ['create_vm.sh','-i', '${_IMAGE_NAME}',
           '-p', '${_IMAGE_PROJECT}',
-          '-m', 'tee-image-reference=${_WORKLOAD_IMAGE},tee-container-log-redirect=true,tee-signed-image-repos=${_SIGNATURE_REPO},tee-env-ALLOWED_OVERRIDE=overridden,tee-cmd=["newCmd"]',
+          '-m', 'tee-image-reference=${_WORKLOAD_IMAGE},tee-container-log-redirect=true,tee-signed-image-repos=${_IMAGE_REPO},tee-env-ALLOWED_OVERRIDE=overridden,tee-cmd=["newCmd"]',
           '-n', '${_VM_NAME_PREFIX}-${BUILD_ID}',
           '-z', '${_ZONE}',
         ]
@@ -45,7 +47,3 @@ steps:
   env:
   - 'BUILD_ID=$BUILD_ID'
   args: ['check_failure.sh']
-
-options:
-  pool:
-    name: 'projects/confidential-space-images-dev/locations/us-west1/workerPools/cs-image-build-vpc'

@@ -8,12 +8,13 @@ import (
 
 // Manifest represents a build manifest binding provenance to output.
 type Manifest struct {
-	Version      string     `json:"version"`
-	Timestamp    time.Time  `json:"timestamp"`
-	Source       SourceInfo `json:"source"`
-	BaseImage    ImageRef   `json:"base_image"`
-	Output       ImageRef   `json:"output"`
-	CloudBuildID string     `json:"cloud_build_id"`
+	Version       string            `json:"version"`
+	Timestamp     time.Time         `json:"timestamp"`
+	Source        SourceInfo        `json:"source"`
+	BuilderImages map[string]string `json:"builder_images"`
+	BaseImage     ImageRef          `json:"base_image"`
+	Output        ImageRef          `json:"output"`
+	CloudBuildID  string            `json:"cloud_build_id"`
 }
 
 // SourceInfo contains provenance information for build inputs.
@@ -76,6 +77,7 @@ func newManifest(config *Config, launcher *LauncherResult, builder *BuilderResul
 				Signature:     builder.Signature,
 			},
 		},
+		BuilderImages: build.BuilderImages,
 		BaseImage: ImageRef{
 			Name:    config.BaseImage,
 			Project: config.BaseImageProject,

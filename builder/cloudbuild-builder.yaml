@@ -28,13 +28,13 @@ steps:
     args:
       - 'build'
       - '-t'
-      - '${_REGION}-docker.pkg.dev/tee-compute-global/cs-builder/builder:${_VERSION}'
+      - '${_REGION}-docker.pkg.dev/tee-compute-global/cs-build/builder:${_VERSION}'
       - '-f'
       - 'builder/Dockerfile'
       - 'builder/'
 
 images:
-  - '${_REGION}-docker.pkg.dev/tee-compute-global/cs-builder/builder:${_VERSION}'
+  - '${_REGION}-docker.pkg.dev/tee-compute-global/cs-build/builder:${_VERSION}'
 
 options:
   # Enable SLSA provenance generation

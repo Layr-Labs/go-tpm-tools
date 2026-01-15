@@ -4,4 +4,4 @@
 # See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
 # Protect all GitHub Actions workflows
-/.github/workflows/ @anupsv @vineetguptadev @shrimalmadhur @solimander
+/.github/workflows/ @anupsv @vineetguptadev @solimander
