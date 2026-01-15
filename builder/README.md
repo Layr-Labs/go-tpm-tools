@@ -28,11 +28,13 @@ Source Code ──> Cloud Build ──> Launcher Container ──> CVM Builder �
 ### Release Flow
 
 ```
-Manual Dispatch ──> Build ──> Deploy (debug + hardened) ──> Create Tag
-     │                │                   │                      │
-     ↓                ↓                   ↓                      ↓
-  3 versions     Containers          GCE Images            image-v0.1.0
-  required       + provenance        + attestation         (on success)
+Tag launcher-v* ──> Build Launcher ──┐
+                    + provenance     │
+                                     ├──> Manual Dispatch ──> Deploy ──> Create Tag
+Tag builder-v*  ──> Build Builder  ──┘         │               │             │
+                    + provenance               ↓               ↓             ↓
+                                           3 versions      GCE Images    image-v0.1.0
+                                           (references)    + attestation (on success)
 ```
 
 ### Workflows

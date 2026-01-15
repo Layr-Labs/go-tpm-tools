@@ -94,9 +94,9 @@ func downloadImageContents(ctx context.Context, imageRef, filePath string) (dige
 	return "", nil, fmt.Errorf("file %s not found in image layers", filePath)
 }
 
-// BuilderResult contains the builder container hash and provenance.
+// BuilderResult contains the builder container digest and provenance.
 type BuilderResult struct {
-	SHA256        string
+	ImageDigest   string // Container image digest
 	ProvenanceRef string // URL to fetch provenance
 	Signature     *ProvenanceSignature
 }
@@ -116,14 +116,14 @@ func fetchLauncherWithProvenance(ctx context.Context, config *Config) (*Launcher
 
 	// Compute hash of the binary
 	hash := sha256.Sum256(launcherData)
-	hashHex := hex.EncodeToString(hash[:])
-	slog.Info("launcher downloaded", "size", len(launcherData), "sha256", hashHex)
+	binaryDigest := "sha256:" + hex.EncodeToString(hash[:])
+	slog.Info("launcher downloaded", "size", len(launcherData), "binaryDigest", binaryDigest)
 
 	// Build provenance reference URL
 	provenanceRef := "https://" + stripImageTag(imageRef) + "@" + imageDigest
 
 	result := &LauncherResult{
-		SHA256:        hashHex,
+		BinaryDigest:  binaryDigest,
 		ImageDigest:   imageDigest,
 		ProvenanceRef: provenanceRef,
 		Data:          launcherData,
@@ -206,21 +206,18 @@ func fetchBuilderProvenance(ctx context.Context, config *Config) (*BuilderResult
 	}
 
 	// Parse the JWT to extract container info from submods.container
-	digest, imageRef, err := parseContainerInfoFromToken(token)
+	imageDigest, imageRef, err := parseContainerInfoFromToken(token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse container info from token: %w", err)
 	}
 
-	// Strip sha256: prefix for consistent format with launcher
-	sha256Hash := strings.TrimPrefix(digest, "sha256:")
-
-	slog.Info("builder container identified", "ref", imageRef, "sha256", sha256Hash)
+	slog.Info("builder container identified", "ref", imageRef, "imageDigest", imageDigest)
 
 	// Build provenance reference URL
-	provenanceRef := "https://" + stripImageTag(imageRef) + "@" + digest
+	provenanceRef := "https://" + stripImageTag(imageRef) + "@" + imageDigest
 
 	result := &BuilderResult{
-		SHA256:        sha256Hash,
+		ImageDigest:   imageDigest,
 		ProvenanceRef: provenanceRef,
 	}
 
@@ -231,7 +228,7 @@ func fetchBuilderProvenance(ctx context.Context, config *Config) (*BuilderResult
 		slog.Warn("could not fetch builder provenance signature",
 			"error", err,
 			"resourceUri", provenanceRef,
-			"digest", digest)
+			"imageDigest", imageDigest)
 		return result, nil
 	}
 
