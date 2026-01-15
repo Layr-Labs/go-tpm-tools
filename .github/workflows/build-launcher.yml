@@ -33,6 +33,7 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Authenticate to Google Cloud
+        id: auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
@@ -40,6 +41,22 @@ jobs:
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
+
+      - name: Debug auth
+        run: |
+          echo "=== Secrets check ==="
+          echo "PROJECT_ID set: ${{ secrets.GCP_PROJECT_ID != '' }}"
+          echo "SERVICE_ACCOUNT set: ${{ secrets.GCP_SERVICE_ACCOUNT != '' }}"
+          echo "PROVIDER set: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER != '' }}"
+
+          echo "=== Auth result ==="
+          echo "Credentials file: ${{ steps.auth.outputs.credentials_file_path }}"
+
+          echo "=== gcloud identity ==="
+          gcloud auth list
+
+          echo "=== Test bucket access ==="
+          gsutil ls gs://tee-compute-global_cloudbuild/ 2>&1 || true
 
       - name: Build with SLSA provenance
         run: |
