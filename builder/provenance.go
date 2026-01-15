@@ -247,8 +247,8 @@ func parseContainerInfoFromToken(token string) (digest, imageRef string, err err
 		return "", "", fmt.Errorf("invalid JWT format")
 	}
 
-	// Decode the payload (base64url encoded)
-	payload, err := base64URLDecode(parts[1])
+	// Decode the payload (base64url encoded, no padding)
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
 		return "", "", fmt.Errorf("failed to decode JWT payload: %w", err)
 	}
@@ -272,22 +272,6 @@ func parseContainerInfoFromToken(token string) (digest, imageRef string, err err
 	}
 
 	return claims.Submods.Container.ImageDigest, claims.Submods.Container.ImageReference, nil
-}
-
-// base64URLDecode decodes a base64url-encoded string (JWT uses base64url without padding).
-func base64URLDecode(s string) ([]byte, error) {
-	// Add padding if necessary
-	switch len(s) % 4 {
-	case 2:
-		s += "=="
-	case 3:
-		s += "="
-	}
-	// Replace URL-safe characters
-	s = strings.ReplaceAll(s, "-", "+")
-	s = strings.ReplaceAll(s, "_", "/")
-
-	return base64.StdEncoding.DecodeString(s)
 }
 
 // fetchProvenanceSignature queries Container Analysis for provenance signature on a container image.
