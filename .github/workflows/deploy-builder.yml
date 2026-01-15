@@ -104,7 +104,6 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     strategy:
-      fail-fast: false
       matrix:
         image_env: [debug, hardened]
 
@@ -113,10 +112,10 @@ jobs:
         id: config
         run: |
           # Convert dots to dashes and remove 'v' prefix (v0.12.0 -> 0-12-0)
-          I_VER=$(echo "${{ needs.build.outputs.image_version }}" | tr '.' '-' | sed 's/^v//')
+          IMAGE_VERSION=$(echo "${{ needs.build.outputs.image_version }}" | tr '.' '-' | sed 's/^v//')
 
-          IMAGE_NAME="cs-image-${I_VER}-${{ matrix.image_env }}"
-          INSTANCE_NAME="cs-builder-${I_VER}-${{ matrix.image_env }}"
+          IMAGE_NAME="cs-image-${IMAGE_VERSION}-${{ matrix.image_env }}"
+          INSTANCE_NAME="cs-builder-${IMAGE_VERSION}-${{ matrix.image_env }}"
 
           echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
           echo "instance_name=$INSTANCE_NAME" >> $GITHUB_OUTPUT
