@@ -225,6 +225,19 @@ jobs:
             --zone="${{ env.ZONE }}" --project="${{ env.PROJECT_ID }}" 2>/dev/null | tail -100
           exit 1
 
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Tests
+        run: |
+          echo "Running test suite against ${{ steps.config.outputs.image_name }}"
+          gcloud builds submit \
+            --config=launcher/image/test/test_suite.yaml \
+            --substitutions="_IMAGE_NAME=${{ steps.config.outputs.image_name }},_IMAGE_PROJECT=${{ env.PROJECT_ID }}" \
+            --project="${{ env.PROJECT_ID }}" \
+            --region="${{ env.REGION }}" \
+            launcher/image/test/
+
       - name: Make Image Public
         run: |
           gcloud compute images add-iam-policy-binding "${{ steps.config.outputs.image_name }}" \
