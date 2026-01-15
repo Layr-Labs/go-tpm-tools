@@ -116,20 +116,22 @@ steps:
     gcloud builds submit --config=test_memory_monitoring.yaml --region us-central1 \
       --substitutions _IMAGE_NAME=${IMAGE_NAME},_IMAGE_PROJECT=${IMAGE_PROJECT}
 
-- name: 'gcr.io/cloud-builders/gcloud'
-  id: HealthMonitoringTests
-  env:
-  - 'IMAGE_NAME=${_IMAGE_NAME}'
-  - 'IMAGE_PROJECT=${_IMAGE_PROJECT}'
-  script: |
-    #!/usr/bin/env bash
-    if [[ "${IMAGE_NAME}" != *"hardened"* ]]; then
-      echo "Skipping health monitoring tests (not a hardened image)"
-      exit 0
-    fi
-    echo "running health monitoring tests on ${IMAGE_NAME}"
-    gcloud builds submit --config=test_health_monitoring.yaml --region us-central1 \
-      --substitutions _IMAGE_NAME=${IMAGE_NAME},_IMAGE_PROJECT=${IMAGE_PROJECT}
+# Skipped: HealthMonitoringTests requires EnableHealthMonitoring experiment flag
+# which is not enabled by default. Re-enable when the experiment is graduated.
+# - name: 'gcr.io/cloud-builders/gcloud'
+#   id: HealthMonitoringTests
+#   env:
+#   - 'IMAGE_NAME=${_IMAGE_NAME}'
+#   - 'IMAGE_PROJECT=${_IMAGE_PROJECT}'
+#   script: |
+#     #!/usr/bin/env bash
+#     if [[ "${IMAGE_NAME}" != *"hardened"* ]]; then
+#       echo "Skipping health monitoring tests (not a hardened image)"
+#       exit 0
+#     fi
+#     echo "running health monitoring tests on ${IMAGE_NAME}"
+#     gcloud builds submit --config=test_health_monitoring.yaml --region us-central1 \
+#       --substitutions _IMAGE_NAME=${IMAGE_NAME},_IMAGE_PROJECT=${IMAGE_PROJECT}
 
 - name: 'gcr.io/cloud-builders/gcloud'
   id: ODAWithSignedContainerTests
