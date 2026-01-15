@@ -8,7 +8,7 @@ substitutions:
   #   cosign sign --key gcpkms://projects/tee-compute-global/locations/global/keyRings/cosign-test/cryptoKeys/ecdsa/cryptoKeyVersions/1 \
   #     -y --tlog-upload=false <IMAGE>@sha256:<DIGEST>
   '_WORKLOAD_IMAGE': 'us-central1-docker.pkg.dev/tee-compute-global/cs-test/ipc/happypath@sha256:c7e8b1878fc50231c7b0079ff2579fc6f707445f41e112cfe77ce045b1eb4f70'
-  '_IMAGE_REPO': 'us-central1-docker.pkg.dev/tee-compute-global/cs-test'
+  '_IMAGE_REPO': 'us-central1-docker.pkg.dev/tee-compute-global/cs-test/ipc/happypath'
   '_EXPECTED_SIG': 'MEUCIQDb3WXW20wYV0GFFQAuFRgq8YrO+vekNxkgDwvlSJpbEAIgdgEsjjA+Ty+9GBN7UMMEq6FISefkn76E0cDepUvwNh4='
 
 steps:

@@ -5,7 +5,7 @@ substitutions:
   '_VM_NAME_PREFIX': 'discover-signatures'
   '_ZONE': 'us-central1-a'
   '_WORKLOAD_IMAGE': 'us-central1-docker.pkg.dev/tee-compute-global/cs-test/basic-test:latest'
-  '_IMAGE_REPO': 'us-central1-docker.pkg.dev/tee-compute-global/cs-test'
+  '_IMAGE_REPO': 'us-central1-docker.pkg.dev/tee-compute-global/cs-test/basic-test'
 
 steps:
 - name: 'gcr.io/projectsigstore/cosign:v2.2.0'
