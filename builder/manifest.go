@@ -25,7 +25,7 @@ type SourceInfo struct {
 
 // ArtifactInfo contains hash and provenance details for an artifact.
 type ArtifactInfo struct {
-	SHA256        string               `json:"sha256"`
+	BinaryDigest  string               `json:"binary_digest,omitempty"`
 	ImageDigest   string               `json:"image_digest,omitempty"`
 	ProvenanceRef string               `json:"provenance_ref"`
 	Signature     *ProvenanceSignature `json:"signature,omitempty"`
@@ -46,15 +46,15 @@ type ImageRef struct {
 
 // BuildAttestation contains the complete attestation for a build.
 type BuildAttestation struct {
-	Manifest     Manifest `json:"manifest"`
-	ManifestHash string   `json:"manifest_hash"`
-	GCAToken     string   `json:"gca_token"`
+	Manifest       Manifest `json:"manifest"`
+	ManifestDigest string   `json:"manifest_digest"`
+	GCAToken       string   `json:"gca_token"`
 }
 
 // LauncherResult contains the fetched launcher artifact and its provenance.
 type LauncherResult struct {
-	SHA256        string
-	ImageDigest   string
+	BinaryDigest  string // SHA256 hash of the launcher binary
+	ImageDigest   string // Container image digest
 	ProvenanceRef string
 	Signature     *ProvenanceSignature
 	Data          []byte
@@ -66,13 +66,13 @@ func newManifest(config *Config, launcher *LauncherResult, builder *BuilderResul
 		Timestamp: time.Now().UTC(),
 		Source: SourceInfo{
 			Launcher: ArtifactInfo{
-				SHA256:        launcher.SHA256,
+				BinaryDigest:  launcher.BinaryDigest,
 				ImageDigest:   launcher.ImageDigest,
 				ProvenanceRef: launcher.ProvenanceRef,
 				Signature:     launcher.Signature,
 			},
 			Builder: ArtifactInfo{
-				SHA256:        builder.SHA256,
+				ImageDigest:   builder.ImageDigest,
 				ProvenanceRef: builder.ProvenanceRef,
 				Signature:     builder.Signature,
 			},

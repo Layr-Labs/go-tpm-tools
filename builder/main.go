@@ -91,8 +91,8 @@ func fetchLauncher(ctx context.Context, config *Config) (*LauncherResult, error)
 	}
 
 	slog.Info("launcher fetched",
-		"sha256", result.SHA256,
-		"digest", result.ImageDigest,
+		"binaryDigest", result.BinaryDigest,
+		"imageDigest", result.ImageDigest,
 	)
 	return result, nil
 }
@@ -106,7 +106,7 @@ func fetchBuilder(ctx context.Context, config *Config) (*BuilderResult, error) {
 		return nil, fmt.Errorf("builder missing provenance signature")
 	}
 
-	slog.Info("builder fetched", "sha256", result.SHA256)
+	slog.Info("builder fetched", "imageDigest", result.ImageDigest)
 	return result, nil
 }
 
@@ -137,11 +137,12 @@ func attest(ctx context.Context, config *Config, manifest Manifest) (*BuildAttes
 		return nil, err
 	}
 
-	slog.Info("attestation received", "manifest_hash", hex.EncodeToString(hash))
+	manifestDigest := "sha256:" + hex.EncodeToString(hash)
+	slog.Info("attestation received", "manifestDigest", manifestDigest)
 
 	return &BuildAttestation{
-		Manifest:     manifest,
-		ManifestHash: hex.EncodeToString(hash),
-		GCAToken:     token,
+		Manifest:       manifest,
+		ManifestDigest: manifestDigest,
+		GCAToken:       token,
 	}, nil
 }
