@@ -22,6 +22,10 @@ type BuildResult struct {
 	// ImageID is the unique GCE image ID (immutable identifier)
 	ImageID string
 
+	// BuilderImages maps builder container names to their SHA256 digests.
+	// This captures the exact versions of tools like cos-customizer, docker, gcloud used.
+	BuilderImages map[string]string
+
 	// Status is the build status
 	Status string
 
@@ -184,10 +188,11 @@ func triggerImageBuild(ctx context.Context, config *Config, launcherImage string
 	duration := time.Since(startTime)
 
 	result := &BuildResult{
-		BuildID:  resp.Id,
-		Status:   resp.Status.String(),
-		Duration: duration,
-		ImageID:  extractImageID(resp),
+		BuildID:       resp.Id,
+		Status:        resp.Status.String(),
+		Duration:      duration,
+		ImageID:       extractImageID(resp),
+		BuilderImages: extractBuilderImages(resp),
 	}
 
 	if resp.Status != cloudbuildpb.Build_SUCCESS {
@@ -214,4 +219,23 @@ func extractImageID(build *cloudbuildpb.Build) string {
 		}
 	}
 	return ""
+}
+
+// extractBuilderImages creates a deduplicated map of builder container names to their SHA256 digests.
+// This provides cryptographic binding to the exact tools used in the build.
+func extractBuilderImages(build *cloudbuildpb.Build) map[string]string {
+	images := make(map[string]string)
+	if build.Results == nil {
+		return images
+	}
+
+	for i, step := range build.Steps {
+		if i < len(build.Results.BuildStepImages) {
+			digest := build.Results.BuildStepImages[i]
+			if digest != "" && images[step.Name] == "" {
+				images[step.Name] = digest
+			}
+		}
+	}
+	return images
 }

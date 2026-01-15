@@ -12,7 +12,7 @@ run_ssh_test() {
     BUILD_ID=$(date +%s)
     HOME_DIR=$(echo ~)
     VM_NAME="cs-ssh-test-$BUILD_ID"
-    WORKLOAD_IMAGE="us-west1-docker.pkg.dev/tee-compute-global/cs-integration-test-images/basic-test:latest"
+    WORKLOAD_IMAGE="us-central1-docker.pkg.dev/tee-compute-global/cs-test/basic-test:latest"
     ZONE="us-central1-a"
 
     ACCOUNT_NAME=$(gcloud config list account --format "value(core.account)" | tr @. _)

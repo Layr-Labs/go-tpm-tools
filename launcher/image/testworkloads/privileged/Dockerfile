@@ -1,5 +1,5 @@
 # From current directory:
-# gcloud builds submit --tag us-west1-docker.pkg.dev/tee-compute-global/cs-integration-test-images/privileged:latest --project tee-compute-global
+# gcloud builds submit --tag us-central1-docker.pkg.dev/tee-compute-global/cs-test/privileged:latest --project tee-compute-global
 FROM alpine
 
 RUN apk update

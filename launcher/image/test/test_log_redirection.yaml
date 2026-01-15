@@ -3,8 +3,8 @@ substitutions:
   '_IMAGE_PROJECT': ''
   '_CLEANUP': 'true'
   '_VM_NAME_PREFIX': 'cs-logredirect-test'
-  '_ZONE': 'us-west1-a'
-  '_WORKLOAD_IMAGE': 'us-west1-docker.pkg.dev/tee-compute-global/cs-integration-test-images/basic-test:latest'
+  '_ZONE': 'us-central1-a'
+  '_WORKLOAD_IMAGE': 'us-central1-docker.pkg.dev/tee-compute-global/cs-test/basic-test:latest'
 
 steps:
 - name: 'gcr.io/cloud-builders/gcloud'

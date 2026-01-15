@@ -1,6 +1,6 @@
 # From current directory:
 # GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o main ../basic
-# gcloud builds submit --tag us-west1-docker.pkg.dev/tee-compute-global/cs-integration-test-images/launchpolicylognever:latest --project tee-compute-global
+# gcloud builds submit --tag us-central1-docker.pkg.dev/tee-compute-global/cs-test/launchpolicylognever:latest --project tee-compute-global
 FROM alpine
 
 COPY main /

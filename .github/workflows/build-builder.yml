@@ -12,12 +12,13 @@ permissions:
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-central1
-  AR_REPO: cs-builder
+  AR_REPO: cs-build
 
 jobs:
   build:
     name: Build Builder Container
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,18 +41,6 @@ jobs:
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
-
-      - name: Ensure Artifact Registry exists
-        run: |
-          if ! gcloud artifacts repositories describe "${{ env.AR_REPO }}" \
-              --location="${{ env.REGION }}" \
-              --project="${{ env.PROJECT_ID }}" --quiet > /dev/null 2>&1; then
-            echo "Creating repository: ${{ env.AR_REPO }}"
-            gcloud artifacts repositories create "${{ env.AR_REPO }}" \
-              --repository-format=docker \
-              --location="${{ env.REGION }}" \
-              --project="${{ env.PROJECT_ID }}"
-          fi
 
       - name: Build with SLSA provenance
         run: |
