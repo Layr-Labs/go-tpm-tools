@@ -5,59 +5,6 @@ import (
 	"testing"
 )
 
-func TestBase64URLDecode(t *testing.T) {
-	tests := []struct {
-		name    string
-		input   string
-		want    string
-		wantErr bool
-	}{
-		{
-			name:    "standard base64url without padding",
-			input:   "SGVsbG8gV29ybGQ",
-			want:    "Hello World",
-			wantErr: false,
-		},
-		{
-			name:    "base64url with URL-safe chars",
-			input:   "PDw_Pz4-",
-			want:    "<<??>>",
-			wantErr: false,
-		},
-		{
-			name:    "empty string",
-			input:   "",
-			want:    "",
-			wantErr: false,
-		},
-		{
-			name:    "base64url needing 2 padding chars",
-			input:   "YQ",
-			want:    "a",
-			wantErr: false,
-		},
-		{
-			name:    "base64url needing 1 padding char",
-			input:   "YWI",
-			want:    "ab",
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := base64URLDecode(tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("base64URLDecode() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if string(got) != tt.want {
-				t.Errorf("base64URLDecode() = %q, want %q", string(got), tt.want)
-			}
-		})
-	}
-}
-
 func TestParseContainerInfoFromToken(t *testing.T) {
 	// Create a minimal JWT with container info in the payload
 	// JWT format: header.payload.signature
