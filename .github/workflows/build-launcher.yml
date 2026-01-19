@@ -32,6 +32,38 @@ jobs:
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Debug - Check secrets injection
+        run: |
+          echo "=== Environment Info ==="
+          echo "Repository: ${{ github.repository }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Event: ${{ github.event_name }}"
+          echo "Environment: production"
+
+          echo ""
+          echo "=== Secrets Presence Check ==="
+          echo "GCP_PROJECT_ID is set: ${{ secrets.GCP_PROJECT_ID != '' }}"
+          echo "GCP_SERVICE_ACCOUNT is set: ${{ secrets.GCP_SERVICE_ACCOUNT != '' }}"
+          echo "GCP_WORKLOAD_IDENTITY_PROVIDER is set: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER != '' }}"
+
+          echo ""
+          echo "=== Secret Length Check (non-zero means set) ==="
+          echo "GCP_PROJECT_ID length: ${#PROJECT_ID_VAL}"
+          echo "GCP_SERVICE_ACCOUNT length: ${#SA_VAL}"
+          echo "GCP_WORKLOAD_IDENTITY_PROVIDER length: ${#WIF_VAL}"
+
+          echo ""
+          echo "=== Env var from workflow env block ==="
+          echo "PROJECT_ID env: '${{ env.PROJECT_ID }}'"
+
+          if [[ -z "$WIF_VAL" ]]; then
+            echo "::error::GCP_WORKLOAD_IDENTITY_PROVIDER secret is EMPTY - check that secrets are configured in the 'production' environment"
+          fi
+        env:
+          PROJECT_ID_VAL: ${{ secrets.GCP_PROJECT_ID }}
+          SA_VAL: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          WIF_VAL: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+
       - name: Authenticate to Google Cloud
         id: auth
         uses: google-github-actions/auth@v2
@@ -43,22 +75,6 @@ jobs:
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
-
-      - name: Debug auth
-        run: |
-          echo "=== Secrets check ==="
-          echo "PROJECT_ID set: ${{ secrets.GCP_PROJECT_ID != '' }}"
-          echo "SERVICE_ACCOUNT set: ${{ secrets.GCP_SERVICE_ACCOUNT != '' }}"
-          echo "PROVIDER set: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER != '' }}"
-
-          echo "=== Auth result ==="
-          echo "Credentials file: ${{ steps.auth.outputs.credentials_file_path }}"
-
-          echo "=== gcloud identity ==="
-          gcloud auth list
-
-          echo "=== Test bucket access ==="
-          gsutil ls gs://tee-compute-global_cloudbuild/ 2>&1 || true
 
       - name: Build with SLSA provenance
         run: |
