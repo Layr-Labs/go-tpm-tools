@@ -85,7 +85,11 @@ jobs:
           gcloud services list --enabled --limit=1
           echo ""
           echo "Testing bucket access:"
-          gcloud storage ls gs://${{ env.PROJECT_ID }}_cloudbuild/ --limit=1
+          gsutil ls gs://${{ env.PROJECT_ID }}_cloudbuild/ | head -5 || echo "Bucket access failed"
+          echo ""
+          echo "Testing write to bucket:"
+          echo "test" | gsutil cp - gs://${{ env.PROJECT_ID }}_cloudbuild/debug-test.txt && echo "Write succeeded" || echo "Write failed"
+          gsutil rm gs://${{ env.PROJECT_ID }}_cloudbuild/debug-test.txt 2>/dev/null || true
 
       - name: Build with SLSA provenance
         run: |
