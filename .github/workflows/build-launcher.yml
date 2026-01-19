@@ -76,6 +76,17 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Debug Auth
+        run: |
+          echo "Authenticated as:"
+          gcloud auth list
+          echo ""
+          echo "Testing serviceusage permission:"
+          gcloud services list --enabled --limit=1
+          echo ""
+          echo "Testing bucket access:"
+          gcloud storage ls gs://${{ env.PROJECT_ID }}_cloudbuild/ --limit=1
+
       - name: Build with SLSA provenance
         run: |
           gcloud builds submit \
