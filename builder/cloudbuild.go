@@ -147,7 +147,7 @@ func triggerImageBuild(ctx context.Context, config *Config, launcherImage string
 			Source: &cloudbuildpb.Source_StorageSource{
 				StorageSource: &cloudbuildpb.StorageSource{
 					Bucket:     config.StagingBucket,
-					Object:     "source.tar.gz",
+					Object:     sourceObjectPath(config),
 					Generation: sourceGeneration,
 				},
 			},
