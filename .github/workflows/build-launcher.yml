@@ -47,7 +47,8 @@ jobs:
             --config=builder/cloudbuild-launcher.yaml \
             --substitutions="_VERSION=${{ steps.config.outputs.version }},_REGION=${{ env.REGION }}" \
             --project="${{ env.PROJECT_ID }}" \
-            --gcs-source-staging-dir="gs://${{ env.PROJECT_ID }}_cloudbuild/source"
+            --gcs-source-staging-dir="gs://${{ env.PROJECT_ID }}_cloudbuild/source" \
+            --gcs-log-dir="gs://${{ env.PROJECT_ID }}_cloudbuild/logs"
 
       - name: Summary
         if: success()
