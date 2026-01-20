@@ -16,11 +16,15 @@ import (
 const (
 	// scriptsDir is where cos-customizer scripts are bundled in the container
 	scriptsDir = "/scripts"
-	// sourceObject is the name of the source archive in GCS
-	sourceObject = "source.tar.gz"
 	// targetDir is the path structure expected by cos-customizer build context
 	targetDir = "launcher/image"
 )
+
+// sourceObjectPath returns the GCS object path for the source archive.
+// Uses image name to prevent race conditions when building multiple images in parallel.
+func sourceObjectPath(config *Config) string {
+	return fmt.Sprintf("%s/source.tar.gz", config.OutputImageName)
+}
 
 // uploadSource creates a tar.gz archive from the bundled cos-customizer scripts
 // and uploads it to the staging bucket. Cloud Build uses this as its source.
@@ -32,7 +36,8 @@ func uploadSource(ctx context.Context, config *Config) (int64, error) {
 	}
 	defer client.Close()
 
-	obj := client.Bucket(config.StagingBucket).Object(sourceObject)
+	objectPath := sourceObjectPath(config)
+	obj := client.Bucket(config.StagingBucket).Object(objectPath)
 	w := obj.NewWriter(ctx)
 	defer w.Close()
 
@@ -112,7 +117,7 @@ func uploadSource(ctx context.Context, config *Config) (int64, error) {
 
 	slog.Info("source uploaded",
 		"bucket", config.StagingBucket,
-		"object", sourceObject,
+		"object", objectPath,
 		"generation", attrs.Generation,
 	)
 	return attrs.Generation, nil
