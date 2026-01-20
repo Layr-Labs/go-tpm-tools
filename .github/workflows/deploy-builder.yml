@@ -39,8 +39,8 @@ env:
   MACHINE_TYPE: c3-standard-4
 
 jobs:
-  build:
-    name: Build Artifacts
+  validate:
+    name: Validate Inputs
     runs-on: ubuntu-latest
     environment: production
     outputs:
@@ -90,27 +90,30 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Build Images
+      - name: Verify Images Exist
         run: |
-          echo "::group::Building Launcher ${{ steps.versions.outputs.launcher_version }}"
-          gcloud builds submit --config=builder/cloudbuild-launcher.yaml \
-            --substitutions="_VERSION=${{ steps.versions.outputs.launcher_version }},_REGION=${{ env.REGION }}" \
-            --project="${{ env.PROJECT_ID }}" \
-            --gcs-source-staging-dir="gs://${{ env.PROJECT_ID }}_cloudbuild/source" \
-            --gcs-log-dir="gs://${{ env.PROJECT_ID }}_cloudbuild/logs"
-          echo "::endgroup::"
+          LAUNCHER_IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/cs-build/launcher:${{ steps.versions.outputs.launcher_version }}"
+          BUILDER_IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/cs-build/builder:${{ steps.versions.outputs.builder_version }}"
 
-          echo "::group::Building Builder Container ${{ steps.versions.outputs.builder_version }}"
-          gcloud builds submit --config=builder/cloudbuild-builder.yaml \
-            --substitutions="_VERSION=${{ steps.versions.outputs.builder_version }},_REGION=${{ env.REGION }}" \
-            --project="${{ env.PROJECT_ID }}" \
-            --gcs-source-staging-dir="gs://${{ env.PROJECT_ID }}_cloudbuild/source" \
-            --gcs-log-dir="gs://${{ env.PROJECT_ID }}_cloudbuild/logs"
-          echo "::endgroup::"
+          echo "Checking launcher image: $LAUNCHER_IMAGE"
+          if ! gcloud artifacts docker images describe "$LAUNCHER_IMAGE" --project="${{ env.PROJECT_ID }}" > /dev/null 2>&1; then
+            echo "::error::Launcher image not found: $LAUNCHER_IMAGE"
+            echo "Run the build-launcher workflow first with tag launcher-${{ steps.versions.outputs.launcher_version }}"
+            exit 1
+          fi
+          echo "✓ Launcher image exists"
+
+          echo "Checking builder image: $BUILDER_IMAGE"
+          if ! gcloud artifacts docker images describe "$BUILDER_IMAGE" --project="${{ env.PROJECT_ID }}" > /dev/null 2>&1; then
+            echo "::error::Builder image not found: $BUILDER_IMAGE"
+            echo "Run the build-builder workflow first with tag builder-${{ steps.versions.outputs.builder_version }}"
+            exit 1
+          fi
+          echo "✓ Builder image exists"
 
   deploy:
     name: Deploy ${{ matrix.image_env }}
-    needs: build
+    needs: validate
     runs-on: ubuntu-latest
     environment: production
     strategy:
@@ -122,7 +125,7 @@ jobs:
         id: config
         run: |
           # Convert dots to dashes and remove 'v' prefix (v0.12.0 -> 0-12-0)
-          IMAGE_VERSION=$(echo "${{ needs.build.outputs.image_version }}" | tr '.' '-' | sed 's/^v//')
+          IMAGE_VERSION=$(echo "${{ needs.validate.outputs.image_version }}" | tr '.' '-' | sed 's/^v//')
 
           IMAGE_NAME="cs-image-${IMAGE_VERSION}-${{ matrix.image_env }}"
           INSTANCE_NAME="cs-builder-${IMAGE_VERSION}-${{ matrix.image_env }}"
@@ -149,9 +152,9 @@ jobs:
 
       - name: Deploy Builder VM
         run: |
-          AR_IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO_BUILDER }}/builder:${{ needs.build.outputs.builder_version }}"
+          AR_IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO_BUILDER }}/builder:${{ needs.validate.outputs.builder_version }}"
           # docker:// format: docker://REGION/PROJECT/REPO/IMAGE/VERSION
-          LAUNCHER_ARTIFACT="docker://${{ env.REGION }}/${{ env.PROJECT_ID }}/cs-build/launcher/${{ needs.build.outputs.launcher_version }}"
+          LAUNCHER_ARTIFACT="docker://${{ env.REGION }}/${{ env.PROJECT_ID }}/cs-build/launcher/${{ needs.validate.outputs.launcher_version }}"
 
           # Clean Metadata Array
           METADATA_PAIRS=(
@@ -263,9 +266,9 @@ jobs:
 
           | Property | Value |
           |:--- |:--- |
-          | **Image Version** | \`${{ needs.build.outputs.image_version }}\` |
-          | **Builder** | \`${{ needs.build.outputs.builder_version }}\` |
-          | **Launcher** | \`${{ needs.build.outputs.launcher_version }}\` |
+          | **Image Version** | \`${{ needs.validate.outputs.image_version }}\` |
+          | **Builder** | \`${{ needs.validate.outputs.builder_version }}\` |
+          | **Launcher** | \`${{ needs.validate.outputs.launcher_version }}\` |
           | **Image** | \`${{ steps.config.outputs.image_name }}\` |
           | **Public** | ✓ |
 
@@ -277,7 +280,7 @@ jobs:
 
   tag:
     name: Create Release Tag
-    needs: [build, deploy]
+    needs: [validate, deploy]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -287,9 +290,9 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "image-${{ needs.build.outputs.image_version }}" \
-            -m "CS Image ${{ needs.build.outputs.image_version }}
+          git tag -a "image-${{ needs.validate.outputs.image_version }}" \
+            -m "CS Image ${{ needs.validate.outputs.image_version }}
 
-          Builder: ${{ needs.build.outputs.builder_version }}
-          Launcher: ${{ needs.build.outputs.launcher_version }}"
-          git push origin "image-${{ needs.build.outputs.image_version }}"
+          Builder: ${{ needs.validate.outputs.builder_version }}
+          Launcher: ${{ needs.validate.outputs.launcher_version }}"
+          git push origin "image-${{ needs.validate.outputs.image_version }}"
