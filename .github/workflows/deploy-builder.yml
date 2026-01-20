@@ -184,6 +184,7 @@ jobs:
             "tee-env-PROVENANCE_BUCKET=${{ env.PROVENANCE_BUCKET }}"
             "tee-env-GCA_ENDPOINT=https://confidentialcomputing.googleapis.com"
             "tee-env-IMAGE_ENV=${{ matrix.image_env }}"
+            "tee-env-ZONE=${{ env.ZONE }}"
           )
           
           IFS="~"
