@@ -32,7 +32,7 @@ env:
   STAGING_BUCKET: ${{ secrets.GCP_STAGING_BUCKET }}
   PROVENANCE_BUCKET: ${{ secrets.GCP_PROVENANCE_BUCKET }}
   REGION: us-central1
-  ZONE: us-central1-a
+  ZONE: us-central1-b
   AR_REPO_BUILDER: cs-build
   BASE_IMAGE: cos-tdx-113-18244-521-56
   BASE_IMAGE_PROJECT: confidential-vm-images
