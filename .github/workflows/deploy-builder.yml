@@ -1,20 +1,26 @@
 name: Deploy Builder
 
 on:
+  # TODO: Remove push trigger after testing
+  push:
+    branches: [soli/verifiable-builds]
   workflow_dispatch:
     inputs:
       image_version:
         description: 'Image version (e.g., v0.1.0)'
         required: true
         type: string
+        default: 'v0.1.0-test'
       builder_version:
         description: 'Builder version (e.g., v0.1.0)'
         required: true
         type: string
+        default: 'v0.1.0-test'
       launcher_version:
         description: 'Launcher version (e.g., v0.1.0)'
         required: true
         type: string
+        default: 'v0.1.0-test'
 
 permissions:
   contents: write
@@ -47,9 +53,9 @@ jobs:
         run: |
           REGEX="^v[0-9]+\.[0-9]+\.[0-9]+.*$"
 
-          IMAGE_VERSION="${{ inputs.image_version }}"
-          BUILDER_VERSION="${{ inputs.builder_version }}"
-          LAUNCHER_VERSION="${{ inputs.launcher_version }}"
+          IMAGE_VERSION="${{ inputs.image_version || 'v0.1.0-test' }}"
+          BUILDER_VERSION="${{ inputs.builder_version || 'v0.1.0-test' }}"
+          LAUNCHER_VERSION="${{ inputs.launcher_version || 'v0.1.0-test' }}"
 
           if [[ ! "$IMAGE_VERSION" =~ $REGEX ]]; then
             echo "::error::Image version '$IMAGE_VERSION' invalid. Expected vX.Y.Z"
