@@ -96,7 +96,7 @@ jobs:
           BUILDER_IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/cs-build/builder:${{ steps.versions.outputs.builder_version }}"
 
           echo "Checking launcher image: $LAUNCHER_IMAGE"
-          if ! gcloud artifacts docker images describe "$LAUNCHER_IMAGE" --project="${{ env.PROJECT_ID }}" > /dev/null 2>&1; then
+          if ! gcloud artifacts docker images describe "$LAUNCHER_IMAGE" --project="${{ env.PROJECT_ID }}"; then
             echo "::error::Launcher image not found: $LAUNCHER_IMAGE"
             echo "Run the build-launcher workflow first with tag launcher-${{ steps.versions.outputs.launcher_version }}"
             exit 1
@@ -104,7 +104,7 @@ jobs:
           echo "✓ Launcher image exists"
 
           echo "Checking builder image: $BUILDER_IMAGE"
-          if ! gcloud artifacts docker images describe "$BUILDER_IMAGE" --project="${{ env.PROJECT_ID }}" > /dev/null 2>&1; then
+          if ! gcloud artifacts docker images describe "$BUILDER_IMAGE" --project="${{ env.PROJECT_ID }}"; then
             echo "::error::Builder image not found: $BUILDER_IMAGE"
             echo "Run the build-builder workflow first with tag builder-${{ steps.versions.outputs.builder_version }}"
             exit 1
