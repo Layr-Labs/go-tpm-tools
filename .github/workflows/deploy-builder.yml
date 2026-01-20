@@ -42,7 +42,6 @@ jobs:
   validate:
     name: Validate Inputs
     runs-on: ubuntu-latest
-    environment: production
     outputs:
       image_version: ${{ steps.versions.outputs.image_version }}
       builder_version: ${{ steps.versions.outputs.builder_version }}
@@ -112,6 +111,7 @@ jobs:
     name: Deploy ${{ matrix.image_env }}
     needs: validate
     runs-on: ubuntu-latest
+    environment: production
     strategy:
       matrix:
         image_env: [debug, hardened]
