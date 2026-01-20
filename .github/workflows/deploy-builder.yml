@@ -89,8 +89,8 @@ jobs:
 
       - name: Verify Images Exist
         run: |
-          LAUNCHER_IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/cs-build/launcher:${{ steps.versions.outputs.launcher_version }}"
-          BUILDER_IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/cs-build/builder:${{ steps.versions.outputs.builder_version }}"
+          LAUNCHER_IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO_BUILDER }}/launcher:${{ steps.versions.outputs.launcher_version }}"
+          BUILDER_IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO_BUILDER }}/builder:${{ steps.versions.outputs.builder_version }}"
 
           echo "Checking launcher image: $LAUNCHER_IMAGE"
           if ! gcloud artifacts docker images describe "$LAUNCHER_IMAGE" --project="${{ env.PROJECT_ID }}"; then
@@ -125,9 +125,11 @@ jobs:
 
           IMAGE_NAME="cs-image-${IMAGE_VERSION}-${{ matrix.image_env }}"
           INSTANCE_NAME="cs-builder-${IMAGE_VERSION}-${{ matrix.image_env }}"
+          IMAGE_FAMILY="cs-image-${{ matrix.image_env }}"
 
           echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
           echo "instance_name=$INSTANCE_NAME" >> $GITHUB_OUTPUT
+          echo "image_family=$IMAGE_FAMILY" >> $GITHUB_OUTPUT
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -141,21 +143,32 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Clean Previous Resources
+      - name: Verify Image Not Already Built
         run: |
-          gcloud compute images delete "${{ steps.config.outputs.image_name }}" \
-            --project="${{ env.PROJECT_ID }}" --quiet > /dev/null 2>&1 || true
+          if gcloud compute images describe "${{ steps.config.outputs.image_name }}" \
+              --project="${{ env.PROJECT_ID }}" 2>/dev/null; then
+            echo "::error::Image ${{ steps.config.outputs.image_name }} already exists. Use a new version."
+            exit 1
+          fi
+          echo "✓ Image does not exist, proceeding"
 
-          gcloud compute instances delete "${{ steps.config.outputs.instance_name }}" \
-            --zone="${{ env.ZONE }}" --project="${{ env.PROJECT_ID }}" --quiet > /dev/null 2>&1 || true
+      - name: Clean Stale Instance
+        run: |
+          # Clean up any stale instance from a previous failed run
+          if gcloud compute instances describe "${{ steps.config.outputs.instance_name }}" \
+              --zone="${{ env.ZONE }}" --project="${{ env.PROJECT_ID }}" 2>/dev/null; then
+            echo "Found stale instance, deleting..."
+            gcloud compute instances delete "${{ steps.config.outputs.instance_name }}" \
+              --zone="${{ env.ZONE }}" --project="${{ env.PROJECT_ID }}" --quiet
+          fi
 
       - name: Deploy Builder VM
         run: |
           AR_IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO_BUILDER }}/builder:${{ needs.validate.outputs.builder_version }}"
           # docker:// format: docker://REGION/PROJECT/REPO/IMAGE/VERSION
-          LAUNCHER_ARTIFACT="docker://${{ env.REGION }}/${{ env.PROJECT_ID }}/cs-build/launcher/${{ needs.validate.outputs.launcher_version }}"
+          LAUNCHER_ARTIFACT="docker://${{ env.REGION }}/${{ env.PROJECT_ID }}/${{ env.AR_REPO_BUILDER }}/launcher/${{ needs.validate.outputs.launcher_version }}"
 
-          # Clean Metadata Array
+          # Build metadata
           METADATA_PAIRS=(
             "tee-image-reference=${AR_IMAGE}"
             "tee-restart-policy=Never"
@@ -166,7 +179,7 @@ jobs:
             "tee-env-BASE_IMAGE=${{ env.BASE_IMAGE }}"
             "tee-env-BASE_IMAGE_PROJECT=${{ env.BASE_IMAGE_PROJECT }}"
             "tee-env-OUTPUT_IMAGE_NAME=${{ steps.config.outputs.image_name }}"
-            "tee-env-OUTPUT_IMAGE_FAMILY=custom-cs-images"
+            "tee-env-OUTPUT_IMAGE_FAMILY=${{ steps.config.outputs.image_family }}"
             "tee-env-STAGING_BUCKET=${{ env.STAGING_BUCKET }}"
             "tee-env-PROVENANCE_BUCKET=${{ env.PROVENANCE_BUCKET }}"
             "tee-env-GCA_ENDPOINT=https://confidentialcomputing.googleapis.com"
@@ -184,7 +197,7 @@ jobs:
             --confidential-compute-type=TDX \
             --shielded-secure-boot \
             --maintenance-policy=TERMINATE \
-            --image-family=confidential-space-debug \
+            --image-family=confidential-space \
             --image-project=confidential-space-images \
             --scopes=cloud-platform \
             --project="${{ env.PROJECT_ID }}" \
@@ -236,6 +249,12 @@ jobs:
             --zone="${{ env.ZONE }}" --project="${{ env.PROJECT_ID }}" 2>/dev/null | tail -100
           exit 1
 
+      - name: Cleanup Builder VM
+        if: always()
+        run: |
+          gcloud compute instances delete "${{ steps.config.outputs.instance_name }}" \
+            --zone="${{ env.ZONE }}" --project="${{ env.PROJECT_ID }}" --quiet 2>/dev/null || true
+
       - name: Run Tests
         run: |
           echo "Running test suite against ${{ steps.config.outputs.image_name }}"
@@ -266,6 +285,7 @@ jobs:
           | **Builder** | \`${{ needs.validate.outputs.builder_version }}\` |
           | **Launcher** | \`${{ needs.validate.outputs.launcher_version }}\` |
           | **Image** | \`${{ steps.config.outputs.image_name }}\` |
+          | **Family** | \`${{ steps.config.outputs.image_family }}\` |
           | **Public** | ✓ |
 
           **View attestation:**
