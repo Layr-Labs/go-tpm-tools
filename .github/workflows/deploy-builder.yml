@@ -270,7 +270,7 @@ jobs:
       - name: Make Image Public
         run: |
           gcloud compute images add-iam-policy-binding "${{ steps.config.outputs.image_name }}" \
-            --member=allUsers \
+            --member=allAuthenticatedUsers \
             --role=roles/compute.imageUser \
             --project="${{ env.PROJECT_ID }}"
 
