@@ -156,20 +156,22 @@ func verifyBinding(attestation *attestpb.Attestation, nonce []byte, platform Pla
 		return nil, fmt.Errorf("failed to marshal AK public key: %w", err)
 	}
 
-	// Verify consistency: if attestation contains ak_pub field, it must match the certificate
+	// Verify ak_pub field exists and matches the certificate
 	// Note: ak_pub is in TPM2B_PUBLIC format (TPMT_PUBLIC), not PKIX DER
-	if akPub := attestation.GetAkPub(); len(akPub) > 0 {
-		akPubArea, err := tpm2.DecodePublic(akPub)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode ak_pub: %w", err)
-		}
-		akPubFromTPM, err := akPubArea.Key()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get public key from ak_pub: %w", err)
-		}
-		if !pubKeysEqual(akCert.PublicKey, akPubFromTPM) {
-			return nil, fmt.Errorf("AK certificate public key does not match attestation ak_pub field")
-		}
+	akPub := attestation.GetAkPub()
+	if len(akPub) == 0 {
+		return nil, fmt.Errorf("no AK public key in attestation")
+	}
+	akPubArea, err := tpm2.DecodePublic(akPub)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode ak_pub: %w", err)
+	}
+	akPubFromTPM, err := akPubArea.Key()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get public key from ak_pub: %w", err)
+	}
+	if !pubKeysEqual(akCert.PublicKey, akPubFromTPM) {
+		return nil, fmt.Errorf("AK certificate public key does not match attestation ak_pub field")
 	}
 
 	// Compute expected binding hash: SHA256(nonce + AK_public_key_DER)
