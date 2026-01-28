@@ -23,9 +23,8 @@ import (
 
 // Package-level cached state for firmware verification.
 var (
-	rootsOnce   sync.Once
+	rootsMu     sync.Mutex
 	cachedRoots *x509.CertPool
-	rootsErr    error
 	httpClient  = &http.Client{Timeout: 30 * time.Second}
 )
 
@@ -57,12 +56,16 @@ func VerifySevSnpMeasurement(ctx context.Context, measurement []byte) (*Firmware
 
 // getRootsOfTrust returns the cached roots of trust, fetching them if necessary.
 func getRootsOfTrust() (*x509.CertPool, error) {
-	rootsOnce.Do(func() {
-		cachedRoots, rootsErr = fetchRootsOfTrust()
-	})
-	if rootsErr != nil {
-		return nil, fmt.Errorf("failed to fetch roots of trust: %w", rootsErr)
+	rootsMu.Lock()
+	defer rootsMu.Unlock()
+	if cachedRoots != nil {
+		return cachedRoots, nil
 	}
+	roots, err := fetchRootsOfTrust()
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch roots of trust: %w", err)
+	}
+	cachedRoots = roots
 	return cachedRoots, nil
 }
 
