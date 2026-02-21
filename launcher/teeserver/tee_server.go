@@ -22,7 +22,7 @@ import (
 const (
 	gcaEndpoint         = "/v1/token"
 	itaEndpoint         = "/v1/intel/token"
-	attestationEndpoint = "/v1/attestation"
+	boundEvidenceEndpoint = "/v1/bound_evidence"
 )
 
 var clientErrorCodes = map[codes.Code]struct{}{
@@ -91,7 +91,7 @@ func (a *attestHandler) Handler() http.Handler {
 
 	mux.HandleFunc(gcaEndpoint, a.getToken)
 	mux.HandleFunc(itaEndpoint, a.getITAToken)
-	mux.HandleFunc(attestationEndpoint, a.getAttestation)
+	mux.HandleFunc(boundEvidenceEndpoint, a.getBoundEvidence)
 	return mux
 }
 
@@ -135,24 +135,23 @@ func (a *attestHandler) getITAToken(w http.ResponseWriter, r *http.Request) {
 	a.attest(w, r, a.clients.ITA)
 }
 
-// attestationRequest is the request body for /v1/attestation
-type attestationRequest struct {
-	// Nonce is used for attestation freshness. Required, non-empty.
-	Nonce []byte `json:"nonce"`
-	// UserData is optional application-specific data (up to 32 bytes)
-	// embedded in TEE ReportData[32:64].
-	UserData []byte `json:"user_data,omitempty"`
+// boundEvidenceRequest is the request body for /v1/bound_evidence
+type boundEvidenceRequest struct {
+	// Challenge is used for attestation freshness. Required, non-empty.
+	Challenge []byte `json:"challenge"`
+	// ExtraData is optional application-specific data bound into the nonce.
+	ExtraData []byte `json:"extra_data,omitempty"`
 }
 
-// getAttestation handles POST requests to retrieve a raw TEE attestation.
-// The client must provide a nonce (non-empty) in the request body.
-// Optional user_data (up to 32 bytes) is embedded in TEE ReportData[32:64].
+// getBoundEvidence handles POST requests to retrieve a bound TEE attestation.
+// The client must provide a challenge (non-empty) in the request body.
+// Optional extra_data is cryptographically bound into the nonce.
 // Returns a serialized pb.Attestation that can be verified using the
 // teeverify.VerifyAttestation() function for self-verification.
-func (a *attestHandler) getAttestation(w http.ResponseWriter, r *http.Request) {
+func (a *attestHandler) getBoundEvidence(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 
-	a.logger.Info(fmt.Sprintf("%s called", attestationEndpoint))
+	a.logger.Info(fmt.Sprintf("%s called", boundEvidenceEndpoint))
 
 	if !a.launchSpec.SelfVerificationEnabled {
 		a.logAndWriteHTTPError(w, http.StatusNotFound, fmt.Errorf("self-verification not enabled"))
@@ -164,7 +163,7 @@ func (a *attestHandler) getAttestation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req attestationRequest
+	var req boundEvidenceRequest
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&req); err != nil {
@@ -172,20 +171,15 @@ func (a *attestHandler) getAttestation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.Nonce) == 0 {
-		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("nonce is required"))
-		return
-	}
-
-	if len(req.UserData) > 32 {
-		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("user_data exceeds 32 bytes"))
+	if len(req.Challenge) == 0 {
+		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("challenge is required"))
 		return
 	}
 
 	// Get attestation from the agent
-	attestation, err := a.attestAgent.RawAttest(agent.RawAttestOpts{
-		Nonce:    req.Nonce,
-		UserData: req.UserData,
+	attestation, err := a.attestAgent.BoundAttestationEvidence(agent.BoundAttestationOpts{
+		Challenge: req.Challenge,
+		ExtraData: req.ExtraData,
 	})
 	if err != nil {
 		a.logAndWriteHTTPError(w, http.StatusInternalServerError, fmt.Errorf("failed to get attestation: %w", err))
