@@ -19,24 +19,19 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const (
-	reportDataBindingSize  = 32 // SHA256(nonce + AK_pub_DER)
-	reportDataUserDataSize = 32 // Optional user data
-	reportDataSize         = reportDataBindingSize + reportDataUserDataSize
-)
-
-// VerifyAttestation cryptographically verifies an attestation.
-// This verifies:
-// - TEE quote signature (Intel TDX or AMD SEV-SNP root of trust)
-// - TPM quote signature and AK certificate chain
-// - Binding: ReportData[0:32] == SHA256(nonce + AK_public_key_DER)
+// VerifyBoundAttestation cryptographically verifies an attestation produced by
+// BoundAttestationEvidence. This verifies:
+//   - TEE quote signature (Intel TDX or AMD SEV-SNP root of trust)
+//   - TPM quote signature and AK certificate chain
+//   - Binding: ReportData == ComputeBoundNonce(challenge, SHA256(AK_pub_DER), extraData)
+//   - TPM quote ExtraData == ComputeTPMNonce(challenge, extraData)
 //
-// The binding hash proves that the TEE and TPM are from the same VM (via AK public key).
-// The nonce must match the value used during attestation creation.
+// The binding proves that the TEE and TPM are from the same VM (via AK public key)
+// and that the attestation is fresh (via challenge) with optional application data (extraData).
 //
 // This does NOT make policy decisions (debug mode, TCB versions, allowlists).
 // Policy checks should be performed by the caller after extracting claims.
-func VerifyAttestation(attestationBytes []byte, nonce []byte) (*VerifiedAttestation, error) {
+func VerifyBoundAttestation(attestationBytes, challenge, extraData []byte) (*VerifiedBoundAttestation, error) {
 	var attestation attestpb.Attestation
 	if err := proto.Unmarshal(attestationBytes, &attestation); err != nil {
 		return nil, fmt.Errorf("failed to parse attestation proto: %w", err)
@@ -47,23 +42,37 @@ func VerifyAttestation(attestationBytes []byte, nonce []byte) (*VerifiedAttestat
 		return nil, fmt.Errorf("no TEE attestation found")
 	}
 
-	userData, err := verifyBinding(&attestation, nonce, platform)
+	// Extract and validate AK public key DER from the attestation.
+	akPubDER, err := extractAKPubDER(&attestation)
 	if err != nil {
 		return nil, err
 	}
 
-	switch platform {
-	case PlatformTDX:
-		if err := verifyTDXSignature(&attestation); err != nil {
-			return nil, fmt.Errorf("TDX verification failed: %w", err)
+	// Compute expected TPM nonce (all platforms).
+	tpmNonce := ComputeTPMNonce(challenge, extraData)
+
+	// TEE platforms: verify ReportData binding and TEE quote signature.
+	if platform == PlatformIntelTDX || platform == PlatformAMDSevSnp {
+		akHash := sha256.Sum256(akPubDER)
+		boundNonce := ComputeBoundNonce(challenge, akHash[:], extraData)
+
+		if err := verifyBinding(&attestation, boundNonce, platform); err != nil {
+			return nil, err
 		}
-	case PlatformSevSnp:
-		if err := verifySevSnpSignature(&attestation); err != nil {
-			return nil, fmt.Errorf("SEV-SNP verification failed: %w", err)
+
+		switch platform {
+		case PlatformIntelTDX:
+			if err := verifyTDXSignature(&attestation); err != nil {
+				return nil, fmt.Errorf("TDX verification failed: %w", err)
+			}
+		case PlatformAMDSevSnp:
+			if err := verifySevSnpSignature(&attestation); err != nil {
+				return nil, fmt.Errorf("SEV-SNP verification failed: %w", err)
+			}
 		}
 	}
 
-	// Extract TPM nonce from quote's extraData
+	// Verify TPM quote ExtraData matches the computed TPM nonce.
 	quotes := attestation.GetQuotes()
 	if len(quotes) == 0 {
 		return nil, fmt.Errorf("no TPM quotes in attestation")
@@ -72,14 +81,11 @@ func VerifyAttestation(attestationBytes []byte, nonce []byte) (*VerifiedAttestat
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode TPM quote: %w", err)
 	}
-	tpmNonce := quoteInfo.ExtraData
-
-	// Verify TPM nonce matches the provided nonce
-	if !bytes.Equal(tpmNonce, nonce) {
-		return nil, fmt.Errorf("TPM nonce mismatch: quote contains different nonce than provided")
+	if !bytes.Equal(quoteInfo.ExtraData, tpmNonce) {
+		return nil, fmt.Errorf("TPM nonce mismatch: quote contains different nonce than expected")
 	}
 
-	// Create a new slice to avoid mutating the original slices
+	// Verify TPM attestation (AK cert chain, PCR quotes, event log).
 	allRoots := make([]*x509.Certificate, 0, len(server.GceEKRoots)+len(server.GcpCASEKRoots))
 	allRoots = append(allRoots, server.GceEKRoots...)
 	allRoots = append(allRoots, server.GcpCASEKRoots...)
@@ -93,9 +99,9 @@ func VerifyAttestation(attestationBytes []byte, nonce []byte) (*VerifiedAttestat
 		return nil, fmt.Errorf("TPM attestation verification failed: %w", err)
 	}
 
-	return &VerifiedAttestation{
+	return &VerifiedBoundAttestation{
 		Platform:     platform,
-		UserData:     userData,
+		ExtraData:    extraData,
 		attestation:  &attestation,
 		machineState: machineState,
 	}, nil
@@ -103,35 +109,31 @@ func VerifyAttestation(attestationBytes []byte, nonce []byte) (*VerifiedAttestat
 
 func detectPlatform(attestation *attestpb.Attestation) Platform {
 	if attestation.GetTdxAttestation() != nil {
-		return PlatformTDX
+		return PlatformIntelTDX
 	}
 	if attestation.GetSevSnpAttestation() != nil {
-		return PlatformSevSnp
+		return PlatformAMDSevSnp
+	}
+	if len(attestation.GetQuotes()) > 0 && len(attestation.GetAkCert()) > 0 {
+		return PlatformGCPShieldedVM
 	}
 	return PlatformUnknown
 }
 
 func getReportData(attestation *attestpb.Attestation, platform Platform) []byte {
 	switch platform {
-	case PlatformTDX:
+	case PlatformIntelTDX:
 		return attestation.GetTdxAttestation().GetTdQuoteBody().GetReportData()
-	case PlatformSevSnp:
+	case PlatformAMDSevSnp:
 		return attestation.GetSevSnpAttestation().GetReport().GetReportData()
 	}
 	return nil
 }
 
-// verifyBinding verifies ReportData[0:32] == SHA256(nonce + AK_public_key_DER).
-// This proves both freshness (via nonce) and binds the TEE hardware quote to the TPM's AK,
-// proving that the TPM claims (event log, PCRs) came from the same VM as the TEE attestation.
-// Returns the user data from ReportData[32:64].
-func verifyBinding(attestation *attestpb.Attestation, nonce []byte, platform Platform) ([]byte, error) {
-	reportData := getReportData(attestation, platform)
-
-	if len(reportData) < reportDataSize {
-		return nil, fmt.Errorf("report data too short: got %d bytes, need at least %d", len(reportData), reportDataSize)
-	}
-
+// extractAKPubDER extracts and validates the AK public key in PKIX DER format
+// from the attestation. It parses the AK certificate, validates its expiry,
+// marshals the public key to PKIX DER, and verifies the ak_pub field matches.
+func extractAKPubDER(attestation *attestpb.Attestation) ([]byte, error) {
 	akCertDER := attestation.GetAkCert()
 	if len(akCertDER) == 0 {
 		return nil, fmt.Errorf("no AK certificate in attestation")
@@ -142,7 +144,7 @@ func verifyBinding(attestation *attestpb.Attestation, nonce []byte, platform Pla
 		return nil, fmt.Errorf("failed to parse AK certificate: %w", err)
 	}
 
-	// Verify AK certificate is within its validity window
+	// Verify AK certificate is within its validity window.
 	now := time.Now()
 	if now.Before(akCert.NotBefore) {
 		return nil, fmt.Errorf("AK certificate not yet valid (notBefore: %v)", akCert.NotBefore)
@@ -156,8 +158,8 @@ func verifyBinding(attestation *attestpb.Attestation, nonce []byte, platform Pla
 		return nil, fmt.Errorf("failed to marshal AK public key: %w", err)
 	}
 
-	// Verify ak_pub field exists and matches the certificate
-	// Note: ak_pub is in TPM2B_PUBLIC format (TPMT_PUBLIC), not PKIX DER
+	// Verify ak_pub field exists and matches the certificate.
+	// Note: ak_pub is in TPM2B_PUBLIC format (TPMT_PUBLIC), not PKIX DER.
 	akPub := attestation.GetAkPub()
 	if len(akPub) == 0 {
 		return nil, fmt.Errorf("no AK public key in attestation")
@@ -174,17 +176,25 @@ func verifyBinding(attestation *attestpb.Attestation, nonce []byte, platform Pla
 		return nil, fmt.Errorf("AK certificate public key does not match attestation ak_pub field")
 	}
 
-	// Compute expected binding hash: SHA256(nonce + AK_public_key_DER)
-	expectedHash := sha256.Sum256(append(nonce, akPubDER...))
-	if !bytes.Equal(reportData[:reportDataBindingSize], expectedHash[:]) {
-		return nil, fmt.Errorf("binding mismatch: ReportData[0:32] does not match SHA256(nonce + AK_public_key)")
+	return akPubDER, nil
+}
+
+// verifyBinding verifies ReportData == expectedBoundNonce (full 64 bytes).
+// This proves both freshness (via challenge) and binds the TEE hardware quote to
+// the TPM's AK, proving that the TPM claims (event log, PCRs) came from the same
+// VM as the TEE attestation.
+func verifyBinding(attestation *attestpb.Attestation, expectedBoundNonce []byte, platform Platform) error {
+	reportData := getReportData(attestation, platform)
+
+	if len(reportData) < len(expectedBoundNonce) {
+		return fmt.Errorf("report data too short: got %d bytes, need at least %d", len(reportData), len(expectedBoundNonce))
 	}
 
-	// Extract user data from ReportData[32:64]
-	userData := make([]byte, reportDataUserDataSize)
-	copy(userData, reportData[reportDataBindingSize:reportDataSize])
+	if !bytes.Equal(reportData[:len(expectedBoundNonce)], expectedBoundNonce) {
+		return fmt.Errorf("binding mismatch: ReportData does not match expected bound nonce")
+	}
 
-	return userData, nil
+	return nil
 }
 
 func verifyTDXSignature(attestation *attestpb.Attestation) error {

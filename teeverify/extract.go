@@ -11,7 +11,7 @@ import (
 )
 
 // ExtractClaims extracts claims from a verified attestation.
-func (v *VerifiedAttestation) ExtractClaims(opts ExtractOptions) (*Claims, error) {
+func (v *VerifiedBoundAttestation) ExtractClaims(opts ExtractOptions) (*Claims, error) {
 	claims := &Claims{
 		Platform: v.Platform,
 		Hardened: isHardened(v.machineState.GetLinuxKernel().GetCommandLine()),
@@ -49,13 +49,13 @@ func (v *VerifiedAttestation) ExtractClaims(opts ExtractOptions) (*Claims, error
 	}
 
 	switch v.Platform {
-	case PlatformTDX:
+	case PlatformIntelTDX:
 		tdxClaims, err := extractTDXClaims(v.attestation)
 		if err != nil {
 			return nil, fmt.Errorf("failed to extract TDX claims: %w", err)
 		}
 		claims.TDX = tdxClaims
-	case PlatformSevSnp:
+	case PlatformAMDSevSnp:
 		sevClaims, err := extractSevSnpClaims(v.attestation)
 		if err != nil {
 			return nil, fmt.Errorf("failed to extract SEV-SNP claims: %w", err)

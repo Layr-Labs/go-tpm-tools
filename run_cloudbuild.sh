@@ -18,6 +18,6 @@ gcloud beta builds submit --config=${DIR}/launcher/cloudbuild.yaml \
   --substitutions=_OUTPUT_IMAGE_SUFFIX="${IMAGE_SUFFIX}"
 
 echo "Image creation successful."
-echo "Create a VM using the debug image confidential-space-debug-${IMAGE_SUFFIX}"
-echo "gcloud compute instances create confidential-space-test --image=confidential-space-debug-${IMAGE_SUFFIX} --metadata ..."
-echo "Or use the hardened image confidential-space-hardened-${IMAGE_SUFFIX}"
+echo "Create a VM using the debug image eigen-compute-debug-${IMAGE_SUFFIX}"
+echo "gcloud compute instances create confidential-space-test --image=eigen-compute-debug-${IMAGE_SUFFIX} --metadata ..."
+echo "Or use the hardened image eigen-compute-hardened-${IMAGE_SUFFIX}"

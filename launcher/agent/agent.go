@@ -422,31 +422,40 @@ func (a *agent) BoundAttestationEvidence(opts BoundAttestationOpts) (*pb.Attesta
 	})
 }
 
-// computeTPMNonce derives a 32-byte nonce for TPM quotes from the challenge and optional extra data.
+// computeTPMNonce derives a 32-byte nonce for TPM quotes:
+//
+//	SHA256(label || SHA256(challenge) || SHA256(extraData)?)
+//
+// If extraData is nil or empty, the SHA256(extraData) term is omitted.
 func computeTPMNonce(challenge, extraData []byte) []byte {
-	challengeData := append([]byte{}, challenge...)
-	if extraData != nil {
-		extraDataDigest := sha256.Sum256(extraData)
-		challengeData = append(challengeData, extraDataDigest[:]...)
+	h := sha256.New()
+	challengeDigest := sha256.Sum256(challenge)
+	h.Write([]byte(workloadAttestationLabel))
+	h.Write(challengeDigest[:])
+	if len(extraData) > 0 {
+		extraDigest := sha256.Sum256(extraData)
+		h.Write(extraDigest[:])
 	}
-	challengeDigest := sha256.Sum256(challengeData)
-	finalNonce := sha256.Sum256(append([]byte(workloadAttestationLabel), challengeDigest[:]...))
-	return finalNonce[:]
+	return h.Sum(nil)
 }
 
-// computeBoundNonce derives a 64-byte nonce for TEE ReportData, binding
-// the challenge, AK public key hash, and optional extra data.
+// computeBoundNonce derives a 64-byte nonce for TEE ReportData:
+//
+//	SHA512(label || SHA512(challenge) || SHA512(akPubKeyHash) || SHA512(extraData)?)
+//
+// If extraData is nil or empty, the SHA512(extraData) term is omitted.
 func computeBoundNonce(challenge, akPubKeyHash, extraData []byte) []byte {
+	h := sha512.New()
+	challengeDigest := sha512.Sum512(challenge)
 	akDigest := sha512.Sum512(akPubKeyHash)
-	challengeData := append([]byte{}, challenge...)
-	challengeData = append(challengeData, akDigest[:]...)
-	if extraData != nil {
-		extraDataDigest := sha512.Sum512(extraData)
-		challengeData = append(challengeData, extraDataDigest[:]...)
+	h.Write([]byte(workloadAttestationLabel))
+	h.Write(challengeDigest[:])
+	h.Write(akDigest[:])
+	if len(extraData) > 0 {
+		extraDigest := sha512.Sum512(extraData)
+		h.Write(extraDigest[:])
 	}
-	challengeDigest := sha512.Sum512(challengeData)
-	finalNonce := sha512.Sum512(append([]byte(workloadAttestationLabel), challengeDigest[:]...))
-	return finalNonce[:]
+	return h.Sum(nil)
 }
 
 // createTEEDevice returns a TEE quote provider for the current platform,

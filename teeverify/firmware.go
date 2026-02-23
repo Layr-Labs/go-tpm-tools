@@ -42,7 +42,7 @@ func VerifyMRTD(ctx context.Context, mrtd []byte) (*FirmwareEndorsement, error) 
 	if err != nil {
 		return nil, err
 	}
-	return verifyMeasurement(ctx, PlatformTDX, mrtd, roots)
+	return verifyMeasurement(ctx, PlatformIntelTDX, mrtd, roots)
 }
 
 // VerifySevSnpMeasurement verifies that a SEV-SNP MEASUREMENT is endorsed by Google.
@@ -51,7 +51,7 @@ func VerifySevSnpMeasurement(ctx context.Context, measurement []byte) (*Firmware
 	if err != nil {
 		return nil, err
 	}
-	return verifyMeasurement(ctx, PlatformSevSnp, measurement, roots)
+	return verifyMeasurement(ctx, PlatformAMDSevSnp, measurement, roots)
 }
 
 // getRootsOfTrust returns the cached roots of trust, fetching them if necessary.
@@ -79,10 +79,10 @@ func verifyMeasurement(ctx context.Context, platform Platform, measurement []byt
 	var objectName string
 	var techName string
 	switch platform {
-	case PlatformTDX:
+	case PlatformIntelTDX:
 		objectName = extracttdx.GCETcbObjectName(measurement)
 		techName = "TDX MRTD"
-	case PlatformSevSnp:
+	case PlatformAMDSevSnp:
 		objectName = extractsev.GCETcbObjectName(sev.GCEUefiFamilyID, measurement)
 		techName = "SEV-SNP MEASUREMENT"
 	default:
@@ -142,9 +142,9 @@ func verifyEndorsement(endorsementBytes, expectedMeasurement []byte, platform Pl
 	}
 
 	switch platform {
-	case PlatformTDX:
+	case PlatformIntelTDX:
 		return extractTdxEndorsement(golden, expectedMeasurement)
-	case PlatformSevSnp:
+	case PlatformAMDSevSnp:
 		return extractSevSnpEndorsement(golden, expectedMeasurement)
 	default:
 		return nil, fmt.Errorf("unsupported platform: %d", platform)

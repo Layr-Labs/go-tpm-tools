@@ -8,17 +8,20 @@ import (
 type Platform int
 
 const (
-	PlatformUnknown Platform = -1
-	PlatformTDX     Platform = 0
-	PlatformSevSnp  Platform = 1
+	PlatformUnknown       Platform = -1
+	PlatformIntelTDX      Platform = 0
+	PlatformAMDSevSnp     Platform = 1
+	PlatformGCPShieldedVM Platform = 2 // TPM-only, no TEE hardware attestation
 )
 
 func (p Platform) String() string {
 	switch p {
-	case PlatformTDX:
-		return "TDX"
-	case PlatformSevSnp:
-		return "SEV-SNP"
+	case PlatformIntelTDX:
+		return "Intel TDX"
+	case PlatformAMDSevSnp:
+		return "AMD SEV-SNP"
+	case PlatformGCPShieldedVM:
+		return "GCP Shielded VM"
 	default:
 		return "Unknown"
 	}
@@ -34,20 +37,20 @@ type ExtractOptions struct {
 	PCRIndices []uint32
 }
 
-// VerifiedAttestation wraps a cryptographically verified TEE attestation.
+// VerifiedBoundAttestation wraps a cryptographically verified TEE attestation.
 //
-// This type is returned by VerifyAttestation() after successful verification of:
+// This type is returned by VerifyBoundAttestation() after successful verification of:
 //   - TEE quote signature (TDX or SEV-SNP hardware root of trust)
 //   - TPM quote signature and AK certificate chain
-//   - Binding: ReportData[0:32] = SHA256(nonce + AK_public_key), proving freshness and TEE/TPM binding
+//   - Binding: ReportData = ComputeBoundNonce(challenge, akHash, extraData)
 //
 // The private fields (attestation, machineState) are always non-nil after successful
 // verification. Claims can only be extracted via ExtractClaims(), ensuring callers
 // cannot accidentally use unverified data.
-type VerifiedAttestation struct {
+type VerifiedBoundAttestation struct {
 	Platform Platform
-	// UserData contains up to 32 bytes of application-specific data bound in ReportData[32:64].
-	UserData     []byte
+	// ExtraData contains caller-provided data cryptographically bound into the attestation nonces.
+	ExtraData    []byte
 	attestation  *attestpb.Attestation
 	machineState *attestpb.MachineState
 }
