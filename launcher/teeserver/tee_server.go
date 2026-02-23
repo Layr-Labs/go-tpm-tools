@@ -20,8 +20,8 @@ import (
 )
 
 const (
-	gcaEndpoint         = "/v1/token"
-	itaEndpoint         = "/v1/intel/token"
+	gcaEndpoint           = "/v1/token"
+	itaEndpoint           = "/v1/intel/token"
 	boundEvidenceEndpoint = "/v1/bound_evidence"
 )
 

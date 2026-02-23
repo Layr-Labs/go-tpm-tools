@@ -391,12 +391,11 @@ func (a *agent) BoundAttestationEvidence(opts BoundAttestationOpts) (*pb.Attesta
 		defer teeDevice.Close()
 	}
 
-	// Compute AK public key hash for nonce binding.
+	// Compute AK public key DER for nonce binding.
 	akPubDER, err := x509.MarshalPKIXPublicKey(a.fetchedAK.PublicKey())
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal AK public key: %w", err)
 	}
-	akHash := sha256.Sum256(akPubDER)
 
 	// Compute nonces.
 	tpmNonce := computeTPMNonce(opts.Challenge, opts.ExtraData)
@@ -404,7 +403,7 @@ func (a *agent) BoundAttestationEvidence(opts BoundAttestationOpts) (*pb.Attesta
 	// Only compute TEE nonce when a TEE device is available.
 	var teeNonce []byte
 	if teeDevice != nil {
-		teeNonce = computeBoundNonce(opts.Challenge, akHash[:], opts.ExtraData)
+		teeNonce = computeBoundNonce(opts.Challenge, akPubDER, opts.ExtraData)
 	}
 
 	// Encode the CEL.
@@ -441,13 +440,14 @@ func computeTPMNonce(challenge, extraData []byte) []byte {
 
 // computeBoundNonce derives a 64-byte nonce for TEE ReportData:
 //
-//	SHA512(label || SHA512(challenge) || SHA512(akPubKeyHash) || SHA512(extraData)?)
+//	SHA512(label || SHA512(challenge) || SHA512(akPubDER) || SHA512(extraData)?)
 //
 // If extraData is nil or empty, the SHA512(extraData) term is omitted.
-func computeBoundNonce(challenge, akPubKeyHash, extraData []byte) []byte {
+// akPubDER is the AK public key in PKIX DER format.
+func computeBoundNonce(challenge, akPubDER, extraData []byte) []byte {
 	h := sha512.New()
 	challengeDigest := sha512.Sum512(challenge)
-	akDigest := sha512.Sum512(akPubKeyHash)
+	akDigest := sha512.Sum512(akPubDER)
 	h.Write([]byte(workloadAttestationLabel))
 	h.Write(challengeDigest[:])
 	h.Write(akDigest[:])

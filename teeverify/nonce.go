@@ -27,14 +27,14 @@ func ComputeTPMNonce(challenge, extraData []byte) []byte {
 
 // ComputeBoundNonce derives a 64-byte nonce for TEE ReportData:
 //
-//	SHA512(label || SHA512(challenge) || SHA512(akPubKeyHash) || SHA512(extraData)?)
+//	SHA512(label || SHA512(challenge) || SHA512(akPubDER) || SHA512(extraData)?)
 //
 // If extraData is nil or empty, the SHA512(extraData) term is omitted.
-// akPubKeyHash should be SHA256(AK_public_key_DER).
-func ComputeBoundNonce(challenge, akPubKeyHash, extraData []byte) []byte {
+// akPubDER is the AK public key in PKIX DER format.
+func ComputeBoundNonce(challenge, akPubDER, extraData []byte) []byte {
 	h := sha512.New()
 	challengeDigest := sha512.Sum512(challenge)
-	akDigest := sha512.Sum512(akPubKeyHash)
+	akDigest := sha512.Sum512(akPubDER)
 	h.Write([]byte(WorkloadAttestationLabel))
 	h.Write(challengeDigest[:])
 	h.Write(akDigest[:])

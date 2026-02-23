@@ -6,7 +6,6 @@ package teeverify
 import (
 	"bytes"
 	"crypto"
-	"crypto/sha256"
 	"crypto/x509"
 	"fmt"
 	"time"
@@ -53,8 +52,7 @@ func VerifyBoundAttestation(attestationBytes, challenge, extraData []byte) (*Ver
 
 	// TEE platforms: verify ReportData binding and TEE quote signature.
 	if platform == PlatformIntelTDX || platform == PlatformAMDSevSnp {
-		akHash := sha256.Sum256(akPubDER)
-		boundNonce := ComputeBoundNonce(challenge, akHash[:], extraData)
+		boundNonce := ComputeBoundNonce(challenge, akPubDER, extraData)
 
 		if err := verifyBinding(&attestation, boundNonce, platform); err != nil {
 			return nil, err
@@ -62,11 +60,11 @@ func VerifyBoundAttestation(attestationBytes, challenge, extraData []byte) (*Ver
 
 		switch platform {
 		case PlatformIntelTDX:
-			if err := verifyTDXSignature(&attestation); err != nil {
+			if err := verifyTDXQuote(&attestation); err != nil {
 				return nil, fmt.Errorf("TDX verification failed: %w", err)
 			}
 		case PlatformAMDSevSnp:
-			if err := verifySevSnpSignature(&attestation); err != nil {
+			if err := verifySevSnpAttestation(&attestation); err != nil {
 				return nil, fmt.Errorf("SEV-SNP verification failed: %w", err)
 			}
 		}
@@ -197,7 +195,7 @@ func verifyBinding(attestation *attestpb.Attestation, expectedBoundNonce []byte,
 	return nil
 }
 
-func verifyTDXSignature(attestation *attestpb.Attestation) error {
+func verifyTDXQuote(attestation *attestpb.Attestation) error {
 	quote := attestation.GetTdxAttestation()
 	opts := &tdxverify.Options{
 		CheckRevocations: true, // Check Intel CRLs for revoked certificates
@@ -211,7 +209,7 @@ func verifyTDXSignature(attestation *attestpb.Attestation) error {
 	return nil
 }
 
-func verifySevSnpSignature(attestation *attestpb.Attestation) error {
+func verifySevSnpAttestation(attestation *attestpb.Attestation) error {
 	snpAttestation := attestation.GetSevSnpAttestation()
 	opts := &sevverify.Options{
 		CheckRevocations: true, // Check AMD CRLs for revoked VCEK/ASK certificates
