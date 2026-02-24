@@ -10,10 +10,10 @@ import (
 type Platform int
 
 const (
-	PlatformUnknown       Platform = -1
-	PlatformIntelTDX      Platform = 0
-	PlatformAMDSevSnp     Platform = 1
-	PlatformGCPShieldedVM Platform = 2 // TPM-only, no TEE hardware attestation
+	PlatformUnknown       Platform = iota - 1 // -1
+	PlatformIntelTDX                          // 0
+	PlatformAMDSevSnp                         // 1
+	PlatformGCPShieldedVM                     // 2, TPM-only, no TEE hardware attestation
 )
 
 // Platform tag constants for anti-downgrade protection in the TPM nonce.
