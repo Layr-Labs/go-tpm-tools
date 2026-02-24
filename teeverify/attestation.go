@@ -19,6 +19,9 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// teeReportDataSize is the size of the ReportData field in both TDX and SEV-SNP hardware specs.
+const teeReportDataSize = 64
+
 // ParseAttestation deserializes an attestation proto and detects the platform.
 // Use VerifyTPM and VerifyBoundTEE on the returned Attestation to verify independently.
 func ParseAttestation(attestationBytes []byte) (*Attestation, error) {
@@ -197,11 +200,11 @@ func extractAKPubDER(attestation *attestpb.Attestation) ([]byte, error) {
 func verifyBinding(attestation *attestpb.Attestation, expectedBoundNonce []byte, platform Platform) error {
 	reportData := getReportData(attestation, platform)
 
-	if len(reportData) < len(expectedBoundNonce) {
-		return fmt.Errorf("report data too short: got %d bytes, need at least %d", len(reportData), len(expectedBoundNonce))
+	if len(reportData) != teeReportDataSize {
+		return fmt.Errorf("report data length mismatch: got %d bytes, want %d", len(reportData), teeReportDataSize)
 	}
 
-	if !bytes.Equal(reportData[:len(expectedBoundNonce)], expectedBoundNonce) {
+	if !bytes.Equal(reportData, expectedBoundNonce) {
 		return fmt.Errorf("binding mismatch: ReportData does not match expected bound nonce")
 	}
 
