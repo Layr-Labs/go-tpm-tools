@@ -147,7 +147,7 @@ type boundEvidenceRequest struct {
 // The client must provide a challenge (non-empty) in the request body.
 // Optional extra_data is cryptographically bound into the nonce.
 // Returns a serialized pb.Attestation that can be verified using the
-// teeverify.VerifyAttestation() function for self-verification.
+// sdk/attest package for self-verification.
 func (a *attestHandler) getBoundEvidence(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 # capture_vectors.sh — Build the workload, run it on TDX / SEV-SNP / Shielded VMs
 # for both debug and hardened images, and write test vectors to
-# teeverify/testdata/attestations.json.
+# sdk/testdata/attestations.json.
 #
 # All VMs are created in parallel and vectors are fetched in parallel via GCS.
 # The output file is overwritten completely (not merged).
@@ -58,8 +58,8 @@ fi
 WORKLOAD_IMAGE="docker.io/${DOCKER_USER}/teeverify-capture:latest"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-OUTPUT_FILE="${REPO_ROOT}/teeverify/testdata/attestations.json"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+OUTPUT_FILE="${REPO_ROOT}/sdk/testdata/attestations.json"
 TIMESTAMP=$(date +%s)
 
 # GCS prefix for vector upload. Reuses the project's Cloud Build bucket.
@@ -288,4 +288,4 @@ echo ""
 echo "=== Done ==="
 echo "wrote $(python3 -c "import json; print(len(json.load(open('$OUTPUT_FILE'))))" 2>/dev/null || echo '?') vectors to ${OUTPUT_FILE}"
 echo ""
-echo "Next: run 'cd teeverify && go test -v' to verify the vectors."
+echo "Next: run 'go test github.com/Layr-Labs/go-tpm-tools/sdk/attest -v' to verify the vectors."

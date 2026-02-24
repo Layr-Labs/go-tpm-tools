@@ -1,4 +1,4 @@
-# teeverify
+# attest
 
 Verifies TEE attestations from Confidential Space workloads. For third parties (KMS, services, CLI tools) that need to verify attestations.
 
@@ -21,7 +21,7 @@ After cryptographic verification, apply your own policy:
 
 ```go
 // Parse and detect platform.
-att, err := teeverify.ParseAttestation(attestationBytes)
+att, err := attest.Parse(attestationBytes)
 
 // Verify TPM layer (AK cert chain, PCR quotes, event log, nonce).
 tpmResult, err := att.VerifyTPM(challenge, extraData)
@@ -31,7 +31,7 @@ tpmResult, err := att.VerifyTPM(challenge, extraData)
 teeResult, err := att.VerifyBoundTEE(challenge, extraData)
 
 // Extract claims from each layer.
-tpmClaims, err := tpmResult.ExtractTPMClaims(teeverify.ExtractOptions{
+tpmClaims, err := tpmResult.ExtractTPMClaims(attest.ExtractOptions{
     PCRIndices: []uint32{4, 8, 9},
 })
 teeClaims, err := teeResult.ExtractTEEClaims()

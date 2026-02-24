@@ -13,7 +13,7 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.5.1
 	github.com/google/go-cmp v0.7.0
 	github.com/google/go-eventlog v0.0.2-0.20241003021507-01bb555f7cba
-	github.com/google/go-sev-guest v0.14.0
+	github.com/google/go-sev-guest v0.14.1
 	github.com/google/go-tdx-guest v0.3.2-0.20241009005452-097ee70d0843
 	github.com/google/go-tpm v0.9.6
 	github.com/google/uuid v1.6.0

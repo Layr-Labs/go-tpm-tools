@@ -1,4 +1,4 @@
-package teeverify
+package attest
 
 import (
 	"time"

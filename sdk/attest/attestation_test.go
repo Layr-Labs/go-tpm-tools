@@ -1,4 +1,4 @@
-package teeverify
+package attest
 
 import (
 	"encoding/base64"
@@ -37,7 +37,7 @@ type testVectorJSON struct {
 func loadTestVectors(t *testing.T) []testVector {
 	t.Helper()
 
-	data, err := os.ReadFile("testdata/attestations.json")
+	data, err := os.ReadFile("../testdata/attestations.json")
 	if err != nil {
 		return nil
 	}
@@ -90,10 +90,10 @@ func expectedPlatform(s string) Platform {
 }
 
 // =============================================================================
-// ParseAttestation Tests
+// Parse Tests
 // =============================================================================
 
-func TestParseAttestation(t *testing.T) {
+func TestParse(t *testing.T) {
 	vectors := loadTestVectors(t)
 	if len(vectors) == 0 {
 		t.Skip("no test vectors")
@@ -101,9 +101,9 @@ func TestParseAttestation(t *testing.T) {
 
 	for _, v := range vectors {
 		t.Run(v.Name, func(t *testing.T) {
-			att, err := ParseAttestation(v.Attestation)
+			att, err := Parse(v.Attestation)
 			if err != nil {
-				t.Fatalf("ParseAttestation failed: %v", err)
+				t.Fatalf("Parse failed: %v", err)
 			}
 
 			want := expectedPlatform(v.Platform)
@@ -114,10 +114,10 @@ func TestParseAttestation(t *testing.T) {
 	}
 }
 
-func TestParseAttestation_InvalidProto(t *testing.T) {
+func TestParse_InvalidProto(t *testing.T) {
 	garbage := []byte("this is not a valid protobuf message")
 
-	_, err := ParseAttestation(garbage)
+	_, err := Parse(garbage)
 	if err == nil {
 		t.Fatal("expected error for invalid proto, got nil")
 	}
@@ -127,8 +127,8 @@ func TestParseAttestation_InvalidProto(t *testing.T) {
 	}
 }
 
-func TestParseAttestation_EmptyAttestation(t *testing.T) {
-	_, err := ParseAttestation([]byte{})
+func TestParse_EmptyAttestation(t *testing.T) {
+	_, err := Parse([]byte{})
 	if err == nil {
 		t.Fatal("expected error for empty attestation, got nil")
 	}
@@ -138,8 +138,8 @@ func TestParseAttestation_EmptyAttestation(t *testing.T) {
 	}
 }
 
-func TestParseAttestation_NilAttestation(t *testing.T) {
-	_, err := ParseAttestation(nil)
+func TestParse_NilAttestation(t *testing.T) {
+	_, err := Parse(nil)
 	if err == nil {
 		t.Fatal("expected error for nil attestation, got nil")
 	}
@@ -157,9 +157,9 @@ func TestVerifyTPM(t *testing.T) {
 
 	for _, v := range vectors {
 		t.Run(v.Name, func(t *testing.T) {
-			att, err := ParseAttestation(v.Attestation)
+			att, err := Parse(v.Attestation)
 			if err != nil {
-				t.Fatalf("ParseAttestation failed: %v", err)
+				t.Fatalf("Parse failed: %v", err)
 			}
 
 			tpmResult, err := att.VerifyTPM(v.Challenge, v.ExtraData)
@@ -182,9 +182,9 @@ func TestVerifyTPM_WrongChallenge(t *testing.T) {
 	}
 
 	v := vectors[0]
-	att, err := ParseAttestation(v.Attestation)
+	att, err := Parse(v.Attestation)
 	if err != nil {
-		t.Fatalf("ParseAttestation failed: %v", err)
+		t.Fatalf("Parse failed: %v", err)
 	}
 
 	wrongChallenge := make([]byte, 32) // all zeros
@@ -209,9 +209,9 @@ func TestVerifyBoundTEE(t *testing.T) {
 
 	for _, v := range vectors {
 		t.Run(v.Name, func(t *testing.T) {
-			att, err := ParseAttestation(v.Attestation)
+			att, err := Parse(v.Attestation)
 			if err != nil {
-				t.Fatalf("ParseAttestation failed: %v", err)
+				t.Fatalf("Parse failed: %v", err)
 			}
 
 			want := expectedPlatform(v.Platform)
@@ -249,9 +249,9 @@ func TestExtractTPMClaims(t *testing.T) {
 
 	for _, v := range vectors {
 		t.Run(v.Name, func(t *testing.T) {
-			att, err := ParseAttestation(v.Attestation)
+			att, err := Parse(v.Attestation)
 			if err != nil {
-				t.Fatalf("ParseAttestation failed: %v", err)
+				t.Fatalf("Parse failed: %v", err)
 			}
 
 			tpmResult, err := att.VerifyTPM(v.Challenge, v.ExtraData)
@@ -304,9 +304,9 @@ func TestExtractTEEClaims(t *testing.T) {
 
 	for _, v := range vectors {
 		t.Run(v.Name, func(t *testing.T) {
-			att, err := ParseAttestation(v.Attestation)
+			att, err := Parse(v.Attestation)
 			if err != nil {
-				t.Fatalf("ParseAttestation failed: %v", err)
+				t.Fatalf("Parse failed: %v", err)
 			}
 
 			want := expectedPlatform(v.Platform)
@@ -373,9 +373,9 @@ func TestExtractTPMClaims_InvalidPCRIndex(t *testing.T) {
 	}
 
 	v := vectors[0]
-	att, err := ParseAttestation(v.Attestation)
+	att, err := Parse(v.Attestation)
 	if err != nil {
-		t.Fatalf("ParseAttestation failed: %v", err)
+		t.Fatalf("Parse failed: %v", err)
 	}
 
 	tpmResult, err := att.VerifyTPM(v.Challenge, v.ExtraData)
@@ -426,9 +426,9 @@ func TestVerifyTPM_StrippedTEEQuote_FailsNonceMismatch(t *testing.T) {
 				t.Fatalf("failed to re-marshal stripped attestation: %v", err)
 			}
 
-			att, err := ParseAttestation(stripped)
+			att, err := Parse(stripped)
 			if err != nil {
-				t.Fatalf("ParseAttestation failed on stripped attestation: %v", err)
+				t.Fatalf("Parse failed on stripped attestation: %v", err)
 			}
 			if att.Platform() != PlatformGCPShieldedVM {
 				t.Fatalf("expected Shielded VM after stripping, got %s", att.Platform().PlatformTag())
@@ -464,9 +464,9 @@ func TestShieldedVM_ParseSucceeds(t *testing.T) {
 		t.Fatalf("failed to marshal attestation: %v", err)
 	}
 
-	att, err := ParseAttestation(attestationBytes)
+	att, err := Parse(attestationBytes)
 	if err != nil {
-		t.Fatalf("ParseAttestation should succeed for Shielded VM: %v", err)
+		t.Fatalf("Parse should succeed for Shielded VM: %v", err)
 	}
 	if att.Platform() != PlatformGCPShieldedVM {
 		t.Errorf("expected Shielded VM platform, got %s", att.Platform().PlatformTag())
@@ -486,9 +486,9 @@ func TestShieldedVM_VerifyBoundTEE_Fails(t *testing.T) {
 		t.Fatalf("failed to marshal attestation: %v", err)
 	}
 
-	att, err := ParseAttestation(attestationBytes)
+	att, err := Parse(attestationBytes)
 	if err != nil {
-		t.Fatalf("ParseAttestation failed: %v", err)
+		t.Fatalf("Parse failed: %v", err)
 	}
 
 	_, err = att.VerifyBoundTEE(make([]byte, 32), nil)
@@ -554,9 +554,9 @@ func TestExtractContainerClaims(t *testing.T) {
 				t.Skip("no canonical event log in this test vector")
 			}
 
-			att, err := ParseAttestation(v.Attestation)
+			att, err := Parse(v.Attestation)
 			if err != nil {
-				t.Fatalf("ParseAttestation failed: %v", err)
+				t.Fatalf("Parse failed: %v", err)
 			}
 
 			container, err := att.ExtractContainerClaims()

@@ -1,4 +1,4 @@
-package teeverify
+package attest
 
 import (
 	"fmt"
@@ -42,7 +42,7 @@ type ExtractOptions struct {
 }
 
 // Attestation is a parsed attestation ready for verification.
-// Use ParseAttestation to create, then call VerifyTPM and/or VerifyBoundTEE.
+// Use Parse to create, then call VerifyTPM and/or VerifyBoundTEE.
 type Attestation struct {
 	platform    Platform
 	attestation *attestpb.Attestation

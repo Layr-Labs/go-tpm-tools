@@ -1,7 +1,7 @@
-// Package teeverify provides TEE attestation verification for TDX and SEV-SNP.
+// Package attest provides TEE attestation verification for TDX and SEV-SNP.
 // This package is for third parties who need to verify raw TEE attestations
 // without using external services (like Google Cloud Attestation or Intel Trust Authority).
-package teeverify
+package attest
 
 import (
 	"bytes"
@@ -25,9 +25,9 @@ import (
 // teeReportDataSize is the size of the ReportData field in both TDX and SEV-SNP hardware specs.
 const teeReportDataSize = 64
 
-// ParseAttestation deserializes an attestation proto and detects the platform.
+// Parse deserializes an attestation proto and detects the platform.
 // Use VerifyTPM and VerifyBoundTEE on the returned Attestation to verify independently.
-func ParseAttestation(attestationBytes []byte) (*Attestation, error) {
+func Parse(attestationBytes []byte) (*Attestation, error) {
 	var attestation attestpb.Attestation
 	if err := proto.Unmarshal(attestationBytes, &attestation); err != nil {
 		return nil, fmt.Errorf("failed to parse attestation proto: %w", err)

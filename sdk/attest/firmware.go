@@ -1,5 +1,5 @@
-// Package teeverify provides firmware endorsement verification against Google's TCB bucket.
-package teeverify
+// Package attest provides firmware endorsement verification against Google's TCB bucket.
+package attest
 
 import (
 	"bytes"
