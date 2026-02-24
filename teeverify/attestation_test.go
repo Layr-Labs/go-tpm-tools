@@ -7,6 +7,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/Layr-Labs/go-tpm-tools/internal/nonce"
 	attestpb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
 	tpmpb "github.com/Layr-Labs/go-tpm-tools/proto/tpm"
 	"google.golang.org/protobuf/proto"
@@ -511,9 +512,9 @@ func TestPlatformTag(t *testing.T) {
 		platform Platform
 		wantTag  string
 	}{
-		{PlatformIntelTDX, PlatformTagIntelTDX},
-		{PlatformAMDSevSnp, PlatformTagAMDSevSnp},
-		{PlatformGCPShieldedVM, PlatformTagGCPShieldedVM},
+		{PlatformIntelTDX, nonce.PlatformTagIntelTDX},
+		{PlatformAMDSevSnp, nonce.PlatformTagAMDSevSnp},
+		{PlatformGCPShieldedVM, nonce.PlatformTagGCPShieldedVM},
 	}
 
 	for _, tt := range tests {

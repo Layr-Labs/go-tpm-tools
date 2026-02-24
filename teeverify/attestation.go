@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Layr-Labs/go-tpm-tools/internal/nonce"
 	attestpb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
 	"github.com/Layr-Labs/go-tpm-tools/server"
 	sevverify "github.com/google/go-sev-guest/verify"
@@ -42,7 +43,7 @@ func ParseAttestation(attestationBytes []byte) (*Attestation, error) {
 // Works for all platforms (TDX, SEV-SNP, Shielded VM).
 func (a *Attestation) VerifyTPM(challenge, extraData []byte) (*VerifiedTPMAttestation, error) {
 	// Compute expected TPM nonce with platform tag.
-	tpmNonce := ComputeTPMNonce(challenge, a.platform.PlatformTag(), extraData)
+	tpmNonce := nonce.ComputeTPMNonce(challenge, a.platform.PlatformTag(), extraData)
 
 	// Verify TPM quote ExtraData matches the computed TPM nonce.
 	quotes := a.attestation.GetQuotes()
@@ -93,7 +94,7 @@ func (a *Attestation) VerifyBoundTEE(challenge, extraData []byte) (*VerifiedTEEA
 	}
 
 	// Verify binding: ReportData == ComputeBoundNonce(challenge, akPubDER, extraData).
-	boundNonce := ComputeBoundNonce(challenge, akPubDER, extraData)
+	boundNonce := nonce.ComputeBoundNonce(challenge, akPubDER, extraData)
 	if err := verifyBinding(a.attestation, boundNonce, a.platform); err != nil {
 		return nil, err
 	}

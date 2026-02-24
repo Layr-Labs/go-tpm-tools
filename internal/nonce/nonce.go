@@ -1,4 +1,4 @@
-package teeverify
+package nonce
 
 import (
 	"crypto/sha256"
@@ -7,6 +7,13 @@ import (
 
 // WorkloadAttestationLabel is the domain separator used in nonce computation.
 const WorkloadAttestationLabel = "WORKLOAD_ATTESTATION"
+
+// Platform tag constants for anti-downgrade protection in the TPM nonce.
+const (
+	PlatformTagIntelTDX      = "INTEL_TDX"
+	PlatformTagAMDSevSnp     = "AMD_SEV_SNP"
+	PlatformTagGCPShieldedVM = "GCP_SHIELDED_VM"
+)
 
 // ComputeTPMNonce derives a 32-byte nonce for TPM quotes:
 //

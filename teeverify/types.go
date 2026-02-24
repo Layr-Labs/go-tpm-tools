@@ -3,6 +3,7 @@ package teeverify
 import (
 	"fmt"
 
+	"github.com/Layr-Labs/go-tpm-tools/internal/nonce"
 	attestpb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
 )
 
@@ -16,22 +17,15 @@ const (
 	PlatformGCPShieldedVM                     // 2, TPM-only, no TEE hardware attestation
 )
 
-// Platform tag constants for anti-downgrade protection in the TPM nonce.
-const (
-	PlatformTagIntelTDX      = "INTEL_TDX"
-	PlatformTagAMDSevSnp     = "AMD_SEV_SNP"
-	PlatformTagGCPShieldedVM = "GCP_SHIELDED_VM"
-)
-
 // PlatformTag returns the string tag used in TPM nonce computation.
 func (p Platform) PlatformTag() string {
 	switch p {
 	case PlatformIntelTDX:
-		return PlatformTagIntelTDX
+		return nonce.PlatformTagIntelTDX
 	case PlatformAMDSevSnp:
-		return PlatformTagAMDSevSnp
+		return nonce.PlatformTagAMDSevSnp
 	case PlatformGCPShieldedVM:
-		return PlatformTagGCPShieldedVM
+		return nonce.PlatformTagGCPShieldedVM
 	default:
 		panic(fmt.Sprintf("unknown platform: %d", int(p)))
 	}

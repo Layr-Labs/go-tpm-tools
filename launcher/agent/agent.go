@@ -8,8 +8,6 @@ package agent
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"crypto/sha512"
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
@@ -29,6 +27,7 @@ import (
 	"github.com/Layr-Labs/go-tpm-tools/cel"
 	"github.com/Layr-Labs/go-tpm-tools/client"
 	"github.com/Layr-Labs/go-tpm-tools/internal"
+	"github.com/Layr-Labs/go-tpm-tools/internal/nonce"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/signaturediscovery"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/spec"
@@ -39,13 +38,7 @@ import (
 	"github.com/Layr-Labs/go-tpm-tools/verifier/util"
 )
 
-const (
-	audienceSTS              = "https://sts.googleapis.com"
-	workloadAttestationLabel = "WORKLOAD_ATTESTATION"
-	platformTagIntelTDX      = "INTEL_TDX"
-	platformTagAMDSevSnp     = "AMD_SEV_SNP"
-	platformTagGCPShieldedVM = "GCP_SHIELDED_VM"
-)
+const audienceSTS = "https://sts.googleapis.com"
 
 type principalIDTokenFetcher func(audience string) ([][]byte, error)
 
@@ -152,15 +145,15 @@ func CreateAttestationAgent(tpm io.ReadWriteCloser, akFetcher util.TpmKeyFetcher
 
 		logger.Info("Using TDX RTMR as attestation root.")
 		attestAgent.avRot = tdxAR
-		attestAgent.platformTag = platformTagIntelTDX
+		attestAgent.platformTag = nonce.PlatformTagIntelTDX
 	} else if _, err := client.CreateSevSnpQuoteProvider(); err == nil {
 		logger.Info("Using TPM PCR as attestation root (SEV-SNP detected).")
 		attestAgent.avRot = tpmAR
-		attestAgent.platformTag = platformTagAMDSevSnp
+		attestAgent.platformTag = nonce.PlatformTagAMDSevSnp
 	} else {
 		logger.Info("Using TPM PCR as attestation root.")
 		attestAgent.avRot = tpmAR
-		attestAgent.platformTag = platformTagGCPShieldedVM
+		attestAgent.platformTag = nonce.PlatformTagGCPShieldedVM
 	}
 
 	return attestAgent, nil
@@ -408,12 +401,12 @@ func (a *agent) BoundAttestationEvidence(opts BoundAttestationOpts) (*pb.Attesta
 	}
 
 	// Compute nonces. Platform tag was locked at agent creation for anti-downgrade protection.
-	tpmNonce := computeTPMNonce(opts.Challenge, a.platformTag, opts.ExtraData)
+	tpmNonce := nonce.ComputeTPMNonce(opts.Challenge, a.platformTag, opts.ExtraData)
 
 	// Only compute TEE nonce when a TEE device is available.
 	var teeNonce []byte
 	if teeDevice != nil {
-		teeNonce = computeBoundNonce(opts.Challenge, akPubDER, opts.ExtraData)
+		teeNonce = nonce.ComputeBoundNonce(opts.Challenge, akPubDER, opts.ExtraData)
 	}
 
 	// Encode the CEL.
@@ -429,45 +422,6 @@ func (a *agent) BoundAttestationEvidence(opts BoundAttestationOpts) (*pb.Attesta
 		CertChainFetcher:  http.DefaultClient,
 		CanonicalEventLog: celBuf.Bytes(),
 	})
-}
-
-// computeTPMNonce derives a 32-byte nonce for TPM quotes:
-//
-//	SHA256(label || platformTag || SHA256(challenge) || SHA256(extraData)?)
-//
-// The platformTag commits the detected platform into the TPM nonce, preventing
-// anti-downgrade attacks. If extraData is nil or empty, the SHA256(extraData) term is omitted.
-func computeTPMNonce(challenge []byte, platformTag string, extraData []byte) []byte {
-	h := sha256.New()
-	h.Write([]byte(workloadAttestationLabel))
-	h.Write([]byte(platformTag))
-	challengeDigest := sha256.Sum256(challenge)
-	h.Write(challengeDigest[:])
-	if len(extraData) > 0 {
-		extraDigest := sha256.Sum256(extraData)
-		h.Write(extraDigest[:])
-	}
-	return h.Sum(nil)
-}
-
-// computeBoundNonce derives a 64-byte nonce for TEE ReportData:
-//
-//	SHA512(label || SHA512(challenge) || SHA512(akPubDER) || SHA512(extraData)?)
-//
-// If extraData is nil or empty, the SHA512(extraData) term is omitted.
-// akPubDER is the AK public key in PKIX DER format.
-func computeBoundNonce(challenge, akPubDER, extraData []byte) []byte {
-	h := sha512.New()
-	challengeDigest := sha512.Sum512(challenge)
-	akDigest := sha512.Sum512(akPubDER)
-	h.Write([]byte(workloadAttestationLabel))
-	h.Write(challengeDigest[:])
-	h.Write(akDigest[:])
-	if len(extraData) > 0 {
-		extraDigest := sha512.Sum512(extraData)
-		h.Write(extraDigest[:])
-	}
-	return h.Sum(nil)
 }
 
 // createTEEDevice returns a TEE quote provider for the current platform,

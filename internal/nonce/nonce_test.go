@@ -1,4 +1,4 @@
-package teeverify
+package nonce
 
 import (
 	"bytes"
