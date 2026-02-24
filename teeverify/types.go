@@ -1,6 +1,8 @@
 package teeverify
 
 import (
+	"fmt"
+
 	attestpb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
 )
 
@@ -14,16 +16,24 @@ const (
 	PlatformGCPShieldedVM Platform = 2 // TPM-only, no TEE hardware attestation
 )
 
-func (p Platform) String() string {
+// Platform tag constants for anti-downgrade protection in the TPM nonce.
+const (
+	PlatformTagIntelTDX      = "INTEL_TDX"
+	PlatformTagAMDSevSnp     = "AMD_SEV_SNP"
+	PlatformTagGCPShieldedVM = "GCP_SHIELDED_VM"
+)
+
+// PlatformTag returns the string tag used in TPM nonce computation.
+func (p Platform) PlatformTag() string {
 	switch p {
 	case PlatformIntelTDX:
-		return "Intel TDX"
+		return PlatformTagIntelTDX
 	case PlatformAMDSevSnp:
-		return "AMD SEV-SNP"
+		return PlatformTagAMDSevSnp
 	case PlatformGCPShieldedVM:
-		return "GCP Shielded VM"
+		return PlatformTagGCPShieldedVM
 	default:
-		return "Unknown"
+		panic(fmt.Sprintf("unknown platform: %d", int(p)))
 	}
 }
 
@@ -37,39 +47,49 @@ type ExtractOptions struct {
 	PCRIndices []uint32
 }
 
-// VerifiedBoundAttestation wraps a cryptographically verified TEE attestation.
-//
-// This type is returned by VerifyBoundAttestation() after successful verification of:
-//   - TEE quote signature (TDX or SEV-SNP hardware root of trust)
-//   - TPM quote signature and AK certificate chain
-//   - Binding: ReportData = ComputeBoundNonce(challenge, akHash, extraData)
-//
-// The private fields (attestation, machineState) are always non-nil after successful
-// verification. Claims can only be extracted via ExtractClaims(), ensuring callers
-// cannot accidentally use unverified data.
-type VerifiedBoundAttestation struct {
-	Platform Platform
-	// ExtraData contains caller-provided data cryptographically bound into the attestation nonces.
+// Attestation is a parsed attestation ready for verification.
+// Use ParseAttestation to create, then call VerifyTPM and/or VerifyBoundTEE.
+type Attestation struct {
+	platform    Platform
+	attestation *attestpb.Attestation
+}
+
+// Platform returns the detected platform.
+func (a *Attestation) Platform() Platform {
+	return a.platform
+}
+
+// VerifiedTPMAttestation is returned by VerifyTPM after successful TPM verification.
+// Claims can only be extracted via ExtractClaims().
+type VerifiedTPMAttestation struct {
+	Platform     Platform
 	ExtraData    []byte
 	attestation  *attestpb.Attestation
 	machineState *attestpb.MachineState
 }
 
-// Claims contains all extracted claims from a verified attestation.
-//
-// Platform-specific claims (TDX or SevSnp) are populated based on the attestation type.
-// Optional fields (GCE, Container) are nil if not present in the attestation.
-//
-// For byte array fields in TDXClaims/SevSnpClaims (e.g., MRTD, Measurement), a zero
-// value means the field was not present in the attestation. Non-zero partial values
-// are rejected during extraction.
+// VerifiedTEEAttestation is returned by VerifyBoundTEE after successful TEE verification.
+// TEE claims can only be extracted via ExtractTEEClaims().
+type VerifiedTEEAttestation struct {
+	Platform    Platform
+	ExtraData   []byte
+	attestation *attestpb.Attestation
+}
+
+// TEEClaims contains TEE-specific claims (TDX or SEV-SNP only).
+type TEEClaims struct {
+	Platform Platform      `json:"platform"`
+	TDX      *TDXClaims    `json:"tdx,omitempty"`
+	SevSnp   *SevSnpClaims `json:"sevsnp,omitempty"`
+}
+
+// Claims contains TPM-layer claims from a verified attestation.
+// For TEE-specific claims (TDX/SEV-SNP), use VerifiedTEEAttestation.ExtractTEEClaims().
 type Claims struct {
 	Platform  Platform       `json:"platform"`
 	Hardened  bool           `json:"hardened"`
 	Container *ContainerInfo `json:"container,omitempty"`
 	GCE       *GCEInfo       `json:"gce,omitempty"`
-	TDX       *TDXClaims     `json:"tdx,omitempty"`
-	SevSnp    *SevSnpClaims  `json:"sevsnp,omitempty"`
 
 	// PCRs contains the requested PCR values from the vTPM quote.
 	// Keys are PCR indices (0-23), values are SHA-256 measurements (32 bytes).

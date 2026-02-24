@@ -10,8 +10,10 @@ import (
 	sabi "github.com/google/go-sev-guest/abi"
 )
 
-// ExtractClaims extracts claims from a verified attestation.
-func (v *VerifiedBoundAttestation) ExtractClaims(opts ExtractOptions) (*Claims, error) {
+// ExtractClaims extracts TPM-layer claims from a verified TPM attestation.
+// This includes PCRs, container info, GCE metadata, and hardened status.
+// For TEE-specific claims, use VerifiedTEEAttestation.ExtractTEEClaims().
+func (v *VerifiedTPMAttestation) ExtractClaims(opts ExtractOptions) (*Claims, error) {
 	claims := &Claims{
 		Platform: v.Platform,
 		Hardened: isHardened(v.machineState.GetLinuxKernel().GetCommandLine()),
@@ -48,6 +50,15 @@ func (v *VerifiedBoundAttestation) ExtractClaims(opts ExtractOptions) (*Claims, 
 		}
 	}
 
+	return claims, nil
+}
+
+// ExtractTEEClaims extracts TEE-specific claims (TDX or SEV-SNP) from a verified TEE attestation.
+func (v *VerifiedTEEAttestation) ExtractTEEClaims() (*TEEClaims, error) {
+	claims := &TEEClaims{
+		Platform: v.Platform,
+	}
+
 	switch v.Platform {
 	case PlatformIntelTDX:
 		tdxClaims, err := extractTDXClaims(v.attestation)
@@ -61,6 +72,8 @@ func (v *VerifiedBoundAttestation) ExtractClaims(opts ExtractOptions) (*Claims, 
 			return nil, fmt.Errorf("failed to extract SEV-SNP claims: %w", err)
 		}
 		claims.SevSnp = sevClaims
+	default:
+		return nil, fmt.Errorf("no TEE claims available for platform %s", v.Platform.PlatformTag())
 	}
 
 	return claims, nil

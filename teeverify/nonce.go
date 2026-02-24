@@ -10,13 +10,16 @@ const WorkloadAttestationLabel = "WORKLOAD_ATTESTATION"
 
 // ComputeTPMNonce derives a 32-byte nonce for TPM quotes:
 //
-//	SHA256(label || SHA256(challenge) || SHA256(extraData)?)
+//	SHA256(label || platformTag || SHA256(challenge) || SHA256(extraData)?)
 //
+// The platformTag commits the detected platform into the TPM nonce, preventing
+// anti-downgrade attacks where a TEE quote is stripped to appear as Shielded VM.
 // If extraData is nil or empty, the SHA256(extraData) term is omitted.
-func ComputeTPMNonce(challenge, extraData []byte) []byte {
+func ComputeTPMNonce(challenge []byte, platformTag string, extraData []byte) []byte {
 	h := sha256.New()
-	challengeDigest := sha256.Sum256(challenge)
 	h.Write([]byte(WorkloadAttestationLabel))
+	h.Write([]byte(platformTag))
+	challengeDigest := sha256.Sum256(challenge)
 	h.Write(challengeDigest[:])
 	if len(extraData) > 0 {
 		extraDigest := sha256.Sum256(extraData)

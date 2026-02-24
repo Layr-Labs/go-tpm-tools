@@ -89,10 +89,10 @@ func expectedPlatform(s string) Platform {
 }
 
 // =============================================================================
-// Verification Tests
+// ParseAttestation Tests
 // =============================================================================
 
-func TestVerifyBoundAttestation(t *testing.T) {
+func TestParseAttestation(t *testing.T) {
 	vectors := loadTestVectors(t)
 	if len(vectors) == 0 {
 		t.Skip("no test vectors")
@@ -100,29 +100,94 @@ func TestVerifyBoundAttestation(t *testing.T) {
 
 	for _, v := range vectors {
 		t.Run(v.Name, func(t *testing.T) {
-			verified, err := VerifyBoundAttestation(v.Attestation, v.Challenge, v.ExtraData)
+			att, err := ParseAttestation(v.Attestation)
 			if err != nil {
-				t.Fatalf("VerifyBoundAttestation failed: %v", err)
+				t.Fatalf("ParseAttestation failed: %v", err)
 			}
 
 			want := expectedPlatform(v.Platform)
-			if verified.Platform != want {
-				t.Errorf("platform mismatch: got %v, want %v", verified.Platform, want)
+			if att.Platform() != want {
+				t.Errorf("platform mismatch: got %s, want %s", att.Platform().PlatformTag(), want.PlatformTag())
 			}
 		})
 	}
 }
 
-func TestVerifyBoundAttestation_WrongChallenge(t *testing.T) {
+func TestParseAttestation_InvalidProto(t *testing.T) {
+	garbage := []byte("this is not a valid protobuf message")
+
+	_, err := ParseAttestation(garbage)
+	if err == nil {
+		t.Fatal("expected error for invalid proto, got nil")
+	}
+
+	if !contains(err.Error(), "parse") && !contains(err.Error(), "unmarshal") {
+		t.Errorf("expected parse error, got: %v", err)
+	}
+}
+
+func TestParseAttestation_EmptyAttestation(t *testing.T) {
+	_, err := ParseAttestation([]byte{})
+	if err == nil {
+		t.Fatal("expected error for empty attestation, got nil")
+	}
+
+	if !contains(err.Error(), "unknown platform") {
+		t.Errorf("expected 'unknown platform' error, got: %v", err)
+	}
+}
+
+func TestParseAttestation_NilAttestation(t *testing.T) {
+	_, err := ParseAttestation(nil)
+	if err == nil {
+		t.Fatal("expected error for nil attestation, got nil")
+	}
+}
+
+// =============================================================================
+// VerifyTPM Tests
+// =============================================================================
+
+func TestVerifyTPM(t *testing.T) {
+	vectors := loadTestVectors(t)
+	if len(vectors) == 0 {
+		t.Skip("no test vectors")
+	}
+
+	for _, v := range vectors {
+		t.Run(v.Name, func(t *testing.T) {
+			att, err := ParseAttestation(v.Attestation)
+			if err != nil {
+				t.Fatalf("ParseAttestation failed: %v", err)
+			}
+
+			tpmResult, err := att.VerifyTPM(v.Challenge, v.ExtraData)
+			if err != nil {
+				t.Fatalf("VerifyTPM failed: %v", err)
+			}
+
+			want := expectedPlatform(v.Platform)
+			if tpmResult.Platform != want {
+				t.Errorf("platform mismatch: got %s, want %s", tpmResult.Platform.PlatformTag(), want.PlatformTag())
+			}
+		})
+	}
+}
+
+func TestVerifyTPM_WrongChallenge(t *testing.T) {
 	vectors := loadTestVectors(t)
 	if len(vectors) == 0 {
 		t.Skip("no test vectors")
 	}
 
 	v := vectors[0]
-	wrongChallenge := make([]byte, 32) // all zeros
+	att, err := ParseAttestation(v.Attestation)
+	if err != nil {
+		t.Fatalf("ParseAttestation failed: %v", err)
+	}
 
-	_, err := VerifyBoundAttestation(v.Attestation, wrongChallenge, v.ExtraData)
+	wrongChallenge := make([]byte, 32) // all zeros
+	_, err = att.VerifyTPM(wrongChallenge, v.ExtraData)
 	if err == nil {
 		t.Fatal("expected error with wrong challenge, got nil")
 	}
@@ -131,16 +196,43 @@ func TestVerifyBoundAttestation_WrongChallenge(t *testing.T) {
 	}
 }
 
-func TestVerifyBoundAttestation_NilChallenge(t *testing.T) {
+// =============================================================================
+// VerifyBoundTEE Tests
+// =============================================================================
+
+func TestVerifyBoundTEE(t *testing.T) {
 	vectors := loadTestVectors(t)
 	if len(vectors) == 0 {
 		t.Skip("no test vectors")
 	}
 
-	v := vectors[0]
-	_, err := VerifyBoundAttestation(v.Attestation, nil, v.ExtraData)
-	if err == nil {
-		t.Fatal("expected error with nil challenge, got nil")
+	for _, v := range vectors {
+		t.Run(v.Name, func(t *testing.T) {
+			att, err := ParseAttestation(v.Attestation)
+			if err != nil {
+				t.Fatalf("ParseAttestation failed: %v", err)
+			}
+
+			want := expectedPlatform(v.Platform)
+
+			teeResult, err := att.VerifyBoundTEE(v.Challenge, v.ExtraData)
+			if want == PlatformGCPShieldedVM {
+				if err == nil {
+					t.Fatal("expected error for Shielded VM, got nil")
+				}
+				if !contains(err.Error(), "not available") {
+					t.Errorf("expected 'not available' error, got: %v", err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("VerifyBoundTEE failed: %v", err)
+			}
+			if teeResult.Platform != want {
+				t.Errorf("platform mismatch: got %s, want %s", teeResult.Platform.PlatformTag(), want.PlatformTag())
+			}
+		})
 	}
 }
 
@@ -156,12 +248,17 @@ func TestExtractClaims(t *testing.T) {
 
 	for _, v := range vectors {
 		t.Run(v.Name, func(t *testing.T) {
-			verified, err := VerifyBoundAttestation(v.Attestation, v.Challenge, v.ExtraData)
+			att, err := ParseAttestation(v.Attestation)
 			if err != nil {
-				t.Fatalf("VerifyBoundAttestation failed: %v", err)
+				t.Fatalf("ParseAttestation failed: %v", err)
 			}
 
-			claims, err := verified.ExtractClaims(ExtractOptions{
+			tpmResult, err := att.VerifyTPM(v.Challenge, v.ExtraData)
+			if err != nil {
+				t.Fatalf("VerifyTPM failed: %v", err)
+			}
+
+			claims, err := tpmResult.ExtractClaims(ExtractOptions{
 				PCRIndices: []uint32{0, 4, 8, 9},
 			})
 			if err != nil {
@@ -171,37 +268,12 @@ func TestExtractClaims(t *testing.T) {
 			// Platform should match
 			want := expectedPlatform(v.Platform)
 			if claims.Platform != want {
-				t.Errorf("platform mismatch: got %v, want %v", claims.Platform, want)
+				t.Errorf("platform mismatch: got %s, want %s", claims.Platform.PlatformTag(), want.PlatformTag())
 			}
 
 			// Hardened flag should match
 			if claims.Hardened != v.Hardened {
 				t.Errorf("hardened mismatch: got %v, want %v", claims.Hardened, v.Hardened)
-			}
-
-			// Platform-specific claims
-			switch want {
-			case PlatformIntelTDX:
-				if claims.TDX == nil {
-					t.Fatal("expected TDX claims, got nil")
-				}
-				if claims.SevSnp != nil {
-					t.Error("unexpected SEV-SNP claims on TDX vector")
-				}
-			case PlatformAMDSevSnp:
-				if claims.SevSnp == nil {
-					t.Fatal("expected SEV-SNP claims, got nil")
-				}
-				if claims.TDX != nil {
-					t.Error("unexpected TDX claims on SEV-SNP vector")
-				}
-			case PlatformGCPShieldedVM:
-				if claims.TDX != nil {
-					t.Error("unexpected TDX claims on Shielded VM vector")
-				}
-				if claims.SevSnp != nil {
-					t.Error("unexpected SEV-SNP claims on Shielded VM vector")
-				}
 			}
 
 			// PCRs should be extracted
@@ -226,6 +298,76 @@ func TestExtractClaims(t *testing.T) {
 	}
 }
 
+func TestExtractTEEClaims(t *testing.T) {
+	vectors := loadTestVectors(t)
+	if len(vectors) == 0 {
+		t.Skip("no test vectors")
+	}
+
+	for _, v := range vectors {
+		t.Run(v.Name, func(t *testing.T) {
+			att, err := ParseAttestation(v.Attestation)
+			if err != nil {
+				t.Fatalf("ParseAttestation failed: %v", err)
+			}
+
+			want := expectedPlatform(v.Platform)
+			if want == PlatformGCPShieldedVM {
+				t.Skip("no TEE claims for Shielded VM")
+			}
+
+			teeResult, err := att.VerifyBoundTEE(v.Challenge, v.ExtraData)
+			if err != nil {
+				t.Fatalf("VerifyBoundTEE failed: %v", err)
+			}
+
+			teeClaims, err := teeResult.ExtractTEEClaims()
+			if err != nil {
+				t.Fatalf("ExtractTEEClaims failed: %v", err)
+			}
+
+			if teeClaims.Platform != want {
+				t.Errorf("platform mismatch: got %s, want %s", teeClaims.Platform.PlatformTag(), want.PlatformTag())
+			}
+
+			switch want {
+			case PlatformIntelTDX:
+				if teeClaims.TDX == nil {
+					t.Fatal("expected TDX claims, got nil")
+				}
+				if teeClaims.SevSnp != nil {
+					t.Error("unexpected SEV-SNP claims on TDX vector")
+				}
+			case PlatformAMDSevSnp:
+				if teeClaims.SevSnp == nil {
+					t.Fatal("expected SEV-SNP claims, got nil")
+				}
+				if teeClaims.TDX != nil {
+					t.Error("unexpected TDX claims on SEV-SNP vector")
+				}
+			}
+		})
+	}
+}
+
+func TestExtractTEEClaims_ShieldedVMFails(t *testing.T) {
+	// ExtractTEEClaims should fail for non-TEE platforms.
+	// VerifyBoundTEE already rejects Shielded VM, so reaching
+	// ExtractTEEClaims with it is a programming error.
+	vta := &VerifiedTEEAttestation{
+		Platform:    PlatformGCPShieldedVM,
+		attestation: &attestpb.Attestation{},
+	}
+
+	_, err := vta.ExtractTEEClaims()
+	if err == nil {
+		t.Fatal("expected error for Shielded VM ExtractTEEClaims, got nil")
+	}
+	if !contains(err.Error(), "no TEE claims available") {
+		t.Errorf("expected 'no TEE claims available' error, got: %v", err)
+	}
+}
+
 func TestExtractClaims_InvalidPCRIndex(t *testing.T) {
 	vectors := loadTestVectors(t)
 	if len(vectors) == 0 {
@@ -233,13 +375,18 @@ func TestExtractClaims_InvalidPCRIndex(t *testing.T) {
 	}
 
 	v := vectors[0]
-	verified, err := VerifyBoundAttestation(v.Attestation, v.Challenge, v.ExtraData)
+	att, err := ParseAttestation(v.Attestation)
 	if err != nil {
-		t.Fatalf("VerifyBoundAttestation failed: %v", err)
+		t.Fatalf("ParseAttestation failed: %v", err)
+	}
+
+	tpmResult, err := att.VerifyTPM(v.Challenge, v.ExtraData)
+	if err != nil {
+		t.Fatalf("VerifyTPM failed: %v", err)
 	}
 
 	// PCR index 24 is invalid (max is 23)
-	_, err = verified.ExtractClaims(ExtractOptions{
+	_, err = tpmResult.ExtractClaims(ExtractOptions{
 		PCRIndices: []uint32{24},
 	})
 	if err == nil {
@@ -251,27 +398,63 @@ func TestExtractClaims_InvalidPCRIndex(t *testing.T) {
 }
 
 // =============================================================================
-// Negative Tests
+// Anti-Downgrade Tests
 // =============================================================================
 
-func TestVerifyBoundAttestation_InvalidProto(t *testing.T) {
-	garbage := []byte("this is not a valid protobuf message")
-
-	_, err := VerifyBoundAttestation(garbage, make([]byte, 32), nil)
-	if err == nil {
-		t.Fatal("expected error for invalid proto, got nil")
+func TestVerifyTPM_StrippedTEEQuote_FailsNonceMismatch(t *testing.T) {
+	vectors := loadTestVectors(t)
+	if len(vectors) == 0 {
+		t.Skip("no test vectors")
 	}
 
-	if !contains(err.Error(), "parse") && !contains(err.Error(), "unmarshal") {
-		t.Errorf("expected parse error, got: %v", err)
+	for _, v := range vectors {
+		want := expectedPlatform(v.Platform)
+		if want == PlatformGCPShieldedVM {
+			continue // already a Shielded VM, nothing to strip
+		}
+
+		t.Run(v.Name, func(t *testing.T) {
+			// Deserialize the real attestation.
+			var attestation attestpb.Attestation
+			if err := proto.Unmarshal(v.Attestation, &attestation); err != nil {
+				t.Fatalf("failed to unmarshal attestation: %v", err)
+			}
+
+			// Strip the TEE quote so detectPlatform falls back to Shielded VM.
+			attestation.TeeAttestation = nil
+
+			stripped, err := proto.Marshal(&attestation)
+			if err != nil {
+				t.Fatalf("failed to re-marshal stripped attestation: %v", err)
+			}
+
+			att, err := ParseAttestation(stripped)
+			if err != nil {
+				t.Fatalf("ParseAttestation failed on stripped attestation: %v", err)
+			}
+			if att.Platform() != PlatformGCPShieldedVM {
+				t.Fatalf("expected Shielded VM after stripping, got %s", att.Platform().PlatformTag())
+			}
+
+			// VerifyTPM must fail: the TPM quote was signed with the original
+			// platform tag, but we now compute the nonce with GCP_SHIELDED_VM.
+			_, err = att.VerifyTPM(v.Challenge, v.ExtraData)
+			if err == nil {
+				t.Fatal("expected VerifyTPM to fail after stripping TEE quote, got nil")
+			}
+			if !contains(err.Error(), "mismatch") {
+				t.Errorf("expected nonce mismatch error, got: %v", err)
+			}
+		})
 	}
 }
 
-func TestVerifyBoundAttestation_ShieldedVM(t *testing.T) {
+// =============================================================================
+// Shielded VM Tests
+// =============================================================================
+
+func TestShieldedVM_ParseSucceeds(t *testing.T) {
 	// Construct a minimal TPM-only attestation (no TDX or SEV-SNP).
-	// This should be detected as PlatformGCPShieldedVM and proceed past
-	// platform detection. It will fail at TPM signature verification
-	// (since we use dummy data), but should NOT fail with "no TEE attestation found".
 	attestation := &attestpb.Attestation{
 		AkCert: []byte("dummy-ak-cert"),
 		Quotes: []*tpmpb.Quote{
@@ -283,35 +466,72 @@ func TestVerifyBoundAttestation_ShieldedVM(t *testing.T) {
 		t.Fatalf("failed to marshal attestation: %v", err)
 	}
 
-	_, err = VerifyBoundAttestation(attestationBytes, make([]byte, 32), nil)
-	if err == nil {
-		t.Fatal("expected error (dummy data), got nil")
+	att, err := ParseAttestation(attestationBytes)
+	if err != nil {
+		t.Fatalf("ParseAttestation should succeed for Shielded VM: %v", err)
 	}
-
-	// Should NOT fail with "no TEE attestation found" — it should get past platform detection.
-	if contains(err.Error(), "no TEE attestation found") {
-		t.Errorf("Shielded VM attestation was rejected as unknown platform: %v", err)
+	if att.Platform() != PlatformGCPShieldedVM {
+		t.Errorf("expected Shielded VM platform, got %s", att.Platform().PlatformTag())
 	}
 }
 
-func TestVerifyBoundAttestation_EmptyAttestation(t *testing.T) {
-	emptyProto := []byte{}
-
-	_, err := VerifyBoundAttestation(emptyProto, make([]byte, 32), nil)
-	if err == nil {
-		t.Fatal("expected error for empty attestation, got nil")
+func TestShieldedVM_VerifyBoundTEE_Fails(t *testing.T) {
+	// Construct a minimal TPM-only attestation.
+	attestation := &attestpb.Attestation{
+		AkCert: []byte("dummy-ak-cert"),
+		Quotes: []*tpmpb.Quote{
+			{Quote: []byte("dummy-quote")},
+		},
+	}
+	attestationBytes, err := proto.Marshal(attestation)
+	if err != nil {
+		t.Fatalf("failed to marshal attestation: %v", err)
 	}
 
-	if !contains(err.Error(), "no TEE attestation found") {
-		t.Errorf("expected 'no TEE attestation found' error, got: %v", err)
+	att, err := ParseAttestation(attestationBytes)
+	if err != nil {
+		t.Fatalf("ParseAttestation failed: %v", err)
+	}
+
+	_, err = att.VerifyBoundTEE(make([]byte, 32), nil)
+	if err == nil {
+		t.Fatal("expected error for Shielded VM VerifyBoundTEE, got nil")
+	}
+	if !contains(err.Error(), "not available") {
+		t.Errorf("expected 'not available' error, got: %v", err)
 	}
 }
 
-func TestVerifyBoundAttestation_NilAttestation(t *testing.T) {
-	_, err := VerifyBoundAttestation(nil, make([]byte, 32), nil)
-	if err == nil {
-		t.Fatal("expected error for nil attestation, got nil")
+// =============================================================================
+// PlatformTag Tests
+// =============================================================================
+
+func TestPlatformTag(t *testing.T) {
+	tests := []struct {
+		platform Platform
+		wantTag  string
+	}{
+		{PlatformIntelTDX, PlatformTagIntelTDX},
+		{PlatformAMDSevSnp, PlatformTagAMDSevSnp},
+		{PlatformGCPShieldedVM, PlatformTagGCPShieldedVM},
 	}
+
+	for _, tt := range tests {
+		t.Run(tt.wantTag, func(t *testing.T) {
+			if got := tt.platform.PlatformTag(); got != tt.wantTag {
+				t.Errorf("PlatformTag() = %q, want %q", got, tt.wantTag)
+			}
+		})
+	}
+}
+
+func TestPlatformTag_UnknownPanics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic for PlatformUnknown, got none")
+		}
+	}()
+	PlatformUnknown.PlatformTag()
 }
 
 // =============================================================================

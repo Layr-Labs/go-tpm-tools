@@ -42,6 +42,9 @@ import (
 const (
 	audienceSTS              = "https://sts.googleapis.com"
 	workloadAttestationLabel = "WORKLOAD_ATTESTATION"
+	platformTagIntelTDX      = "INTEL_TDX"
+	platformTagAMDSevSnp     = "AMD_SEV_SNP"
+	platformTagGCPShieldedVM = "GCP_SHIELDED_VM"
 )
 
 type principalIDTokenFetcher func(audience string) ([][]byte, error)
@@ -85,6 +88,7 @@ type AttestAgentOpts struct {
 type agent struct {
 	measuredRots     []attestRoot
 	avRot            attestRoot
+	platformTag      string
 	fetchedAK        *client.Key
 	client           verifier.Client
 	principalFetcher principalIDTokenFetcher
@@ -148,9 +152,15 @@ func CreateAttestationAgent(tpm io.ReadWriteCloser, akFetcher util.TpmKeyFetcher
 
 		logger.Info("Using TDX RTMR as attestation root.")
 		attestAgent.avRot = tdxAR
+		attestAgent.platformTag = platformTagIntelTDX
+	} else if _, err := client.CreateSevSnpQuoteProvider(); err == nil {
+		logger.Info("Using TPM PCR as attestation root (SEV-SNP detected).")
+		attestAgent.avRot = tpmAR
+		attestAgent.platformTag = platformTagAMDSevSnp
 	} else {
 		logger.Info("Using TPM PCR as attestation root.")
 		attestAgent.avRot = tpmAR
+		attestAgent.platformTag = platformTagGCPShieldedVM
 	}
 
 	return attestAgent, nil
@@ -397,8 +407,8 @@ func (a *agent) BoundAttestationEvidence(opts BoundAttestationOpts) (*pb.Attesta
 		return nil, fmt.Errorf("failed to marshal AK public key: %w", err)
 	}
 
-	// Compute nonces.
-	tpmNonce := computeTPMNonce(opts.Challenge, opts.ExtraData)
+	// Compute nonces. Platform tag was locked at agent creation for anti-downgrade protection.
+	tpmNonce := computeTPMNonce(opts.Challenge, a.platformTag, opts.ExtraData)
 
 	// Only compute TEE nonce when a TEE device is available.
 	var teeNonce []byte
@@ -423,13 +433,15 @@ func (a *agent) BoundAttestationEvidence(opts BoundAttestationOpts) (*pb.Attesta
 
 // computeTPMNonce derives a 32-byte nonce for TPM quotes:
 //
-//	SHA256(label || SHA256(challenge) || SHA256(extraData)?)
+//	SHA256(label || platformTag || SHA256(challenge) || SHA256(extraData)?)
 //
-// If extraData is nil or empty, the SHA256(extraData) term is omitted.
-func computeTPMNonce(challenge, extraData []byte) []byte {
+// The platformTag commits the detected platform into the TPM nonce, preventing
+// anti-downgrade attacks. If extraData is nil or empty, the SHA256(extraData) term is omitted.
+func computeTPMNonce(challenge []byte, platformTag string, extraData []byte) []byte {
 	h := sha256.New()
-	challengeDigest := sha256.Sum256(challenge)
 	h.Write([]byte(workloadAttestationLabel))
+	h.Write([]byte(platformTag))
+	challengeDigest := sha256.Sum256(challenge)
 	h.Write(challengeDigest[:])
 	if len(extraData) > 0 {
 		extraDigest := sha256.Sum256(extraData)
