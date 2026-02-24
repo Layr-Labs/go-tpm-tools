@@ -40,10 +40,10 @@ func (f *fakeVerifierClient) VerifyConfidentialSpace(_ context.Context, _ verifi
 }
 
 type fakeAttestationAgent struct {
-	measureEventFunc     func(cel.Content) error
-	attestFunc           func(context.Context, agent.AttestAgentOpts) ([]byte, error)
-	attestWithClientFunc func(context.Context, agent.AttestAgentOpts, verifier.Client) ([]byte, error)
-	rawAttestFunc        func(opts agent.RawAttestOpts) (*attestpb.Attestation, error)
+	measureEventFunc             func(cel.Content) error
+	attestFunc                   func(context.Context, agent.AttestAgentOpts) ([]byte, error)
+	attestWithClientFunc         func(context.Context, agent.AttestAgentOpts, verifier.Client) ([]byte, error)
+	boundAttestationEvidenceFunc func(opts agent.BoundAttestationOpts) (*attestpb.Attestation, error)
 }
 
 func (f fakeAttestationAgent) Attest(c context.Context, a agent.AttestAgentOpts) ([]byte, error) {
@@ -66,9 +66,9 @@ func (f fakeAttestationAgent) Close() error {
 	return nil
 }
 
-func (f fakeAttestationAgent) RawAttest(opts agent.RawAttestOpts) (*attestpb.Attestation, error) {
-	if f.rawAttestFunc != nil {
-		return f.rawAttestFunc(opts)
+func (f fakeAttestationAgent) BoundAttestationEvidence(opts agent.BoundAttestationOpts) (*attestpb.Attestation, error) {
+	if f.boundAttestationEvidenceFunc != nil {
+		return f.boundAttestationEvidenceFunc(opts)
 	}
 	return nil, fmt.Errorf("unimplemented")
 }
@@ -590,8 +590,8 @@ func TestCustomHandleAttestError(t *testing.T) {
 }
 
 func TestGetAttestation(t *testing.T) {
-	testNonce := []byte("testnonce12345678")
-	testUserData := []byte("userdata")
+	testChallenge := []byte("testnonce12345678")
+	testExtraData := []byte("userdata")
 	testAttestation := &attestpb.Attestation{
 		AkPub: []byte("test-ak-pub"),
 	}
@@ -600,57 +600,57 @@ func TestGetAttestation(t *testing.T) {
 		name           string
 		body           string
 		wantStatusCode int
-		wantNonce      []byte
-		wantUserData   []byte
+		wantChallenge  []byte
+		wantExtraData  []byte
 	}{
 		{
-			name:           "success with nonce only",
-			body:           fmt.Sprintf(`{"nonce":"%s"}`, base64.StdEncoding.EncodeToString(testNonce)),
+			name:           "success with challenge only",
+			body:           fmt.Sprintf(`{"challenge":"%s"}`, base64.StdEncoding.EncodeToString(testChallenge)),
 			wantStatusCode: http.StatusOK,
-			wantNonce:      testNonce,
-			wantUserData:   nil,
+			wantChallenge:  testChallenge,
+			wantExtraData:  nil,
 		},
 		{
-			name:           "success with nonce and user_data",
-			body:           fmt.Sprintf(`{"nonce":"%s","user_data":"%s"}`, base64.StdEncoding.EncodeToString(testNonce), base64.StdEncoding.EncodeToString(testUserData)),
+			name:           "success with challenge and extra_data",
+			body:           fmt.Sprintf(`{"challenge":"%s","extra_data":"%s"}`, base64.StdEncoding.EncodeToString(testChallenge), base64.StdEncoding.EncodeToString(testExtraData)),
 			wantStatusCode: http.StatusOK,
-			wantNonce:      testNonce,
-			wantUserData:   testUserData,
+			wantChallenge:  testChallenge,
+			wantExtraData:  testExtraData,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			var receivedOpts agent.RawAttestOpts
+			var receivedOpts agent.BoundAttestationOpts
 			ah := attestHandler{
 				ctx:        context.Background(),
 				logger:     logging.SimpleLogger(),
 				launchSpec: spec.LaunchSpec{SelfVerificationEnabled: true},
 				attestAgent: fakeAttestationAgent{
-					rawAttestFunc: func(opts agent.RawAttestOpts) (*attestpb.Attestation, error) {
+					boundAttestationEvidenceFunc: func(opts agent.BoundAttestationOpts) (*attestpb.Attestation, error) {
 						receivedOpts = opts
 						return testAttestation, nil
 					},
 				},
 			}
 
-			req := httptest.NewRequest(http.MethodPost, "/v1/attestation", strings.NewReader(tc.body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/bound_evidence", strings.NewReader(tc.body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
-			ah.getAttestation(w, req)
+			ah.getBoundEvidence(w, req)
 
 			if w.Code != tc.wantStatusCode {
 				t.Errorf("got status code %d, want %d", w.Code, tc.wantStatusCode)
 			}
 
 			if tc.wantStatusCode == http.StatusOK {
-				// Verify nonce and userData were passed correctly
-				if diff := cmp.Diff(tc.wantNonce, receivedOpts.Nonce); diff != "" {
-					t.Errorf("nonce mismatch (-want +got):\n%s", diff)
+				// Verify challenge and extraData were passed correctly
+				if diff := cmp.Diff(tc.wantChallenge, receivedOpts.Challenge); diff != "" {
+					t.Errorf("challenge mismatch (-want +got):\n%s", diff)
 				}
-				if diff := cmp.Diff(tc.wantUserData, receivedOpts.UserData); diff != "" {
-					t.Errorf("userData mismatch (-want +got):\n%s", diff)
+				if diff := cmp.Diff(tc.wantExtraData, receivedOpts.ExtraData); diff != "" {
+					t.Errorf("extraData mismatch (-want +got):\n%s", diff)
 				}
 
 				// Verify response can be unmarshaled as Attestation proto
@@ -674,8 +674,7 @@ func TestGetAttestation(t *testing.T) {
 
 func TestGetAttestationErrors(t *testing.T) {
 	testAttestation := &attestpb.Attestation{AkPub: []byte("test-ak-pub")}
-	validNonce := base64.StdEncoding.EncodeToString([]byte("testnonce"))
-	largeUserData := base64.StdEncoding.EncodeToString(make([]byte, 33)) // 33 bytes, exceeds 32 byte limit
+	validChallenge := base64.StdEncoding.EncodeToString([]byte("testnonce"))
 
 	testCases := []struct {
 		name                    string
@@ -690,7 +689,7 @@ func TestGetAttestationErrors(t *testing.T) {
 			name:                    "self-verification disabled",
 			selfVerificationEnabled: false,
 			method:                  http.MethodPost,
-			body:                    fmt.Sprintf(`{"nonce":"%s"}`, validNonce),
+			body:                    fmt.Sprintf(`{"challenge":"%s"}`, validChallenge),
 			wantStatusCode:          http.StatusNotFound,
 			wantBodyContains:        "self-verification not enabled",
 		},
@@ -706,7 +705,7 @@ func TestGetAttestationErrors(t *testing.T) {
 			name:                    "wrong HTTP method PUT",
 			selfVerificationEnabled: true,
 			method:                  http.MethodPut,
-			body:                    fmt.Sprintf(`{"nonce":"%s"}`, validNonce),
+			body:                    fmt.Sprintf(`{"challenge":"%s"}`, validChallenge),
 			wantStatusCode:          http.StatusMethodNotAllowed,
 			wantBodyContains:        "method PUT not allowed",
 		},
@@ -719,28 +718,20 @@ func TestGetAttestationErrors(t *testing.T) {
 			wantBodyContains:        "failed to parse request body",
 		},
 		{
-			name:                    "missing nonce",
+			name:                    "missing challenge",
 			selfVerificationEnabled: true,
 			method:                  http.MethodPost,
 			body:                    `{}`,
 			wantStatusCode:          http.StatusBadRequest,
-			wantBodyContains:        "nonce is required",
+			wantBodyContains:        "challenge is required",
 		},
 		{
-			name:                    "empty nonce",
+			name:                    "empty challenge",
 			selfVerificationEnabled: true,
 			method:                  http.MethodPost,
-			body:                    `{"nonce":""}`,
+			body:                    `{"challenge":""}`,
 			wantStatusCode:          http.StatusBadRequest,
-			wantBodyContains:        "nonce is required",
-		},
-		{
-			name:                    "user_data exceeds 32 bytes",
-			selfVerificationEnabled: true,
-			method:                  http.MethodPost,
-			body:                    fmt.Sprintf(`{"nonce":"%s","user_data":"%s"}`, validNonce, largeUserData),
-			wantStatusCode:          http.StatusBadRequest,
-			wantBodyContains:        "user_data exceeds 32 bytes",
+			wantBodyContains:        "challenge is required",
 		},
 		{
 			name:                    "invalid JSON",
@@ -754,7 +745,7 @@ func TestGetAttestationErrors(t *testing.T) {
 			name:                    "unknown JSON field",
 			selfVerificationEnabled: true,
 			method:                  http.MethodPost,
-			body:                    fmt.Sprintf(`{"nonce":"%s","unknown_field":"value"}`, validNonce),
+			body:                    fmt.Sprintf(`{"challenge":"%s","unknown_field":"value"}`, validChallenge),
 			wantStatusCode:          http.StatusBadRequest,
 			wantBodyContains:        "failed to parse request body",
 		},
@@ -762,7 +753,7 @@ func TestGetAttestationErrors(t *testing.T) {
 			name:                    "agent returns error",
 			selfVerificationEnabled: true,
 			method:                  http.MethodPost,
-			body:                    fmt.Sprintf(`{"nonce":"%s"}`, validNonce),
+			body:                    fmt.Sprintf(`{"challenge":"%s"}`, validChallenge),
 			agentErr:                errors.New("TEE device not available"),
 			wantStatusCode:          http.StatusInternalServerError,
 			wantBodyContains:        "failed to get attestation",
@@ -776,7 +767,7 @@ func TestGetAttestationErrors(t *testing.T) {
 				logger:     logging.SimpleLogger(),
 				launchSpec: spec.LaunchSpec{SelfVerificationEnabled: tc.selfVerificationEnabled},
 				attestAgent: fakeAttestationAgent{
-					rawAttestFunc: func(_ agent.RawAttestOpts) (*attestpb.Attestation, error) {
+					boundAttestationEvidenceFunc: func(_ agent.BoundAttestationOpts) (*attestpb.Attestation, error) {
 						if tc.agentErr != nil {
 							return nil, tc.agentErr
 						}
@@ -785,11 +776,11 @@ func TestGetAttestationErrors(t *testing.T) {
 				},
 			}
 
-			req := httptest.NewRequest(tc.method, "/v1/attestation", strings.NewReader(tc.body))
+			req := httptest.NewRequest(tc.method, "/v1/bound_evidence", strings.NewReader(tc.body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
-			ah.getAttestation(w, req)
+			ah.getBoundEvidence(w, req)
 
 			if w.Code != tc.wantStatusCode {
 				t.Errorf("got status code %d, want %d", w.Code, tc.wantStatusCode)

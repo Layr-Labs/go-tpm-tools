@@ -6,11 +6,11 @@ package teeverify
 import (
 	"bytes"
 	"crypto"
-	"crypto/sha256"
 	"crypto/x509"
 	"fmt"
 	"time"
 
+	"github.com/Layr-Labs/go-tpm-tools/internal/nonce"
 	attestpb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
 	"github.com/Layr-Labs/go-tpm-tools/server"
 	sevverify "github.com/google/go-sev-guest/verify"
@@ -19,24 +19,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const (
-	reportDataBindingSize  = 32 // SHA256(nonce + AK_pub_DER)
-	reportDataUserDataSize = 32 // Optional user data
-	reportDataSize         = reportDataBindingSize + reportDataUserDataSize
-)
+// teeReportDataSize is the size of the ReportData field in both TDX and SEV-SNP hardware specs.
+const teeReportDataSize = 64
 
-// VerifyAttestation cryptographically verifies an attestation.
-// This verifies:
-// - TEE quote signature (Intel TDX or AMD SEV-SNP root of trust)
-// - TPM quote signature and AK certificate chain
-// - Binding: ReportData[0:32] == SHA256(nonce + AK_public_key_DER)
-//
-// The binding hash proves that the TEE and TPM are from the same VM (via AK public key).
-// The nonce must match the value used during attestation creation.
-//
-// This does NOT make policy decisions (debug mode, TCB versions, allowlists).
-// Policy checks should be performed by the caller after extracting claims.
-func VerifyAttestation(attestationBytes []byte, nonce []byte) (*VerifiedAttestation, error) {
+// ParseAttestation deserializes an attestation proto and detects the platform.
+// Use VerifyTPM and VerifyBoundTEE on the returned Attestation to verify independently.
+func ParseAttestation(attestationBytes []byte) (*Attestation, error) {
 	var attestation attestpb.Attestation
 	if err := proto.Unmarshal(attestationBytes, &attestation); err != nil {
 		return nil, fmt.Errorf("failed to parse attestation proto: %w", err)
@@ -44,27 +32,24 @@ func VerifyAttestation(attestationBytes []byte, nonce []byte) (*VerifiedAttestat
 
 	platform := detectPlatform(&attestation)
 	if platform == PlatformUnknown {
-		return nil, fmt.Errorf("no TEE attestation found")
+		return nil, fmt.Errorf("unknown platform: no TEE or Shielded VM attestation found")
 	}
 
-	userData, err := verifyBinding(&attestation, nonce, platform)
-	if err != nil {
-		return nil, err
-	}
+	return &Attestation{
+		platform:    platform,
+		attestation: &attestation,
+	}, nil
+}
 
-	switch platform {
-	case PlatformTDX:
-		if err := verifyTDXSignature(&attestation); err != nil {
-			return nil, fmt.Errorf("TDX verification failed: %w", err)
-		}
-	case PlatformSevSnp:
-		if err := verifySevSnpSignature(&attestation); err != nil {
-			return nil, fmt.Errorf("SEV-SNP verification failed: %w", err)
-		}
-	}
+// VerifyTPM verifies the TPM layer: AK cert chain, PCR quotes, event log, and
+// TPM nonce (which includes the platform tag for anti-downgrade protection).
+// Works for all platforms (TDX, SEV-SNP, Shielded VM).
+func (a *Attestation) VerifyTPM(challenge, extraData []byte) (*VerifiedTPMAttestation, error) {
+	// Compute expected TPM nonce with platform tag.
+	tpmNonce := nonce.ComputeTPMNonce(challenge, a.platform.PlatformTag(), extraData)
 
-	// Extract TPM nonce from quote's extraData
-	quotes := attestation.GetQuotes()
+	// Verify TPM quote ExtraData matches the computed TPM nonce.
+	quotes := a.attestation.GetQuotes()
 	if len(quotes) == 0 {
 		return nil, fmt.Errorf("no TPM quotes in attestation")
 	}
@@ -72,18 +57,15 @@ func VerifyAttestation(attestationBytes []byte, nonce []byte) (*VerifiedAttestat
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode TPM quote: %w", err)
 	}
-	tpmNonce := quoteInfo.ExtraData
-
-	// Verify TPM nonce matches the provided nonce
-	if !bytes.Equal(tpmNonce, nonce) {
-		return nil, fmt.Errorf("TPM nonce mismatch: quote contains different nonce than provided")
+	if !bytes.Equal(quoteInfo.ExtraData, tpmNonce) {
+		return nil, fmt.Errorf("TPM nonce mismatch: quote contains different nonce than expected")
 	}
 
-	// Create a new slice to avoid mutating the original slices
+	// Verify TPM attestation (AK cert chain, PCR quotes, event log).
 	allRoots := make([]*x509.Certificate, 0, len(server.GceEKRoots)+len(server.GcpCASEKRoots))
 	allRoots = append(allRoots, server.GceEKRoots...)
 	allRoots = append(allRoots, server.GcpCASEKRoots...)
-	machineState, err := server.VerifyAttestation(&attestation, server.VerifyOpts{
+	machineState, err := server.VerifyAttestation(a.attestation, server.VerifyOpts{
 		Nonce:             tpmNonce,
 		TrustedRootCerts:  allRoots,
 		IntermediateCerts: server.GcpCASEKIntermediates,
@@ -93,45 +75,79 @@ func VerifyAttestation(attestationBytes []byte, nonce []byte) (*VerifiedAttestat
 		return nil, fmt.Errorf("TPM attestation verification failed: %w", err)
 	}
 
-	return &VerifiedAttestation{
-		Platform:     platform,
-		UserData:     userData,
-		attestation:  &attestation,
+	return &VerifiedTPMAttestation{
+		Platform:     a.platform,
+		ExtraData:    extraData,
+		attestation:  a.attestation,
 		machineState: machineState,
+	}, nil
+}
+
+// VerifyBoundTEE verifies the TEE layer: TEE quote signature and binding to TPM's AK.
+// Only valid for TDX and SEV-SNP. Returns an error for Shielded VM.
+func (a *Attestation) VerifyBoundTEE(challenge, extraData []byte) (*VerifiedTEEAttestation, error) {
+	if a.platform != PlatformIntelTDX && a.platform != PlatformAMDSevSnp {
+		return nil, fmt.Errorf("TEE verification not available for platform %s", a.platform.PlatformTag())
+	}
+
+	// Extract AK public key DER for binding verification.
+	akPubDER, err := extractAKPubDER(a.attestation)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verify binding: ReportData == ComputeBoundNonce(challenge, akPubDER, extraData).
+	boundNonce := nonce.ComputeBoundNonce(challenge, akPubDER, extraData)
+	if err := verifyBinding(a.attestation, boundNonce, a.platform); err != nil {
+		return nil, err
+	}
+
+	// Verify TEE quote signature.
+	switch a.platform {
+	case PlatformIntelTDX:
+		if err := verifyTDXQuote(a.attestation); err != nil {
+			return nil, fmt.Errorf("TDX verification failed: %w", err)
+		}
+	case PlatformAMDSevSnp:
+		if err := verifySevSnpAttestation(a.attestation); err != nil {
+			return nil, fmt.Errorf("SEV-SNP verification failed: %w", err)
+		}
+	}
+
+	return &VerifiedTEEAttestation{
+		Platform:    a.platform,
+		ExtraData:   extraData,
+		attestation: a.attestation,
 	}, nil
 }
 
 func detectPlatform(attestation *attestpb.Attestation) Platform {
 	if attestation.GetTdxAttestation() != nil {
-		return PlatformTDX
+		return PlatformIntelTDX
 	}
 	if attestation.GetSevSnpAttestation() != nil {
-		return PlatformSevSnp
+		return PlatformAMDSevSnp
+	}
+	if len(attestation.GetQuotes()) > 0 && len(attestation.GetAkCert()) > 0 {
+		return PlatformGCPShieldedVM
 	}
 	return PlatformUnknown
 }
 
 func getReportData(attestation *attestpb.Attestation, platform Platform) []byte {
 	switch platform {
-	case PlatformTDX:
+	case PlatformIntelTDX:
 		return attestation.GetTdxAttestation().GetTdQuoteBody().GetReportData()
-	case PlatformSevSnp:
+	case PlatformAMDSevSnp:
 		return attestation.GetSevSnpAttestation().GetReport().GetReportData()
 	}
 	return nil
 }
 
-// verifyBinding verifies ReportData[0:32] == SHA256(nonce + AK_public_key_DER).
-// This proves both freshness (via nonce) and binds the TEE hardware quote to the TPM's AK,
-// proving that the TPM claims (event log, PCRs) came from the same VM as the TEE attestation.
-// Returns the user data from ReportData[32:64].
-func verifyBinding(attestation *attestpb.Attestation, nonce []byte, platform Platform) ([]byte, error) {
-	reportData := getReportData(attestation, platform)
-
-	if len(reportData) < reportDataSize {
-		return nil, fmt.Errorf("report data too short: got %d bytes, need at least %d", len(reportData), reportDataSize)
-	}
-
+// extractAKPubDER extracts and validates the AK public key in PKIX DER format
+// from the attestation. It parses the AK certificate, validates its expiry,
+// marshals the public key to PKIX DER, and verifies the ak_pub field matches.
+func extractAKPubDER(attestation *attestpb.Attestation) ([]byte, error) {
 	akCertDER := attestation.GetAkCert()
 	if len(akCertDER) == 0 {
 		return nil, fmt.Errorf("no AK certificate in attestation")
@@ -142,7 +158,7 @@ func verifyBinding(attestation *attestpb.Attestation, nonce []byte, platform Pla
 		return nil, fmt.Errorf("failed to parse AK certificate: %w", err)
 	}
 
-	// Verify AK certificate is within its validity window
+	// Verify AK certificate is within its validity window.
 	now := time.Now()
 	if now.Before(akCert.NotBefore) {
 		return nil, fmt.Errorf("AK certificate not yet valid (notBefore: %v)", akCert.NotBefore)
@@ -156,8 +172,8 @@ func verifyBinding(attestation *attestpb.Attestation, nonce []byte, platform Pla
 		return nil, fmt.Errorf("failed to marshal AK public key: %w", err)
 	}
 
-	// Verify ak_pub field exists and matches the certificate
-	// Note: ak_pub is in TPM2B_PUBLIC format (TPMT_PUBLIC), not PKIX DER
+	// Verify ak_pub field exists and matches the certificate.
+	// Note: ak_pub is in TPM2B_PUBLIC format (TPMT_PUBLIC), not PKIX DER.
 	akPub := attestation.GetAkPub()
 	if len(akPub) == 0 {
 		return nil, fmt.Errorf("no AK public key in attestation")
@@ -174,20 +190,28 @@ func verifyBinding(attestation *attestpb.Attestation, nonce []byte, platform Pla
 		return nil, fmt.Errorf("AK certificate public key does not match attestation ak_pub field")
 	}
 
-	// Compute expected binding hash: SHA256(nonce + AK_public_key_DER)
-	expectedHash := sha256.Sum256(append(nonce, akPubDER...))
-	if !bytes.Equal(reportData[:reportDataBindingSize], expectedHash[:]) {
-		return nil, fmt.Errorf("binding mismatch: ReportData[0:32] does not match SHA256(nonce + AK_public_key)")
-	}
-
-	// Extract user data from ReportData[32:64]
-	userData := make([]byte, reportDataUserDataSize)
-	copy(userData, reportData[reportDataBindingSize:reportDataSize])
-
-	return userData, nil
+	return akPubDER, nil
 }
 
-func verifyTDXSignature(attestation *attestpb.Attestation) error {
+// verifyBinding verifies ReportData == expectedBoundNonce (full 64 bytes).
+// This proves both freshness (via challenge) and binds the TEE hardware quote to
+// the TPM's AK, proving that the TPM claims (event log, PCRs) came from the same
+// VM as the TEE attestation.
+func verifyBinding(attestation *attestpb.Attestation, expectedBoundNonce []byte, platform Platform) error {
+	reportData := getReportData(attestation, platform)
+
+	if len(reportData) != teeReportDataSize {
+		return fmt.Errorf("report data length mismatch: got %d bytes, want %d", len(reportData), teeReportDataSize)
+	}
+
+	if !bytes.Equal(reportData, expectedBoundNonce) {
+		return fmt.Errorf("binding mismatch: ReportData does not match expected bound nonce")
+	}
+
+	return nil
+}
+
+func verifyTDXQuote(attestation *attestpb.Attestation) error {
 	quote := attestation.GetTdxAttestation()
 	opts := &tdxverify.Options{
 		CheckRevocations: true, // Check Intel CRLs for revoked certificates
@@ -201,7 +225,7 @@ func verifyTDXSignature(attestation *attestpb.Attestation) error {
 	return nil
 }
 
-func verifySevSnpSignature(attestation *attestpb.Attestation) error {
+func verifySevSnpAttestation(attestation *attestpb.Attestation) error {
 	snpAttestation := attestation.GetSevSnpAttestation()
 	opts := &sevverify.Options{
 		CheckRevocations: true, // Check AMD CRLs for revoked VCEK/ASK certificates

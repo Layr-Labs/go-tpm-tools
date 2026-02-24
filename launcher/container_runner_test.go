@@ -40,11 +40,11 @@ const (
 
 // Fake attestation agent.
 type fakeAttestationAgent struct {
-	measureEventFunc func(cel.Content) error
-	attestFunc       func(context.Context, agent.AttestAgentOpts) ([]byte, error)
-	rawAttestFunc    func(opts agent.RawAttestOpts) (*attestpb.Attestation, error)
-	sigsCache        []string
-	sigsFetcherFunc  func(context.Context) []string
+	measureEventFunc             func(cel.Content) error
+	attestFunc                   func(context.Context, agent.AttestAgentOpts) ([]byte, error)
+	boundAttestationEvidenceFunc func(opts agent.BoundAttestationOpts) (*attestpb.Attestation, error)
+	sigsCache                    []string
+	sigsFetcherFunc              func(context.Context) []string
 
 	// attMu sits on top of attempts field and protects attempts.
 	attMu    sync.Mutex
@@ -83,9 +83,9 @@ func (f *fakeAttestationAgent) Close() error {
 	return nil
 }
 
-func (f *fakeAttestationAgent) RawAttest(opts agent.RawAttestOpts) (*attestpb.Attestation, error) {
-	if f.rawAttestFunc != nil {
-		return f.rawAttestFunc(opts)
+func (f *fakeAttestationAgent) BoundAttestationEvidence(opts agent.BoundAttestationOpts) (*attestpb.Attestation, error) {
+	if f.boundAttestationEvidenceFunc != nil {
+		return f.boundAttestationEvidenceFunc(opts)
 	}
 	return nil, fmt.Errorf("unimplemented")
 }

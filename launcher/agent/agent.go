@@ -8,7 +8,6 @@ package agent
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
@@ -28,6 +27,7 @@ import (
 	"github.com/Layr-Labs/go-tpm-tools/cel"
 	"github.com/Layr-Labs/go-tpm-tools/client"
 	"github.com/Layr-Labs/go-tpm-tools/internal"
+	"github.com/Layr-Labs/go-tpm-tools/internal/nonce"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/signaturediscovery"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/spec"
@@ -38,10 +38,7 @@ import (
 	"github.com/Layr-Labs/go-tpm-tools/verifier/util"
 )
 
-const (
-	audienceSTS       = "https://sts.googleapis.com"
-	maxReportDataSize = 64 // Maximum size for TEE ReportData (TDX/SEV-SNP)
-)
+const audienceSTS = "https://sts.googleapis.com"
 
 type principalIDTokenFetcher func(audience string) ([][]byte, error)
 
@@ -52,18 +49,17 @@ type AttestationAgent interface {
 	MeasureEvent(cel.Content) error
 	Attest(context.Context, AttestAgentOpts) ([]byte, error)
 	AttestWithClient(ctx context.Context, opts AttestAgentOpts, client verifier.Client) ([]byte, error)
-	RawAttest(opts RawAttestOpts) (*pb.Attestation, error)
+	BoundAttestationEvidence(opts BoundAttestationOpts) (*pb.Attestation, error)
 	Refresh(context.Context) error
 	Close() error
 }
 
-// RawAttestOpts contains options for RawAttest.
-type RawAttestOpts struct {
-	// Nonce is used for attestation freshness. Required, non-empty.
-	Nonce []byte
-	// UserData is optional application-specific data (up to 32 bytes)
-	// embedded in TEE ReportData[32:64].
-	UserData []byte
+// BoundAttestationOpts contains options for BoundAttestationEvidence.
+type BoundAttestationOpts struct {
+	// Challenge is used for attestation freshness. Required, non-empty.
+	Challenge []byte
+	// ExtraData is optional application-specific data bound into the nonce.
+	ExtraData []byte
 }
 
 type attestRoot interface {
@@ -85,6 +81,7 @@ type AttestAgentOpts struct {
 type agent struct {
 	measuredRots     []attestRoot
 	avRot            attestRoot
+	platformTag      string
 	fetchedAK        *client.Key
 	client           verifier.Client
 	principalFetcher principalIDTokenFetcher
@@ -148,9 +145,15 @@ func CreateAttestationAgent(tpm io.ReadWriteCloser, akFetcher util.TpmKeyFetcher
 
 		logger.Info("Using TDX RTMR as attestation root.")
 		attestAgent.avRot = tdxAR
+		attestAgent.platformTag = nonce.PlatformTagIntelTDX
+	} else if _, err := client.CreateSevSnpQuoteProvider(); err == nil {
+		logger.Info("Using TPM PCR as attestation root (SEV-SNP detected).")
+		attestAgent.avRot = tpmAR
+		attestAgent.platformTag = nonce.PlatformTagAMDSevSnp
 	} else {
 		logger.Info("Using TPM PCR as attestation root.")
 		attestAgent.avRot = tpmAR
+		attestAgent.platformTag = nonce.PlatformTagGCPShieldedVM
 	}
 
 	return attestAgent, nil
@@ -379,58 +382,50 @@ func (a *agent) Refresh(ctx context.Context) error {
 	return nil
 }
 
-// RawAttest returns a pb.Attestation with TPM quotes, event log, AK certs,
-// and TEE attestation for self-verification.
-//
-// TEE ReportData layout:
-//   - [0:32]  = SHA256(nonce + AK_pub_DER) - binds nonce and AK identity
-//   - [32:64] = UserData (optional, zero-padded)
-func (a *agent) RawAttest(opts RawAttestOpts) (*pb.Attestation, error) {
-	if len(opts.UserData) > 32 {
-		return nil, fmt.Errorf("user_data exceeds 32 bytes")
-	}
-
+// BoundAttestationEvidence returns a pb.Attestation with TPM quotes, event log,
+// AK certs, and TEE attestation for self-verification. The challenge, AK public
+// key, and optional extra data are cryptographically bound into both nonces.
+func (a *agent) BoundAttestationEvidence(opts BoundAttestationOpts) (*pb.Attestation, error) {
 	teeDevice, err := createTEEDevice()
 	if err != nil {
 		return nil, err
 	}
-	defer teeDevice.Close()
+	if teeDevice != nil {
+		defer teeDevice.Close()
+	}
 
-	// Get AK public key for binding
+	// Compute AK public key DER for nonce binding.
 	akPubDER, err := x509.MarshalPKIXPublicKey(a.fetchedAK.PublicKey())
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal AK public key: %w", err)
 	}
 
-	// Build TEE ReportData:
-	// [0:32]  = SHA256(nonce + AK_pub_DER) - proves freshness and AK binding
-	// [32:64] = UserData (zero-padded)
-	var teeReportData [maxReportDataSize]byte
-	bindingHash := sha256.Sum256(append(opts.Nonce, akPubDER...))
-	copy(teeReportData[:32], bindingHash[:])
-	copy(teeReportData[32:], opts.UserData)
+	// Compute nonces. Platform tag was locked at agent creation for anti-downgrade protection.
+	tpmNonce := nonce.ComputeTPMNonce(opts.Challenge, a.platformTag, opts.ExtraData)
 
-	// Encode the CEL for the attestation
+	// Only compute TEE nonce when a TEE device is available.
+	var teeNonce []byte
+	if teeDevice != nil {
+		teeNonce = nonce.ComputeBoundNonce(opts.Challenge, akPubDER, opts.ExtraData)
+	}
+
+	// Encode the CEL.
 	var celBuf bytes.Buffer
 	if err := a.avRot.GetCEL().EncodeCEL(&celBuf); err != nil {
 		return nil, fmt.Errorf("failed to encode CEL: %w", err)
 	}
 
-	attestation, err := a.fetchedAK.Attest(client.AttestOpts{
-		Nonce:             opts.Nonce,
-		TEENonce:          teeReportData[:],
+	return a.fetchedAK.Attest(client.AttestOpts{
+		Nonce:             tpmNonce,
+		TEENonce:          teeNonce,
 		TEEDevice:         teeDevice,
 		CertChainFetcher:  http.DefaultClient,
 		CanonicalEventLog: celBuf.Bytes(),
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	return attestation, nil
 }
 
-// createTEEDevice returns a TEE quote provider for the current platform.
+// createTEEDevice returns a TEE quote provider for the current platform,
+// or (nil, nil) if no supported TEE is available (e.g. Shielded VM without CVM).
 func createTEEDevice() (client.TEEDevice, error) {
 	if tdx, err := client.CreateTdxQuoteProvider(); err == nil {
 		return tdx, nil
@@ -438,7 +433,7 @@ func createTEEDevice() (client.TEEDevice, error) {
 	if snp, err := client.CreateSevSnpQuoteProvider(); err == nil {
 		return snp, nil
 	}
-	return nil, fmt.Errorf("failed to create TEE device: no supported platform detected")
+	return nil, nil
 }
 
 func fetchContainerImageSignatures(ctx context.Context, fetcher signaturediscovery.Fetcher, targetRepos []string, retry func() backoff.BackOff, logger logging.Logger) []oci.Signature {

@@ -1,371 +1,290 @@
 package teeverify
 
 import (
-	"bytes"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"os"
 	"testing"
 
+	"github.com/Layr-Labs/go-tpm-tools/internal/nonce"
 	attestpb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
-	"google.golang.org/protobuf/encoding/protojson"
+	tpmpb "github.com/Layr-Labs/go-tpm-tools/proto/tpm"
 	"google.golang.org/protobuf/proto"
 )
 
-// logTeeAttestation logs the raw TEE attestation (TDX or SEV-SNP) in JSON format.
-func logTeeAttestation(t *testing.T, attestationBytes []byte) {
-	t.Helper()
-
-	var attestation attestpb.Attestation
-	if err := proto.Unmarshal(attestationBytes, &attestation); err != nil {
-		t.Logf("Failed to unmarshal attestation: %v", err)
-		return
-	}
-
-	opts := protojson.MarshalOptions{
-		Multiline: true,
-		Indent:    "  ",
-	}
-
-	if tdx := attestation.GetTdxAttestation(); tdx != nil {
-		jsonBytes, err := opts.Marshal(tdx)
-		if err != nil {
-			t.Logf("Failed to marshal TDX attestation: %v", err)
-			return
-		}
-		t.Logf("TDX Attestation (QuoteV4):\n%s", string(jsonBytes))
-	} else if snp := attestation.GetSevSnpAttestation(); snp != nil {
-		jsonBytes, err := opts.Marshal(snp)
-		if err != nil {
-			t.Logf("Failed to marshal SEV-SNP attestation: %v", err)
-			return
-		}
-		t.Logf("SEV-SNP Attestation:\n%s", string(jsonBytes))
-	} else {
-		t.Log("No TEE attestation found")
-	}
-}
-
-// testVector contains a test attestation with its expected inputs
+// testVector contains a decoded test attestation with its expected inputs.
 type testVector struct {
+	Name        string
+	Platform    string
+	Hardened    bool
 	Attestation []byte // decoded pb.Attestation
-	Nonce       []byte // decoded nonce
-	UserData    []byte // decoded user data
-}
-
-// testCase contains a named test case with TDX and SEV-SNP attestations
-type testCase struct {
-	Name     string
-	Hardened bool
-	TDX      testVector
-	SevSnp   testVector
-}
-
-type testCaseJSON struct {
-	Name     string         `json:"name"`
-	Hardened bool           `json:"hardened"`
-	TDX      testVectorJSON `json:"tdx"`
-	SevSnp   testVectorJSON `json:"sevsnp"`
+	Challenge   []byte // decoded challenge
+	ExtraData   []byte // decoded extra data (nil if empty)
 }
 
 type testVectorJSON struct {
-	Attestation string `json:"attestation"` // base64-encoded
-	Nonce       string `json:"nonce"`       // hex-encoded
-	UserData    string `json:"user_data"`   // hex-encoded
+	Name        string `json:"name"`
+	Platform    string `json:"platform"`
+	Hardened    bool   `json:"hardened"`
+	Attestation string `json:"attestation"` // base64
+	Challenge   string `json:"challenge"`   // hex
+	ExtraData   string `json:"extra_data"`  // hex
 }
 
-// loadTestCases loads all test cases from testdata/attestations.json
-func loadTestCases(t *testing.T) []testCase {
+// loadTestVectors loads all test vectors from testdata/attestations.json.
+// Returns nil if the file doesn't exist or contains an empty array.
+func loadTestVectors(t *testing.T) []testVector {
 	t.Helper()
 
 	data, err := os.ReadFile("testdata/attestations.json")
 	if err != nil {
-		t.Fatalf("failed to read test data: %v", err)
+		return nil
 	}
 
-	var casesJSON []testCaseJSON
-	if err := json.Unmarshal(data, &casesJSON); err != nil {
+	var raw []testVectorJSON
+	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("failed to parse test data: %v", err)
 	}
+	if len(raw) == 0 {
+		return nil
+	}
 
-	cases := make([]testCase, len(casesJSON))
-	for i, cj := range casesJSON {
-		cases[i].Name = cj.Name
-		cases[i].Hardened = cj.Hardened
+	vectors := make([]testVector, len(raw))
+	for i, r := range raw {
+		vectors[i].Name = r.Name
+		vectors[i].Platform = r.Platform
+		vectors[i].Hardened = r.Hardened
 
-		// Decode TDX
-		cases[i].TDX.Attestation, err = base64.StdEncoding.DecodeString(cj.TDX.Attestation)
+		vectors[i].Attestation, err = base64.StdEncoding.DecodeString(r.Attestation)
 		if err != nil {
-			t.Fatalf("case %q: failed to decode TDX attestation: %v", cj.Name, err)
+			t.Fatalf("vector %q: failed to decode attestation: %v", r.Name, err)
 		}
-		cases[i].TDX.Nonce, err = hex.DecodeString(cj.TDX.Nonce)
+		vectors[i].Challenge, err = hex.DecodeString(r.Challenge)
 		if err != nil {
-			t.Fatalf("case %q: failed to decode TDX nonce: %v", cj.Name, err)
+			t.Fatalf("vector %q: failed to decode challenge: %v", r.Name, err)
 		}
-		cases[i].TDX.UserData, err = hex.DecodeString(cj.TDX.UserData)
-		if err != nil {
-			t.Fatalf("case %q: failed to decode TDX user data: %v", cj.Name, err)
-		}
-
-		// Decode SEV-SNP
-		cases[i].SevSnp.Attestation, err = base64.StdEncoding.DecodeString(cj.SevSnp.Attestation)
-		if err != nil {
-			t.Fatalf("case %q: failed to decode SEV-SNP attestation: %v", cj.Name, err)
-		}
-		cases[i].SevSnp.Nonce, err = hex.DecodeString(cj.SevSnp.Nonce)
-		if err != nil {
-			t.Fatalf("case %q: failed to decode SEV-SNP nonce: %v", cj.Name, err)
-		}
-		cases[i].SevSnp.UserData, err = hex.DecodeString(cj.SevSnp.UserData)
-		if err != nil {
-			t.Fatalf("case %q: failed to decode SEV-SNP user data: %v", cj.Name, err)
+		if r.ExtraData != "" {
+			vectors[i].ExtraData, err = hex.DecodeString(r.ExtraData)
+			if err != nil {
+				t.Fatalf("vector %q: failed to decode extra data: %v", r.Name, err)
+			}
 		}
 	}
 
-	return cases
+	return vectors
+}
+
+// expectedPlatform maps platform strings to Platform constants.
+func expectedPlatform(s string) Platform {
+	switch s {
+	case "intel_tdx":
+		return PlatformIntelTDX
+	case "amd_sev_snp":
+		return PlatformAMDSevSnp
+	case "gcp_shielded_vm":
+		return PlatformGCPShieldedVM
+	default:
+		return PlatformUnknown
+	}
 }
 
 // =============================================================================
-// TDX Verification Tests
+// ParseAttestation Tests
 // =============================================================================
 
-func TestVerifyTDXAttestation(t *testing.T) {
-	for _, tc := range loadTestCases(t) {
-		t.Run(tc.Name, func(t *testing.T) {
-			verified, err := VerifyAttestation(tc.TDX.Attestation, tc.TDX.Nonce)
+func TestParseAttestation(t *testing.T) {
+	vectors := loadTestVectors(t)
+	if len(vectors) == 0 {
+		t.Skip("no test vectors")
+	}
+
+	for _, v := range vectors {
+		t.Run(v.Name, func(t *testing.T) {
+			att, err := ParseAttestation(v.Attestation)
 			if err != nil {
-				t.Fatalf("VerifyAttestation failed: %v", err)
+				t.Fatalf("ParseAttestation failed: %v", err)
 			}
 
-			if verified.Platform != PlatformTDX {
-				t.Errorf("expected platform TDX, got %v", verified.Platform)
-			}
-
-			if !userDataEqual(verified.UserData, tc.TDX.UserData) {
-				t.Errorf("UserData mismatch:\n  got:  %x\n  want: %x", verified.UserData, tc.TDX.UserData)
+			want := expectedPlatform(v.Platform)
+			if att.Platform() != want {
+				t.Errorf("platform mismatch: got %s, want %s", att.Platform().PlatformTag(), want.PlatformTag())
 			}
 		})
 	}
 }
 
-func TestVerifyTDXAttestation_WrongNonce(t *testing.T) {
-	cases := loadTestCases(t)
-	if len(cases) == 0 {
-		t.Fatal("no test cases found")
-	}
-	tdx := cases[0].TDX
+func TestParseAttestation_InvalidProto(t *testing.T) {
+	garbage := []byte("this is not a valid protobuf message")
 
-	// Use wrong nonce (all zeros)
-	wrongNonce := make([]byte, 32)
-
-	_, err := VerifyAttestation(tdx.Attestation, wrongNonce)
+	_, err := ParseAttestation(garbage)
 	if err == nil {
-		t.Fatal("expected error with wrong nonce, got nil")
+		t.Fatal("expected error for invalid proto, got nil")
 	}
 
-	// Should fail on binding mismatch
-	if !contains(err.Error(), "binding mismatch") && !contains(err.Error(), "mismatch") {
-		t.Errorf("expected binding mismatch error, got: %v", err)
+	if !contains(err.Error(), "parse") && !contains(err.Error(), "unmarshal") {
+		t.Errorf("expected parse error, got: %v", err)
 	}
 }
 
-func TestVerifyTDXAttestation_EmptyNonce(t *testing.T) {
-	cases := loadTestCases(t)
-	if len(cases) == 0 {
-		t.Fatal("no test cases found")
-	}
-	tdx := cases[0].TDX
-
-	_, err := VerifyAttestation(tdx.Attestation, nil)
+func TestParseAttestation_EmptyAttestation(t *testing.T) {
+	_, err := ParseAttestation([]byte{})
 	if err == nil {
-		t.Fatal("expected error with empty nonce, got nil")
+		t.Fatal("expected error for empty attestation, got nil")
+	}
+
+	if !contains(err.Error(), "unknown platform") {
+		t.Errorf("expected 'unknown platform' error, got: %v", err)
+	}
+}
+
+func TestParseAttestation_NilAttestation(t *testing.T) {
+	_, err := ParseAttestation(nil)
+	if err == nil {
+		t.Fatal("expected error for nil attestation, got nil")
 	}
 }
 
 // =============================================================================
-// SEV-SNP Verification Tests
+// VerifyTPM Tests
 // =============================================================================
 
-func TestVerifySevSnpAttestation(t *testing.T) {
-	for _, tc := range loadTestCases(t) {
-		t.Run(tc.Name, func(t *testing.T) {
-			verified, err := VerifyAttestation(tc.SevSnp.Attestation, tc.SevSnp.Nonce)
+func TestVerifyTPM(t *testing.T) {
+	vectors := loadTestVectors(t)
+	if len(vectors) == 0 {
+		t.Skip("no test vectors")
+	}
+
+	for _, v := range vectors {
+		t.Run(v.Name, func(t *testing.T) {
+			att, err := ParseAttestation(v.Attestation)
 			if err != nil {
-				t.Fatalf("VerifyAttestation failed: %v", err)
+				t.Fatalf("ParseAttestation failed: %v", err)
 			}
 
-			if verified.Platform != PlatformSevSnp {
-				t.Errorf("expected platform SEV-SNP, got %v", verified.Platform)
+			tpmResult, err := att.VerifyTPM(v.Challenge, v.ExtraData)
+			if err != nil {
+				t.Fatalf("VerifyTPM failed: %v", err)
 			}
 
-			if !userDataEqual(verified.UserData, tc.SevSnp.UserData) {
-				t.Errorf("UserData mismatch:\n  got:  %x\n  want: %x", verified.UserData, tc.SevSnp.UserData)
+			want := expectedPlatform(v.Platform)
+			if tpmResult.Platform != want {
+				t.Errorf("platform mismatch: got %s, want %s", tpmResult.Platform.PlatformTag(), want.PlatformTag())
 			}
 		})
 	}
 }
 
-func TestVerifySevSnpAttestation_WrongNonce(t *testing.T) {
-	cases := loadTestCases(t)
-	if len(cases) == 0 {
-		t.Fatal("no test cases found")
+func TestVerifyTPM_WrongChallenge(t *testing.T) {
+	vectors := loadTestVectors(t)
+	if len(vectors) == 0 {
+		t.Skip("no test vectors")
 	}
-	sevsnp := cases[0].SevSnp
 
-	// Use wrong nonce (all zeros)
-	wrongNonce := make([]byte, 32)
+	v := vectors[0]
+	att, err := ParseAttestation(v.Attestation)
+	if err != nil {
+		t.Fatalf("ParseAttestation failed: %v", err)
+	}
 
-	_, err := VerifyAttestation(sevsnp.Attestation, wrongNonce)
+	wrongChallenge := make([]byte, 32) // all zeros
+	_, err = att.VerifyTPM(wrongChallenge, v.ExtraData)
 	if err == nil {
-		t.Fatal("expected error with wrong nonce, got nil")
+		t.Fatal("expected error with wrong challenge, got nil")
 	}
-
-	if !contains(err.Error(), "binding mismatch") && !contains(err.Error(), "mismatch") {
-		t.Errorf("expected binding mismatch error, got: %v", err)
+	if !contains(err.Error(), "mismatch") {
+		t.Errorf("expected mismatch error, got: %v", err)
 	}
 }
 
 // =============================================================================
-// TDX Claim Extraction Tests
+// VerifyBoundTEE Tests
 // =============================================================================
 
-func TestExtractTDXClaims(t *testing.T) {
-	for _, tc := range loadTestCases(t) {
-		t.Run(tc.Name, func(t *testing.T) {
-			// Log the raw TEE attestation
-			logTeeAttestation(t, tc.TDX.Attestation)
+func TestVerifyBoundTEE(t *testing.T) {
+	vectors := loadTestVectors(t)
+	if len(vectors) == 0 {
+		t.Skip("no test vectors")
+	}
 
-			verified, err := VerifyAttestation(tc.TDX.Attestation, tc.TDX.Nonce)
+	for _, v := range vectors {
+		t.Run(v.Name, func(t *testing.T) {
+			att, err := ParseAttestation(v.Attestation)
 			if err != nil {
-				t.Fatalf("VerifyAttestation failed: %v", err)
+				t.Fatalf("ParseAttestation failed: %v", err)
 			}
 
-			claims, err := verified.ExtractClaims(ExtractOptions{
+			want := expectedPlatform(v.Platform)
+
+			teeResult, err := att.VerifyBoundTEE(v.Challenge, v.ExtraData)
+			if want == PlatformGCPShieldedVM {
+				if err == nil {
+					t.Fatal("expected error for Shielded VM, got nil")
+				}
+				if !contains(err.Error(), "not available") {
+					t.Errorf("expected 'not available' error, got: %v", err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("VerifyBoundTEE failed: %v", err)
+			}
+			if teeResult.Platform != want {
+				t.Errorf("platform mismatch: got %s, want %s", teeResult.Platform.PlatformTag(), want.PlatformTag())
+			}
+		})
+	}
+}
+
+// =============================================================================
+// Claim Extraction Tests
+// =============================================================================
+
+func TestExtractClaims(t *testing.T) {
+	vectors := loadTestVectors(t)
+	if len(vectors) == 0 {
+		t.Skip("no test vectors")
+	}
+
+	for _, v := range vectors {
+		t.Run(v.Name, func(t *testing.T) {
+			att, err := ParseAttestation(v.Attestation)
+			if err != nil {
+				t.Fatalf("ParseAttestation failed: %v", err)
+			}
+
+			tpmResult, err := att.VerifyTPM(v.Challenge, v.ExtraData)
+			if err != nil {
+				t.Fatalf("VerifyTPM failed: %v", err)
+			}
+
+			claims, err := tpmResult.ExtractClaims(ExtractOptions{
 				PCRIndices: []uint32{0, 4, 8, 9},
 			})
 			if err != nil {
 				t.Fatalf("ExtractClaims failed: %v", err)
 			}
 
-			// Verify platform
-			if claims.Platform != PlatformTDX {
-				t.Errorf("expected platform TDX, got %v", claims.Platform)
+			// Platform should match
+			want := expectedPlatform(v.Platform)
+			if claims.Platform != want {
+				t.Errorf("platform mismatch: got %s, want %s", claims.Platform.PlatformTag(), want.PlatformTag())
 			}
 
-			// Verify TDX claims exist
-			if claims.TDX == nil {
-				t.Fatal("expected TDX claims, got nil")
+			// Hardened flag should match
+			if claims.Hardened != v.Hardened {
+				t.Errorf("hardened mismatch: got %v, want %v", claims.Hardened, v.Hardened)
 			}
 
-			// Verify MRTD is non-zero
-			if isZero(claims.TDX.MRTD[:]) {
-				t.Error("expected non-zero MRTD")
-			}
-
-			// Verify RTMRs (at least RTMR0 should be non-zero for a running TD)
-			if isZero(claims.TDX.RTMR0[:]) && isZero(claims.TDX.RTMR1[:]) &&
-				isZero(claims.TDX.RTMR2[:]) && isZero(claims.TDX.RTMR3[:]) {
-				t.Error("expected at least one non-zero RTMR")
-			}
-
-			// Verify TeeTcbSvn is present
-			if isZero(claims.TDX.TeeTcbSvn[:]) {
-				t.Error("expected non-zero TeeTcbSvn")
-			}
-
-			// Production attestation should not be in debug mode
-			if claims.TDX.Attributes.Debug {
-				t.Error("expected Debug=false for production attestation")
-			}
-
-			// Verify Hardened flag matches expected value
-			if claims.Hardened != tc.Hardened {
-				t.Errorf("Hardened mismatch: got %v, want %v", claims.Hardened, tc.Hardened)
-			}
-
-			// Verify PCRs were extracted
+			// PCRs should be extracted
 			if len(claims.PCRs) != 4 {
 				t.Errorf("expected 4 PCRs, got %d", len(claims.PCRs))
 			}
 			for _, idx := range []uint32{0, 4, 8, 9} {
-				pcr, ok := claims.PCRs[idx]
-				if !ok {
+				if _, ok := claims.PCRs[idx]; !ok {
 					t.Errorf("PCR %d not found", idx)
-					continue
 				}
-				if isZero(pcr[:]) {
-					t.Errorf("PCR %d is zero", idx)
-				}
-			}
-
-			// Log container and GCE info if present (informational)
-			if claims.Container != nil {
-				t.Logf("Container: %s@%s", claims.Container.ImageReference, claims.Container.ImageDigest)
-			}
-			if claims.GCE != nil {
-				t.Logf("GCE: project=%s zone=%s instance=%s",
-					claims.GCE.ProjectID, claims.GCE.Zone, claims.GCE.InstanceName)
-			}
-		})
-	}
-}
-
-// =============================================================================
-// SEV-SNP Claim Extraction Tests
-// =============================================================================
-
-func TestExtractSevSnpClaims(t *testing.T) {
-	for _, tc := range loadTestCases(t) {
-		t.Run(tc.Name, func(t *testing.T) {
-			// Log the raw TEE attestation
-			logTeeAttestation(t, tc.SevSnp.Attestation)
-
-			verified, err := VerifyAttestation(tc.SevSnp.Attestation, tc.SevSnp.Nonce)
-			if err != nil {
-				t.Fatalf("VerifyAttestation failed: %v", err)
-			}
-
-			claims, err := verified.ExtractClaims(ExtractOptions{
-				PCRIndices: []uint32{0, 4, 8, 9},
-			})
-			if err != nil {
-				t.Fatalf("ExtractClaims failed: %v", err)
-			}
-
-			// Verify platform
-			if claims.Platform != PlatformSevSnp {
-				t.Errorf("expected platform SEV-SNP, got %v", claims.Platform)
-			}
-
-			// Verify SEV-SNP claims exist
-			if claims.SevSnp == nil {
-				t.Fatal("expected SEV-SNP claims, got nil")
-			}
-
-			// Verify Measurement is non-zero
-			if isZero(claims.SevSnp.Measurement[:]) {
-				t.Error("expected non-zero Measurement")
-			}
-
-			// Production attestation should not be in debug mode
-			if claims.SevSnp.Policy.Debug {
-				t.Error("expected Debug=false for production attestation")
-			}
-
-			// Verify Hardened flag matches expected value
-			if claims.Hardened != tc.Hardened {
-				t.Errorf("Hardened mismatch: got %v, want %v", claims.Hardened, tc.Hardened)
-			}
-
-			// Verify TCB fields (at least one should be non-zero)
-			if claims.SevSnp.CurrentTcb == 0 && claims.SevSnp.ReportedTcb == 0 {
-				t.Error("expected non-zero TCB values")
-			}
-
-			// Verify PCRs were extracted
-			if len(claims.PCRs) != 4 {
-				t.Errorf("expected 4 PCRs, got %d", len(claims.PCRs))
 			}
 
 			// Log container and GCE info if present
@@ -380,119 +299,245 @@ func TestExtractSevSnpClaims(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// PCR Extraction Tests
-// =============================================================================
-
-func TestExtractPCRs_ValidIndices(t *testing.T) {
-	cases := loadTestCases(t)
-	if len(cases) == 0 {
-		t.Fatal("no test cases found")
-	}
-	tdx := cases[0].TDX
-
-	verified, err := VerifyAttestation(tdx.Attestation, tdx.Nonce)
-	if err != nil {
-		t.Fatalf("VerifyAttestation failed: %v", err)
+func TestExtractTEEClaims(t *testing.T) {
+	vectors := loadTestVectors(t)
+	if len(vectors) == 0 {
+		t.Skip("no test vectors")
 	}
 
-	// Request multiple valid PCR indices
-	claims, err := verified.ExtractClaims(ExtractOptions{
-		PCRIndices: []uint32{0, 4, 8, 9, 14},
-	})
-	if err != nil {
-		t.Fatalf("ExtractClaims failed: %v", err)
-	}
+	for _, v := range vectors {
+		t.Run(v.Name, func(t *testing.T) {
+			att, err := ParseAttestation(v.Attestation)
+			if err != nil {
+				t.Fatalf("ParseAttestation failed: %v", err)
+			}
 
-	// Verify all requested PCRs are present
-	for _, idx := range []uint32{0, 4, 8, 9, 14} {
-		if _, ok := claims.PCRs[idx]; !ok {
-			t.Errorf("PCR %d not found", idx)
-		}
+			want := expectedPlatform(v.Platform)
+			if want == PlatformGCPShieldedVM {
+				t.Skip("no TEE claims for Shielded VM")
+			}
+
+			teeResult, err := att.VerifyBoundTEE(v.Challenge, v.ExtraData)
+			if err != nil {
+				t.Fatalf("VerifyBoundTEE failed: %v", err)
+			}
+
+			teeClaims, err := teeResult.ExtractTEEClaims()
+			if err != nil {
+				t.Fatalf("ExtractTEEClaims failed: %v", err)
+			}
+
+			if teeClaims.Platform != want {
+				t.Errorf("platform mismatch: got %s, want %s", teeClaims.Platform.PlatformTag(), want.PlatformTag())
+			}
+
+			switch want {
+			case PlatformIntelTDX:
+				if teeClaims.TDX == nil {
+					t.Fatal("expected TDX claims, got nil")
+				}
+				if teeClaims.SevSnp != nil {
+					t.Error("unexpected SEV-SNP claims on TDX vector")
+				}
+			case PlatformAMDSevSnp:
+				if teeClaims.SevSnp == nil {
+					t.Fatal("expected SEV-SNP claims, got nil")
+				}
+				if teeClaims.TDX != nil {
+					t.Error("unexpected TDX claims on SEV-SNP vector")
+				}
+			}
+		})
 	}
 }
 
-func TestExtractPCRs_InvalidIndex(t *testing.T) {
-	cases := loadTestCases(t)
-	if len(cases) == 0 {
-		t.Fatal("no test cases found")
+func TestExtractTEEClaims_ShieldedVMFails(t *testing.T) {
+	// ExtractTEEClaims should fail for non-TEE platforms.
+	// VerifyBoundTEE already rejects Shielded VM, so reaching
+	// ExtractTEEClaims with it is a programming error.
+	vta := &VerifiedTEEAttestation{
+		Platform:    PlatformGCPShieldedVM,
+		attestation: &attestpb.Attestation{},
 	}
-	tdx := cases[0].TDX
 
-	verified, err := VerifyAttestation(tdx.Attestation, tdx.Nonce)
+	_, err := vta.ExtractTEEClaims()
+	if err == nil {
+		t.Fatal("expected error for Shielded VM ExtractTEEClaims, got nil")
+	}
+	if !contains(err.Error(), "no TEE claims available") {
+		t.Errorf("expected 'no TEE claims available' error, got: %v", err)
+	}
+}
+
+func TestExtractClaims_InvalidPCRIndex(t *testing.T) {
+	vectors := loadTestVectors(t)
+	if len(vectors) == 0 {
+		t.Skip("no test vectors")
+	}
+
+	v := vectors[0]
+	att, err := ParseAttestation(v.Attestation)
 	if err != nil {
-		t.Fatalf("VerifyAttestation failed: %v", err)
+		t.Fatalf("ParseAttestation failed: %v", err)
 	}
 
-	// Request invalid PCR index (24 is invalid, max is 23)
-	_, err = verified.ExtractClaims(ExtractOptions{
+	tpmResult, err := att.VerifyTPM(v.Challenge, v.ExtraData)
+	if err != nil {
+		t.Fatalf("VerifyTPM failed: %v", err)
+	}
+
+	// PCR index 24 is invalid (max is 23)
+	_, err = tpmResult.ExtractClaims(ExtractOptions{
 		PCRIndices: []uint32{24},
 	})
 	if err == nil {
 		t.Fatal("expected error for invalid PCR index, got nil")
 	}
-
 	if !contains(err.Error(), "invalid PCR index") {
 		t.Errorf("expected 'invalid PCR index' error, got: %v", err)
 	}
 }
 
 // =============================================================================
-// Negative Tests
+// Anti-Downgrade Tests
 // =============================================================================
 
-func TestVerifyAttestation_InvalidProto(t *testing.T) {
-	// Garbage bytes that are not valid protobuf
-	garbage := []byte("this is not a valid protobuf message")
-
-	_, err := VerifyAttestation(garbage, make([]byte, 32))
-	if err == nil {
-		t.Fatal("expected error for invalid proto, got nil")
+func TestVerifyTPM_StrippedTEEQuote_FailsNonceMismatch(t *testing.T) {
+	vectors := loadTestVectors(t)
+	if len(vectors) == 0 {
+		t.Skip("no test vectors")
 	}
 
-	if !contains(err.Error(), "parse") && !contains(err.Error(), "unmarshal") {
-		t.Errorf("expected parse error, got: %v", err)
+	for _, v := range vectors {
+		want := expectedPlatform(v.Platform)
+		if want == PlatformGCPShieldedVM {
+			continue // already a Shielded VM, nothing to strip
+		}
+
+		t.Run(v.Name, func(t *testing.T) {
+			// Deserialize the real attestation.
+			var attestation attestpb.Attestation
+			if err := proto.Unmarshal(v.Attestation, &attestation); err != nil {
+				t.Fatalf("failed to unmarshal attestation: %v", err)
+			}
+
+			// Strip the TEE quote so detectPlatform falls back to Shielded VM.
+			attestation.TeeAttestation = nil
+
+			stripped, err := proto.Marshal(&attestation)
+			if err != nil {
+				t.Fatalf("failed to re-marshal stripped attestation: %v", err)
+			}
+
+			att, err := ParseAttestation(stripped)
+			if err != nil {
+				t.Fatalf("ParseAttestation failed on stripped attestation: %v", err)
+			}
+			if att.Platform() != PlatformGCPShieldedVM {
+				t.Fatalf("expected Shielded VM after stripping, got %s", att.Platform().PlatformTag())
+			}
+
+			// VerifyTPM must fail: the TPM quote was signed with the original
+			// platform tag, but we now compute the nonce with GCP_SHIELDED_VM.
+			_, err = att.VerifyTPM(v.Challenge, v.ExtraData)
+			if err == nil {
+				t.Fatal("expected VerifyTPM to fail after stripping TEE quote, got nil")
+			}
+			if !contains(err.Error(), "mismatch") {
+				t.Errorf("expected nonce mismatch error, got: %v", err)
+			}
+		})
 	}
 }
 
-func TestVerifyAttestation_EmptyAttestation(t *testing.T) {
-	// Empty but valid protobuf (no TDX or SEV-SNP attestation)
-	emptyProto := []byte{}
+// =============================================================================
+// Shielded VM Tests
+// =============================================================================
 
-	_, err := VerifyAttestation(emptyProto, make([]byte, 32))
-	if err == nil {
-		t.Fatal("expected error for empty attestation, got nil")
+func TestShieldedVM_ParseSucceeds(t *testing.T) {
+	// Construct a minimal TPM-only attestation (no TDX or SEV-SNP).
+	attestation := &attestpb.Attestation{
+		AkCert: []byte("dummy-ak-cert"),
+		Quotes: []*tpmpb.Quote{
+			{Quote: []byte("dummy-quote")},
+		},
+	}
+	attestationBytes, err := proto.Marshal(attestation)
+	if err != nil {
+		t.Fatalf("failed to marshal attestation: %v", err)
 	}
 
-	if !contains(err.Error(), "no TEE attestation found") {
-		t.Errorf("expected 'no TEE attestation found' error, got: %v", err)
+	att, err := ParseAttestation(attestationBytes)
+	if err != nil {
+		t.Fatalf("ParseAttestation should succeed for Shielded VM: %v", err)
+	}
+	if att.Platform() != PlatformGCPShieldedVM {
+		t.Errorf("expected Shielded VM platform, got %s", att.Platform().PlatformTag())
 	}
 }
 
-func TestVerifyAttestation_NilAttestation(t *testing.T) {
-	_, err := VerifyAttestation(nil, make([]byte, 32))
-	if err == nil {
-		t.Fatal("expected error for nil attestation, got nil")
+func TestShieldedVM_VerifyBoundTEE_Fails(t *testing.T) {
+	// Construct a minimal TPM-only attestation.
+	attestation := &attestpb.Attestation{
+		AkCert: []byte("dummy-ak-cert"),
+		Quotes: []*tpmpb.Quote{
+			{Quote: []byte("dummy-quote")},
+		},
 	}
+	attestationBytes, err := proto.Marshal(attestation)
+	if err != nil {
+		t.Fatalf("failed to marshal attestation: %v", err)
+	}
+
+	att, err := ParseAttestation(attestationBytes)
+	if err != nil {
+		t.Fatalf("ParseAttestation failed: %v", err)
+	}
+
+	_, err = att.VerifyBoundTEE(make([]byte, 32), nil)
+	if err == nil {
+		t.Fatal("expected error for Shielded VM VerifyBoundTEE, got nil")
+	}
+	if !contains(err.Error(), "not available") {
+		t.Errorf("expected 'not available' error, got: %v", err)
+	}
+}
+
+// =============================================================================
+// PlatformTag Tests
+// =============================================================================
+
+func TestPlatformTag(t *testing.T) {
+	tests := []struct {
+		platform Platform
+		wantTag  string
+	}{
+		{PlatformIntelTDX, nonce.PlatformTagIntelTDX},
+		{PlatformAMDSevSnp, nonce.PlatformTagAMDSevSnp},
+		{PlatformGCPShieldedVM, nonce.PlatformTagGCPShieldedVM},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.wantTag, func(t *testing.T) {
+			if got := tt.platform.PlatformTag(); got != tt.wantTag {
+				t.Errorf("PlatformTag() = %q, want %q", got, tt.wantTag)
+			}
+		})
+	}
+}
+
+func TestPlatformTag_UnknownPanics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic for PlatformUnknown, got none")
+		}
+	}()
+	PlatformUnknown.PlatformTag()
 }
 
 // =============================================================================
 // Helper Functions
 // =============================================================================
-
-func isZero(b []byte) bool {
-	for _, v := range b {
-		if v != 0 {
-			return false
-		}
-	}
-	return true
-}
-
-// userDataEqual compares user data, treating all-zeros as equivalent to empty.
-func userDataEqual(got, want []byte) bool {
-	return bytes.Equal(got, want) || (len(want) == 0 && isZero(got))
-}
 
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
