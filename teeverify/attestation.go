@@ -12,7 +12,10 @@ import (
 
 	"github.com/Layr-Labs/go-tpm-tools/internal/nonce"
 	attestpb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
+	tpmpb "github.com/Layr-Labs/go-tpm-tools/proto/tpm"
 	"github.com/Layr-Labs/go-tpm-tools/server"
+	"github.com/google/go-eventlog/proto/state"
+	"github.com/google/go-eventlog/register"
 	sevverify "github.com/google/go-sev-guest/verify"
 	tdxverify "github.com/google/go-tdx-guest/verify"
 	"github.com/google/go-tpm/legacy/tpm2"
@@ -118,6 +121,53 @@ func (a *Attestation) VerifyBoundTEE(challenge, extraData []byte) (*VerifiedTEEA
 		Platform:    a.platform,
 		ExtraData:   extraData,
 		attestation: a.attestation,
+	}, nil
+}
+
+// ExtractContainerClaims parses the canonical event log (COS CEL) to extract
+// container claims (image, args, env vars, etc.).
+//
+// On TDX, the CEL is replayed against hardware RTMRs (SHA-384).
+// On SEV-SNP and Shielded VM, it is replayed against vTPM PCRs (SHA-256).
+func (a *Attestation) ExtractContainerClaims() (*ContainerInfo, error) {
+	cel := a.attestation.GetCanonicalEventLog()
+	if len(cel) == 0 {
+		return nil, fmt.Errorf("no canonical event log in attestation")
+	}
+
+	var cosState *attestpb.AttestedCosState
+	if a.platform == PlatformIntelTDX {
+		rtmrBank, err := extractRTMRBank(a.attestation)
+		if err != nil {
+			return nil, fmt.Errorf("failed to extract RTMR bank: %w", err)
+		}
+		cosState, err = server.ParseCosCELRTMR(cel, rtmrBank)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse TDX canonical event log: %w", err)
+		}
+	} else {
+		pcrBank, err := extractPCRBank(a.attestation, tpmpb.HashAlgo_SHA256)
+		if err != nil {
+			return nil, fmt.Errorf("failed to extract PCR bank: %w", err)
+		}
+		cosState, err = server.ParseCosCELPCR(cel, *pcrBank)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse canonical event log: %w", err)
+		}
+	}
+
+	c := cosState.GetContainer()
+	if c == nil {
+		return nil, fmt.Errorf("canonical event log contains no container events")
+	}
+
+	return &ContainerInfo{
+		ImageReference: c.GetImageReference(),
+		ImageDigest:    c.GetImageDigest(),
+		ImageID:        c.GetImageId(),
+		RestartPolicy:  c.GetRestartPolicy().String(),
+		Args:           c.GetArgs(),
+		EnvVars:        c.GetEnvVars(),
 	}, nil
 }
 
@@ -236,6 +286,42 @@ func verifySevSnpAttestation(attestation *attestpb.Attestation) error {
 		return fmt.Errorf("SEV-SNP report signature verification failed: %w", err)
 	}
 	return nil
+}
+
+// extractRTMRBank builds an RTMRBank from the RTMR0–3 values in the TDX quote body.
+func extractRTMRBank(attestation *attestpb.Attestation) (register.RTMRBank, error) {
+	rtmrs := attestation.GetTdxAttestation().GetTdQuoteBody().GetRtmrs()
+	if len(rtmrs) != 4 {
+		return register.RTMRBank{}, fmt.Errorf("expected 4 RTMRs, got %d", len(rtmrs))
+	}
+	bank := register.RTMRBank{}
+	for i, digest := range rtmrs {
+		bank.RTMRs = append(bank.RTMRs, register.RTMR{Index: i, Digest: digest})
+	}
+	return bank, nil
+}
+
+// extractPCRBank finds the quote matching the given hash algorithm and returns the PCR bank.
+func extractPCRBank(attestation *attestpb.Attestation, hashAlgo tpmpb.HashAlgo) (*register.PCRBank, error) {
+	for _, quote := range attestation.GetQuotes() {
+		pcrs := quote.GetPcrs()
+		if pcrs.GetHash() == hashAlgo {
+			pcrBank := &register.PCRBank{TCGHashAlgo: state.HashAlgo(pcrs.Hash)}
+			digestAlg, err := pcrBank.TCGHashAlgo.CryptoHash()
+			if err != nil {
+				return nil, fmt.Errorf("invalid digest algorithm: %w", err)
+			}
+			for pcrIndex, digest := range pcrs.GetPcrs() {
+				pcrBank.PCRs = append(pcrBank.PCRs, register.PCR{
+					Index:     int(pcrIndex),
+					Digest:    digest,
+					DigestAlg: digestAlg,
+				})
+			}
+			return pcrBank, nil
+		}
+	}
+	return nil, fmt.Errorf("no PCRs found matching hash %s", hashAlgo.String())
 }
 
 // pubKeysEqual returns whether two public keys are equal.

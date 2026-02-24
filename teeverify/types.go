@@ -54,7 +54,7 @@ func (a *Attestation) Platform() Platform {
 }
 
 // VerifiedTPMAttestation is returned by VerifyTPM after successful TPM verification.
-// Claims can only be extracted via ExtractClaims().
+// Claims can only be extracted via ExtractTPMClaims().
 type VerifiedTPMAttestation struct {
 	Platform     Platform
 	ExtraData    []byte
@@ -79,11 +79,11 @@ type TEEClaims struct {
 
 // TPMClaims contains TPM-layer claims from a verified attestation.
 // For TEE-specific claims (TDX/SEV-SNP), use VerifiedTEEAttestation.ExtractTEEClaims().
+// For container claims, use Attestation.ExtractContainerClaims().
 type TPMClaims struct {
-	Platform  Platform       `json:"platform"`
-	Hardened  bool           `json:"hardened"`
-	Container *ContainerInfo `json:"container,omitempty"`
-	GCE       *GCEInfo       `json:"gce,omitempty"`
+	Platform Platform `json:"platform"`
+	Hardened bool     `json:"hardened"`
+	GCE      *GCEInfo `json:"gce,omitempty"`
 
 	// PCRs contains the requested PCR values from the vTPM quote.
 	// Keys are PCR indices (0-23), values are SHA-256 measurements (32 bytes).

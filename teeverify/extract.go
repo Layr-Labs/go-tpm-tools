@@ -10,10 +10,11 @@ import (
 	sabi "github.com/google/go-sev-guest/abi"
 )
 
-// ExtractClaims extracts TPM-layer claims from a verified TPM attestation.
-// This includes PCRs, container info, GCE metadata, and hardened status.
+// ExtractTPMClaims extracts TPM-layer claims from a verified TPM attestation.
+// This includes PCRs, GCE metadata, and hardened status.
 // For TEE-specific claims, use VerifiedTEEAttestation.ExtractTEEClaims().
-func (v *VerifiedTPMAttestation) ExtractClaims(opts ExtractOptions) (*TPMClaims, error) {
+// For container claims, use Attestation.ExtractContainerClaims().
+func (v *VerifiedTPMAttestation) ExtractTPMClaims(opts ExtractOptions) (*TPMClaims, error) {
 	claims := &TPMClaims{
 		Platform: v.Platform,
 		Hardened: isHardened(v.machineState.GetLinuxKernel().GetCommandLine()),
@@ -33,19 +34,6 @@ func (v *VerifiedTPMAttestation) ExtractClaims(opts ExtractOptions) (*TPMClaims,
 				Zone:          info.GetZone(),
 				InstanceID:    info.GetInstanceId(),
 				InstanceName:  info.GetInstanceName(),
-			}
-		}
-	}
-
-	if cos := v.machineState.GetCos(); cos != nil {
-		if c := cos.GetContainer(); c != nil {
-			claims.Container = &ContainerInfo{
-				ImageReference: c.GetImageReference(),
-				ImageDigest:    c.GetImageDigest(),
-				ImageID:        c.GetImageId(),
-				RestartPolicy:  c.GetRestartPolicy().String(),
-				Args:           c.GetArgs(),
-				EnvVars:        c.GetEnvVars(),
 			}
 		}
 	}
@@ -87,24 +75,20 @@ func extractPCRs(attestation *attestpb.Attestation, indices []uint32) (map[uint3
 		}
 	}
 
-	result := make(map[uint32][32]byte)
-
-	var sha256PCRs *tpmpb.PCRs
+	var sha256PCRs map[uint32][]byte
 	for _, quote := range attestation.GetQuotes() {
 		if quote.GetPcrs().GetHash() == tpmpb.HashAlgo_SHA256 {
-			sha256PCRs = quote.GetPcrs()
+			sha256PCRs = quote.GetPcrs().GetPcrs()
 			break
 		}
 	}
-
 	if sha256PCRs == nil {
 		return nil, fmt.Errorf("attestation contains no SHA-256 PCR quotes")
 	}
 
-	pcrs := sha256PCRs.GetPcrs()
-
+	result := make(map[uint32][32]byte, len(indices))
 	for _, idx := range indices {
-		val, ok := pcrs[idx]
+		val, ok := sha256PCRs[idx]
 		if !ok {
 			return nil, fmt.Errorf("PCR %d not found in attestation", idx)
 		}

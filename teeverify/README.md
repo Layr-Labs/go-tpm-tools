@@ -20,27 +20,25 @@ After cryptographic verification, apply your own policy:
 ## Usage
 
 ```go
-// Verify attestation received from the TEE workload.
-// challenge is the same value passed when requesting the attestation.
-// extraData is the optional application-specific data bound into both nonces.
-verified, err := teeverify.VerifyBoundAttestation(attestationBytes, challenge, extraData)
-if err != nil {
-    return err
-}
+// Parse and detect platform.
+att, err := teeverify.ParseAttestation(attestationBytes)
 
-// Access extra data bound into the attestation
-extra := verified.ExtraData
+// Verify TPM layer (AK cert chain, PCR quotes, event log, nonce).
+tpmResult, err := att.VerifyTPM(challenge, extraData)
 
-// Extract claims
-claims, err := verified.ExtractClaims(teeverify.ExtractOptions{
+// Verify TEE layer (quote signature, binding to TPM AK).
+// Not available for Shielded VM.
+teeResult, err := att.VerifyBoundTEE(challenge, extraData)
+
+// Extract claims from each layer.
+tpmClaims, err := tpmResult.ExtractTPMClaims(teeverify.ExtractOptions{
     PCRIndices: []uint32{4, 8, 9},
 })
-if err != nil {
-    return err
-}
+teeClaims, err := teeResult.ExtractTEEClaims()
+container, err := att.ExtractContainerClaims()
 
-// Apply policy
-if claims.TDX != nil && claims.TDX.Attributes.Debug {
+// Apply policy.
+if teeClaims.TDX != nil && teeClaims.TDX.Attributes.Debug {
     return errors.New("debug mode not allowed")
 }
 ```

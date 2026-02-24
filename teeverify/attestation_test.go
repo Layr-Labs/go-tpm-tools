@@ -241,7 +241,7 @@ func TestVerifyBoundTEE(t *testing.T) {
 // Claim Extraction Tests
 // =============================================================================
 
-func TestExtractClaims(t *testing.T) {
+func TestExtractTPMClaims(t *testing.T) {
 	vectors := loadTestVectors(t)
 	if len(vectors) == 0 {
 		t.Skip("no test vectors")
@@ -259,11 +259,11 @@ func TestExtractClaims(t *testing.T) {
 				t.Fatalf("VerifyTPM failed: %v", err)
 			}
 
-			claims, err := tpmResult.ExtractClaims(ExtractOptions{
+			claims, err := tpmResult.ExtractTPMClaims(ExtractOptions{
 				PCRIndices: []uint32{0, 4, 8, 9},
 			})
 			if err != nil {
-				t.Fatalf("ExtractClaims failed: %v", err)
+				t.Fatalf("ExtractTPMClaims failed: %v", err)
 			}
 
 			// Platform should match
@@ -287,10 +287,7 @@ func TestExtractClaims(t *testing.T) {
 				}
 			}
 
-			// Log container and GCE info if present
-			if claims.Container != nil {
-				t.Logf("Container: %s@%s", claims.Container.ImageReference, claims.Container.ImageDigest)
-			}
+			// Log GCE info if present
 			if claims.GCE != nil {
 				t.Logf("GCE: project=%s zone=%s instance=%s",
 					claims.GCE.ProjectID, claims.GCE.Zone, claims.GCE.InstanceName)
@@ -369,7 +366,7 @@ func TestExtractTEEClaims_ShieldedVMFails(t *testing.T) {
 	}
 }
 
-func TestExtractClaims_InvalidPCRIndex(t *testing.T) {
+func TestExtractTPMClaims_InvalidPCRIndex(t *testing.T) {
 	vectors := loadTestVectors(t)
 	if len(vectors) == 0 {
 		t.Skip("no test vectors")
@@ -387,7 +384,7 @@ func TestExtractClaims_InvalidPCRIndex(t *testing.T) {
 	}
 
 	// PCR index 24 is invalid (max is 23)
-	_, err = tpmResult.ExtractClaims(ExtractOptions{
+	_, err = tpmResult.ExtractTPMClaims(ExtractOptions{
 		PCRIndices: []uint32{24},
 	})
 	if err == nil {
@@ -533,6 +530,52 @@ func TestPlatformTag_UnknownPanics(t *testing.T) {
 		}
 	}()
 	PlatformUnknown.PlatformTag()
+}
+
+// =============================================================================
+// Container Claims from Canonical Event Log
+// =============================================================================
+
+func TestExtractContainerClaims(t *testing.T) {
+	vectors := loadTestVectors(t)
+	if len(vectors) == 0 {
+		t.Skip("no test vectors")
+	}
+
+	for _, v := range vectors {
+		t.Run(v.Name, func(t *testing.T) {
+			// Check if this attestation has a canonical event log.
+			var raw attestpb.Attestation
+			if err := proto.Unmarshal(v.Attestation, &raw); err != nil {
+				t.Fatalf("failed to unmarshal: %v", err)
+			}
+			cel := raw.GetCanonicalEventLog()
+			if len(cel) == 0 {
+				t.Skip("no canonical event log in this test vector")
+			}
+
+			att, err := ParseAttestation(v.Attestation)
+			if err != nil {
+				t.Fatalf("ParseAttestation failed: %v", err)
+			}
+
+			container, err := att.ExtractContainerClaims()
+			if err != nil {
+				t.Fatalf("ExtractContainerClaims failed: %v", err)
+			}
+
+			if container == nil {
+				t.Fatal("expected container claims from canonical event log, got nil")
+			}
+			if container.ImageReference == "" {
+				t.Error("expected non-empty ImageReference")
+			}
+			if container.ImageDigest == "" {
+				t.Error("expected non-empty ImageDigest")
+			}
+			t.Logf("Container: ref=%s digest=%s", container.ImageReference, container.ImageDigest)
+		})
+	}
 }
 
 // =============================================================================
