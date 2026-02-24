@@ -1,3 +1,4 @@
+// Package nonce provides utilities for computing TPM and TEE nonces used in attestation.
 package nonce
 
 import (

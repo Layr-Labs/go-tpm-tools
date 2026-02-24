@@ -117,6 +117,7 @@ jobs:
             --max-same-issues=0
             --max-issues-per-linter=0
             --timeout 2m
+            --out-format=colored-line-number
 
   lintc:
     strategy:
