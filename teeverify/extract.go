@@ -13,8 +13,8 @@ import (
 // ExtractClaims extracts TPM-layer claims from a verified TPM attestation.
 // This includes PCRs, container info, GCE metadata, and hardened status.
 // For TEE-specific claims, use VerifiedTEEAttestation.ExtractTEEClaims().
-func (v *VerifiedTPMAttestation) ExtractClaims(opts ExtractOptions) (*Claims, error) {
-	claims := &Claims{
+func (v *VerifiedTPMAttestation) ExtractClaims(opts ExtractOptions) (*TPMClaims, error) {
+	claims := &TPMClaims{
 		Platform: v.Platform,
 		Hardened: isHardened(v.machineState.GetLinuxKernel().GetCommandLine()),
 	}

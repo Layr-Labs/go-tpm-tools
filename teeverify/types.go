@@ -83,9 +83,9 @@ type TEEClaims struct {
 	SevSnp   *SevSnpClaims `json:"sevsnp,omitempty"`
 }
 
-// Claims contains TPM-layer claims from a verified attestation.
+// TPMClaims contains TPM-layer claims from a verified attestation.
 // For TEE-specific claims (TDX/SEV-SNP), use VerifiedTEEAttestation.ExtractTEEClaims().
-type Claims struct {
+type TPMClaims struct {
 	Platform  Platform       `json:"platform"`
 	Hardened  bool           `json:"hardened"`
 	Container *ContainerInfo `json:"container,omitempty"`
