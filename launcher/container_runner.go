@@ -22,6 +22,7 @@ import (
 	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/healthmonitoring/nodeproblemdetector"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/signaturediscovery"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/storage"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/launcherfile"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/registryauth"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/spec"
@@ -93,6 +94,7 @@ func NewRunner(ctx context.Context, cdClient *containerd.Client, token oauth2.To
 		mounts = append(mounts, lsMnt.SpecsMount())
 	}
 	mounts = appendTokenMounts(mounts)
+	mounts = appendUserDataMount(mounts)
 	var cgroupOpts []oci.SpecOpts
 	if launchSpec.CgroupNamespace {
 		mounts = appendCgroupRw(mounts)
@@ -106,6 +108,7 @@ func NewRunner(ctx context.Context, cdClient *containerd.Client, token oauth2.To
 	if err != nil {
 		return nil, err
 	}
+	envs = append(envs, fmt.Sprintf("USER_DATA_PATH=%s", storage.MountPoint))
 	// Check if there is already a container
 	container, err := cdClient.LoadContainer(ctx, containerID)
 	if err == nil {
@@ -333,6 +336,17 @@ func appendTokenMounts(mounts []specs.Mount) []specs.Mount {
 	m.Source = launcherfile.HostTmpPath
 	m.Options = []string{"rbind", "ro"}
 
+	return append(mounts, m)
+}
+
+// appendUserDataMount appends a bind mount for the encrypted user data volume.
+func appendUserDataMount(mounts []specs.Mount) []specs.Mount {
+	m := specs.Mount{
+		Destination: storage.ContainerMountPoint,
+		Type:        "bind",
+		Source:      storage.MountPoint,
+		Options:     []string{"rbind", "rw"},
+	}
 	return append(mounts, m)
 }
 
