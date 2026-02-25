@@ -26,9 +26,9 @@ const (
 	defaultKey = "test-key-123"
 )
 
-// SetupEncryptedVolume sets up an encrypted LUKS volume with integrity on the
-// persistent storage device. On first boot it formats and opens the device; on
-// subsequent boots it detects the existing LUKS header and only opens it.
+// SetupEncryptedVolume sets up an encrypted LUKS volume on the persistent
+// storage device. On first boot it formats and opens the device; on subsequent
+// boots it detects the existing LUKS header and only opens it.
 func SetupEncryptedVolume(logger logging.Logger) error {
 	logger.Info("SetupEncryptedVolume: starting", "device", devicePath, "mount_point", MountPoint)
 
@@ -58,17 +58,6 @@ func SetupEncryptedVolume(logger logging.Logger) error {
 			return fmt.Errorf("failed to open LUKS device: %w", err)
 		}
 		logger.Info("SetupEncryptedVolume: luksOpen succeeded", "mapper", mapperPath)
-
-		// Zero out the mapped device to initialize dm-integrity tags. This is
-		// required because --integrity-no-wipe leaves tags uninitialized, and
-		// any read to an unwritten sector (e.g., mkfs.ext4 checking for
-		// existing superblocks) will fail integrity verification with I/O errors.
-		logger.Info("SetupEncryptedVolume: wiping mapped device to initialize integrity tags", "mapper", mapperPath)
-		if err := wipeDevice(mapperPath); err != nil {
-			logger.Error("SetupEncryptedVolume: wipe failed", "error", err)
-			return fmt.Errorf("failed to wipe mapped device %s: %w", mapperPath, err)
-		}
-		logger.Info("SetupEncryptedVolume: wipe succeeded")
 
 		if err := mkfsExt4(mapperPath); err != nil {
 			logger.Error("SetupEncryptedVolume: mkfs.ext4 failed", "error", err)
@@ -122,17 +111,9 @@ func isLuksDevice(device string) (bool, error) {
 	return true, nil
 }
 
-// luksFormat formats the device with LUKS and hmac-sha256 integrity.
-//
-// --integrity-no-wipe skips the full-disk integrity tag initialization. Without
-// it, cryptsetup must zero every integrity tag on the device, which creates
-// temporary device-mapper entries ("temporary-cryptsetup-*") and can take hours
-// on large disks (e.g. 128GB), causing process timeouts. Skipping the wipe is
-// safe for a freshly formatted ext4 filesystem: mkfs.ext4 writes all metadata
-// blocks (superblocks, inode tables, journal) which initializes their integrity
-// tags, and ext4 never reads unallocated blocks during normal operation.
+// luksFormat formats the device with LUKS encryption.
 func luksFormat(device string) error {
-	cmd := exec.Command("cryptsetup", "luksFormat", "--integrity", "hmac-sha256", "--integrity-no-wipe", "--pbkdf", "pbkdf2", device, "-")
+	cmd := exec.Command("cryptsetup", "luksFormat", "--pbkdf", "pbkdf2", device, "-")
 	cmd.Stdin = strings.NewReader(defaultKey)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -149,26 +130,6 @@ func luksOpen(device, name string) error {
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%w: %s", err, stderr.String())
-	}
-	return nil
-}
-
-// wipeDevice writes zeros to the entire device using dd. This initializes the
-// dm-integrity tags through the normal IO stack, which is required after
-// --integrity-no-wipe. Unlike the luksFormat internal wipe, this does not
-// create temporary device-mapper entries, so an interrupted wipe leaves the
-// device in a usable state (partially wiped rather than with stale mappings).
-func wipeDevice(device string) error {
-	cmd := exec.Command("dd", "if=/dev/zero", "of="+device, "bs=1M", "status=progress")
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		// dd returns an error when it hits the end of the device ("No space left
-		// on device"), which is expected — the entire device has been written.
-		if strings.Contains(stderr.String(), "No space left on device") {
-			return nil
-		}
 		return fmt.Errorf("%w: %s", err, stderr.String())
 	}
 	return nil
