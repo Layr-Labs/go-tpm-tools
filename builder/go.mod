@@ -1,4 +1,4 @@
-module github.com/google/go-tpm-tools/builder
+module github.com/Layr-Labs/go-tpm-tools/builder
 
 go 1.24.0
 
