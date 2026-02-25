@@ -73,14 +73,6 @@ func SetupEncryptedVolume(logger logging.Logger) error {
 		logger.Info("SetupEncryptedVolume: luksOpen succeeded", "mapper", mapperPath)
 	}
 
-	// Check parent directory state before MkdirAll.
-	parentDir := "/mnt/disks"
-	if pfi, perr := os.Stat(parentDir); perr != nil {
-		logger.Info("SetupEncryptedVolume: parent dir does not exist, will be created", "parent", parentDir, "error", perr)
-	} else {
-		logger.Info("SetupEncryptedVolume: parent dir exists", "parent", parentDir, "mode", pfi.Mode().String(), "is_dir", pfi.IsDir())
-	}
-
 	if err := os.MkdirAll(MountPoint, 0755); err != nil {
 		logger.Error("SetupEncryptedVolume: MkdirAll failed", "mount_point", MountPoint, "error", err)
 		return fmt.Errorf("failed to create mount point %s: %w", MountPoint, err)
