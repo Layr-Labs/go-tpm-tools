@@ -1,4 +1,4 @@
-module github.com/google/go-tpm-tools/launcher
+module github.com/Layr-Labs/go-tpm-tools/launcher
 
 go 1.23.0
 
@@ -7,17 +7,17 @@ toolchain go1.24.4
 require (
 	cloud.google.com/go/compute/metadata v0.8.0
 	cloud.google.com/go/logging v1.13.0
+	github.com/Layr-Labs/go-tpm-tools v0.4.4
+	github.com/Layr-Labs/go-tpm-tools/verifier v0.4.4
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/containerd/containerd v1.7.23
 	github.com/containerd/containerd/v2 v2.0.1
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/golang-jwt/jwt/v4 v4.5.1
 	github.com/google/go-cmp v0.7.0
-	github.com/google/go-configfs-tsm v0.3.3-0.20240919001351-b4b5b84fdcbc
+	github.com/google/go-configfs-tsm v0.3.3
 	github.com/google/go-tdx-guest v0.3.2-0.20241009005452-097ee70d0843
 	github.com/google/go-tpm v0.9.6
-	github.com/google/go-tpm-tools v0.4.4
-	github.com/google/go-tpm-tools/verifier v0.4.4
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.0
 	github.com/opencontainers/runtime-spec v1.2.0
@@ -29,7 +29,7 @@ require (
 )
 
 require (
-	cloud.google.com/go v0.120.0 // indirect
+	cloud.google.com/go v0.121.1 // indirect
 	cloud.google.com/go/auth v0.16.4 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/confidentialcomputing v1.9.3-0.20250902151313-51583bd5c9b8 // indirect
@@ -59,7 +59,7 @@ require (
 	github.com/google/certificate-transparency-go v1.1.2 // indirect
 	github.com/google/go-attestation v0.5.1 // indirect
 	github.com/google/go-eventlog v0.0.2-0.20241003021507-01bb555f7cba // indirect
-	github.com/google/go-sev-guest v0.14.0 // indirect
+	github.com/google/go-sev-guest v0.14.1 // indirect
 	github.com/google/go-tspi v0.3.0 // indirect
 	github.com/google/logger v1.1.1 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
@@ -95,6 +95,6 @@ require (
 )
 
 replace (
-	github.com/google/go-tpm-tools v0.4.4 => ../
-	github.com/google/go-tpm-tools/verifier v0.4.4 => ../verifier
+	github.com/Layr-Labs/go-tpm-tools v0.4.4 => ../
+	github.com/Layr-Labs/go-tpm-tools/verifier v0.4.4 => ../verifier
 )

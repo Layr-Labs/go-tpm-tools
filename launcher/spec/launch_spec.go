@@ -15,14 +15,14 @@ import (
 
 	"cloud.google.com/go/compute/metadata"
 
+	"github.com/Layr-Labs/go-tpm-tools/cel"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/experiments"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/launchermount"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/launcherfile"
+	"github.com/Layr-Labs/go-tpm-tools/verifier"
+	"github.com/Layr-Labs/go-tpm-tools/verifier/util"
 	"github.com/containerd/containerd/v2/pkg/cap"
-	"github.com/google/go-tpm-tools/cel"
-	"github.com/google/go-tpm-tools/launcher/internal/experiments"
-	"github.com/google/go-tpm-tools/launcher/internal/launchermount"
-	"github.com/google/go-tpm-tools/launcher/internal/logging"
-	"github.com/google/go-tpm-tools/launcher/launcherfile"
-	"github.com/google/go-tpm-tools/verifier"
-	"github.com/google/go-tpm-tools/verifier/util"
 )
 
 // MaxInt64 is the maximum value of a signed int64.
@@ -93,6 +93,7 @@ const (
 	addedCaps                  = "tee-added-capabilities"
 	cgroupNS                   = "tee-cgroup-ns"
 	gcaServiceEnv              = "gca-service-env"
+	selfVerificationKey        = "self-verification"
 )
 
 const (
@@ -116,8 +117,9 @@ type EnvVar struct {
 // LaunchSpec contains specification set by the operator who wants to
 // launch a container.
 type LaunchSpec struct {
-	Experiments         experiments.Experiments
-	FakeVerifierEnabled bool
+	Experiments             experiments.Experiments
+	FakeVerifierEnabled     bool
+	SelfVerificationEnabled bool
 
 	// MDS-based values.
 	ImageRef                   string
@@ -153,6 +155,13 @@ func (s *LaunchSpec) UnmarshalJSON(b []byte) error {
 		var err error
 		if s.FakeVerifierEnabled, err = strconv.ParseBool(val); err != nil {
 			return fmt.Errorf("invalid value for %v (not a boolean): %w", fakeVerifierKey, err)
+		}
+	}
+
+	if val, ok := unmarshaledMap[selfVerificationKey]; ok && val != "" {
+		var err error
+		if s.SelfVerificationEnabled, err = strconv.ParseBool(val); err != nil {
+			return fmt.Errorf("invalid value for %v (not a boolean): %w", selfVerificationKey, err)
 		}
 	}
 
@@ -384,6 +393,11 @@ func isHardened(kernelCmd string) bool {
 }
 
 func fetchExperiments(logger logging.Logger) experiments.Experiments {
+	// Skip experiment sync if the binary doesn't exist (e.g., custom images)
+	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
+		return experiments.Experiments{}
+	}
+
 	experimentsFile := path.Join(launcherfile.HostTmpPath, experimentDataFile)
 
 	args := fmt.Sprintf("-output=%s", experimentsFile)

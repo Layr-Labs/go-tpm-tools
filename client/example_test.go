@@ -8,10 +8,10 @@ import (
 	"io"
 	"log"
 
-	"github.com/google/go-tpm-tools/client"
-	"github.com/google/go-tpm-tools/internal"
-	"github.com/google/go-tpm-tools/server"
-	"github.com/google/go-tpm-tools/simulator"
+	"github.com/Layr-Labs/go-tpm-tools/client"
+	"github.com/Layr-Labs/go-tpm-tools/internal"
+	"github.com/Layr-Labs/go-tpm-tools/server"
+	"github.com/Layr-Labs/go-tpm-tools/simulator"
 	"github.com/google/go-tpm/legacy/tpm2"
 )
 

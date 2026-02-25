@@ -14,15 +14,15 @@ import (
 	"time"
 
 	"cloud.google.com/go/compute/metadata"
+	"github.com/Layr-Labs/go-tpm-tools/client"
+	"github.com/Layr-Labs/go-tpm-tools/launcher"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/launcherfile"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/registryauth"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/spec"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/defaults"
 	"github.com/containerd/containerd/namespaces"
-	"github.com/google/go-tpm-tools/client"
-	"github.com/google/go-tpm-tools/launcher"
-	"github.com/google/go-tpm-tools/launcher/internal/logging"
-	"github.com/google/go-tpm-tools/launcher/launcherfile"
-	"github.com/google/go-tpm-tools/launcher/registryauth"
-	"github.com/google/go-tpm-tools/launcher/spec"
 	"github.com/google/go-tpm/legacy/tpm2"
 )
 

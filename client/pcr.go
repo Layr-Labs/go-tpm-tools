@@ -6,7 +6,7 @@ import (
 	"io"
 	"math"
 
-	pb "github.com/google/go-tpm-tools/proto/tpm"
+	pb "github.com/Layr-Labs/go-tpm-tools/proto/tpm"
 	"github.com/google/go-tpm/legacy/tpm2"
 )
 

@@ -1,15 +1,15 @@
-# Go-TPM tools [![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/google/go-tpm-tools)](https://github.com/google/go-tpm-tools/releases)
+# Go-TPM tools [![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/google/go-tpm-tools)](https://github.com/Layr-Labs/go-tpm-tools/releases)
 
-[![Build Status](https://github.com/google/go-tpm-tools/workflows/CI/badge.svg)](https://github.com/google/go-tpm-tools/actions?query=workflow%3ACI)
-[![Go Reference](https://pkg.go.dev/badge/github.com/google/go-tpm-tools.svg)](https://pkg.go.dev/github.com/google/go-tpm-tools)
+[![Build Status](https://github.com/Layr-Labs/go-tpm-tools/workflows/CI/badge.svg)](https://github.com/Layr-Labs/go-tpm-tools/actions?query=workflow%3ACI)
+[![Go Reference](https://pkg.go.dev/badge/github.com/Layr-Labs/go-tpm-tools.svg)](https://pkg.go.dev/github.com/Layr-Labs/go-tpm-tools)
 ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/google/go-tpm-tools)
-[![Go Report Card](https://goreportcard.com/badge/github.com/google/go-tpm-tools)](https://goreportcard.com/report/github.com/google/go-tpm-tools)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Layr-Labs/go-tpm-tools)](https://goreportcard.com/report/github.com/Layr-Labs/go-tpm-tools)
 [![License](https://img.shields.io/badge/LICENSE-Apache2.0-ff69b4.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
 
 The `go-tpm-tools` module is a [TPM 2.0](https://trustedcomputinggroup.org/resource/trusted-platform-module-2-0-a-brief-introduction/) support library designed to complement [Go-TPM](https://github.com/google/go-tpm).
 
 It contains the following public packages:
-  - [`client`](https://pkg.go.dev/github.com/google/go-tpm-tools/client):
+  - [`client`](https://pkg.go.dev/github.com/Layr-Labs/go-tpm-tools/client):
     A Go package providing simplified abstractions and utility functions for interacting with a TPM 2.0, including:
       - Signing
       - Attestation
@@ -18,14 +18,14 @@ It contains the following public packages:
       - Importing Data and Keys
       - Reading NVData
       - Getting the TCG Event Log
-  - [`server`](https://pkg.go.dev/github.com/google/go-tpm-tools/server):
+  - [`server`](https://pkg.go.dev/github.com/Layr-Labs/go-tpm-tools/server):
     A Go package providing functionality for a remote server to send, receive, and interpret TPM 2.0 data. None of the commands in this package issue TPM commands, but instead handle:
       - TCG Event Log parsing
       - Attestation verification
       - Creating data for Importing into a TPM
-  - [`proto`](https://pkg.go.dev/github.com/google/go-tpm-tools/proto):
+  - [`proto`](https://pkg.go.dev/github.com/Layr-Labs/go-tpm-tools/proto):
     Common [Protocol Buffer](https://developers.google.com/protocol-buffers) messages that are exchanged between the `client` and `server` libraries. This package also contains helper methods for validating these messages.
-  - [`simulator`](https://pkg.go.dev/github.com/google/go-tpm-tools/simulator):
+  - [`simulator`](https://pkg.go.dev/github.com/Layr-Labs/go-tpm-tools/simulator):
     Go bindings to the Microsoft's [TPM 2.0 simulator](https://github.com/Microsoft/ms-tpm-20-ref/).
 
 This repository also contains `gotpm`, a command line tool for using the TPM.
@@ -33,11 +33,11 @@ Run `gotpm --help` and `gotpm <command> --help` for more documentation.
 
 ### Use prebuilt `gotpm` binary
 
-You can download the binary from a [release](https://github.com/google/go-tpm-tools/releases) directly.
+You can download the binary from a [release](https://github.com/Layr-Labs/go-tpm-tools/releases) directly.
 
 ```bash
 # VERSION: 0.4.4 ARCH: Linux_x86_64
-curl -L https://github.com/google/go-tpm-tools/releases/download/[VERSION]/go-tpm-tools_[ARCH].tar.gz -o go-tpm-tools.tar.gz
+curl -L https://github.com/Layr-Labs/go-tpm-tools/releases/download/[VERSION]/go-tpm-tools_[ARCH].tar.gz -o go-tpm-tools.tar.gz
 tar xvf go-tpm-tools.tar.gz
 # You may need to copy the binary to a directory with executable permissions.
 # NOTE: on Container-Optimized OS, /var/lib/google/ is executable
@@ -48,7 +48,7 @@ tar xvf go-tpm-tools.tar.gz
 
 `gotpm` can be directly installed from this repo by running:
 ```bash
-go install github.com/google/go-tpm-tools/cmd/gotpm@latest
+go install github.com/Layr-Labs/go-tpm-tools/cmd/gotpm@latest
 # gotpm will be installed to $GOBIN
 gotpm --help
 ```

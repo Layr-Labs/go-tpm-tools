@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/google/go-tpm-tools/launcher/internal/logging"
-	"github.com/google/go-tpm-tools/launcher/internal/systemctl"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/systemctl"
 )
 
 var systemStatsFilePath = "/etc/node_problem_detector/system-stats-monitor.json"

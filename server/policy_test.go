@@ -3,7 +3,7 @@ package server
 import (
 	"testing"
 
-	pb "github.com/google/go-tpm-tools/proto/attest"
+	pb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
 )
 
 var defaultGcePolicy = pb.Policy{

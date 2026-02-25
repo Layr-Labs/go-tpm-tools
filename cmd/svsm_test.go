@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Layr-Labs/go-tpm-tools/client"
+	"github.com/Layr-Labs/go-tpm-tools/internal/test"
 	epb "github.com/google/gce-tcb-verifier/proto/endorsement"
 	"github.com/google/go-configfs-tsm/configfs/configfsi"
 	"github.com/google/go-configfs-tsm/configfs/faketsm"
@@ -15,8 +17,6 @@ import (
 	sevpb "github.com/google/go-sev-guest/proto/sevsnp"
 	sgtest "github.com/google/go-sev-guest/testing"
 	"github.com/google/go-sev-guest/validate"
-	"github.com/google/go-tpm-tools/client"
-	"github.com/google/go-tpm-tools/internal/test"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 )

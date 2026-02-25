@@ -4,10 +4,10 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/experiments"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/launchermount"
+	"github.com/Layr-Labs/go-tpm-tools/verifier"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-tpm-tools/launcher/internal/experiments"
-	"github.com/google/go-tpm-tools/launcher/internal/launchermount"
-	"github.com/google/go-tpm-tools/verifier"
 )
 
 func TestLaunchSpecUnmarshalJSONHappyCases(t *testing.T) {
@@ -393,5 +393,65 @@ func TestLaunchSpecUnmarshalJSONWithBadMounts(t *testing.T) {
 				t.Errorf("got %v error, but expected %v error", err, testcase.errMatch)
 			}
 		})
+	}
+}
+
+func TestLaunchSpecUnmarshalJSONWithSelfVerification(t *testing.T) {
+	var testCases = []struct {
+		testName string
+		mdsJSON  string
+		want     bool
+	}{
+		{
+			"SelfVerificationEnabled",
+			`{
+				"tee-image-reference":"docker.io/library/hello-world:latest",
+				"self-verification":"true"
+			}`,
+			true,
+		},
+		{
+			"SelfVerificationDisabled",
+			`{
+				"tee-image-reference":"docker.io/library/hello-world:latest",
+				"self-verification":"false"
+			}`,
+			false,
+		},
+		{
+			"SelfVerificationNotSpecified",
+			`{
+				"tee-image-reference":"docker.io/library/hello-world:latest"
+			}`,
+			false,
+		},
+	}
+
+	for _, testcase := range testCases {
+		t.Run(testcase.testName, func(t *testing.T) {
+			spec := &LaunchSpec{}
+			if err := spec.UnmarshalJSON([]byte(testcase.mdsJSON)); err != nil {
+				t.Fatal(err)
+			}
+			if spec.SelfVerificationEnabled != testcase.want {
+				t.Errorf("SelfVerificationEnabled got %v, want %v", spec.SelfVerificationEnabled, testcase.want)
+			}
+		})
+	}
+}
+
+func TestLaunchSpecUnmarshalJSONWithBadSelfVerification(t *testing.T) {
+	mdsJSON := `{
+		"tee-image-reference":"docker.io/library/hello-world:latest",
+		"self-verification":"notabool"
+	}`
+
+	spec := &LaunchSpec{}
+	err := spec.UnmarshalJSON([]byte(mdsJSON))
+	if err == nil {
+		t.Fatal("expected error for invalid self-verification value")
+	}
+	if match, _ := regexp.MatchString("self-verification.*not a boolean", err.Error()); !match {
+		t.Errorf("got %v error, but expected error about self-verification not being a boolean", err)
 	}
 }

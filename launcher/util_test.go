@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Layr-Labs/go-tpm-tools/client"
+	"github.com/Layr-Labs/go-tpm-tools/internal/test"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-tpm-tools/client"
-	"github.com/google/go-tpm-tools/internal/test"
 	"google.golang.org/api/option"
 )
 

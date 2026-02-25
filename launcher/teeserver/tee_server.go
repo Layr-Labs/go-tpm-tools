@@ -1,5 +1,5 @@
 // Package teeserver implements a server to be run in the launcher.
-// Used for communicate between the host/launcher and the container.
+// Used for communication between the host/launcher and the container.
 package teeserver
 
 import (
@@ -9,18 +9,20 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/google/go-tpm-tools/launcher/agent"
-	"github.com/google/go-tpm-tools/launcher/internal/logging"
-	"github.com/google/go-tpm-tools/launcher/spec"
-	"github.com/google/go-tpm-tools/verifier"
-	"github.com/google/go-tpm-tools/verifier/models"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/agent"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/spec"
+	"github.com/Layr-Labs/go-tpm-tools/verifier"
+	"github.com/Layr-Labs/go-tpm-tools/verifier/models"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
-	gcaEndpoint = "/v1/token"
-	itaEndpoint = "/v1/intel/token"
+	gcaEndpoint           = "/v1/token"
+	itaEndpoint           = "/v1/intel/token"
+	boundEvidenceEndpoint = "/v1/bound_evidence"
 )
 
 var clientErrorCodes = map[codes.Code]struct{}{
@@ -44,10 +46,9 @@ type AttestClients struct {
 type attestHandler struct {
 	ctx         context.Context
 	attestAgent agent.AttestationAgent
-	// defaultTokenFile string
-	logger     logging.Logger
-	launchSpec spec.LaunchSpec
-	clients    AttestClients
+	logger      logging.Logger
+	launchSpec  spec.LaunchSpec
+	clients     AttestClients
 }
 
 // TeeServer is a server that can be called from a container through a unix
@@ -90,6 +91,7 @@ func (a *attestHandler) Handler() http.Handler {
 
 	mux.HandleFunc(gcaEndpoint, a.getToken)
 	mux.HandleFunc(itaEndpoint, a.getITAToken)
+	mux.HandleFunc(boundEvidenceEndpoint, a.getBoundEvidence)
 	return mux
 }
 
@@ -106,7 +108,8 @@ func (a *attestHandler) getToken(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 
 	a.logger.Info(fmt.Sprintf("%s called", gcaEndpoint))
-	// If the handler does not have a GCA client, create one.
+
+	// If the handler does not have a GCA client, return error.
 	if a.clients.GCA == nil {
 		errStr := "no GCA verifier client present, please try rebooting your VM"
 		a.logAndWriteError(errStr, http.StatusInternalServerError, w)
@@ -130,6 +133,68 @@ func (a *attestHandler) getITAToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.attest(w, r, a.clients.ITA)
+}
+
+// boundEvidenceRequest is the request body for /v1/bound_evidence
+type boundEvidenceRequest struct {
+	// Challenge is used for attestation freshness. Required, non-empty.
+	Challenge []byte `json:"challenge"`
+	// ExtraData is optional application-specific data bound into the nonce.
+	ExtraData []byte `json:"extra_data,omitempty"`
+}
+
+// getBoundEvidence handles POST requests to retrieve a bound TEE attestation.
+// The client must provide a challenge (non-empty) in the request body.
+// Optional extra_data is cryptographically bound into the nonce.
+// Returns a serialized pb.Attestation that can be verified using the
+// sdk/attest package for self-verification.
+func (a *attestHandler) getBoundEvidence(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/octet-stream")
+
+	a.logger.Info(fmt.Sprintf("%s called", boundEvidenceEndpoint))
+
+	if !a.launchSpec.SelfVerificationEnabled {
+		a.logAndWriteHTTPError(w, http.StatusNotFound, fmt.Errorf("self-verification not enabled"))
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		a.logAndWriteHTTPError(w, http.StatusMethodNotAllowed, fmt.Errorf("method %s not allowed, use POST", r.Method))
+		return
+	}
+
+	var req boundEvidenceRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("failed to parse request body: %w", err))
+		return
+	}
+
+	if len(req.Challenge) == 0 {
+		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("challenge is required"))
+		return
+	}
+
+	// Get attestation from the agent
+	attestation, err := a.attestAgent.BoundAttestationEvidence(agent.BoundAttestationOpts{
+		Challenge: req.Challenge,
+		ExtraData: req.ExtraData,
+	})
+	if err != nil {
+		a.logAndWriteHTTPError(w, http.StatusInternalServerError, fmt.Errorf("failed to get attestation: %w", err))
+		return
+	}
+
+	// Serialize the attestation proto
+	attestBytes, err := proto.Marshal(attestation)
+	if err != nil {
+		a.logAndWriteHTTPError(w, http.StatusInternalServerError, fmt.Errorf("failed to marshal attestation: %w", err))
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(attestBytes)
 }
 
 func (a *attestHandler) attest(w http.ResponseWriter, r *http.Request, client verifier.Client) {

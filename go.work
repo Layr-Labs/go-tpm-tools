@@ -6,9 +6,10 @@ use (
 	.
 	./cmd
 	./launcher
+	./sdk/attest
 	./verifier
 )
 
-replace github.com/google/go-tpm-tools v0.4.4 => ./
+replace github.com/Layr-Labs/go-tpm-tools v0.4.4 => ./
 
-replace github.com/google/go-tpm-tools/verifier v0.4.4 => ./
+replace github.com/Layr-Labs/go-tpm-tools/verifier v0.4.4 => ./

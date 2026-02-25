@@ -1,4 +1,4 @@
-module github.com/google/go-tpm-tools/cmd
+module github.com/Layr-Labs/go-tpm-tools/cmd
 
 go 1.23.0
 
@@ -7,16 +7,16 @@ toolchain go1.24.4
 require (
 	cloud.google.com/go/compute/metadata v0.8.0
 	cloud.google.com/go/logging v1.13.0
+	github.com/Layr-Labs/go-tpm-tools v0.4.4
+	github.com/Layr-Labs/go-tpm-tools/verifier v0.4.4
 	github.com/golang-jwt/jwt/v4 v4.5.1
 	github.com/golang/protobuf v1.5.4
 	github.com/google/gce-tcb-verifier v0.3.1
-	github.com/google/gce-tcb-verifier/gcetcbendorsement v0.0.0-20250301004354-d18ce1139be2
+	github.com/google/gce-tcb-verifier/gcetcbendorsement v0.0.0-20251118221541-74582c078997
 	github.com/google/go-configfs-tsm v0.3.3
-	github.com/google/go-sev-guest v0.14.0
+	github.com/google/go-sev-guest v0.14.1
 	github.com/google/go-tdx-guest v0.3.2-0.20241009005452-097ee70d0843
 	github.com/google/go-tpm v0.9.6
-	github.com/google/go-tpm-tools v0.4.4
-	github.com/google/go-tpm-tools/verifier v0.4.4
 	github.com/spf13/cobra v1.8.1
 	golang.org/x/oauth2 v0.30.0
 	google.golang.org/api v0.247.0
@@ -25,7 +25,7 @@ require (
 )
 
 require (
-	cloud.google.com/go v0.120.0 // indirect
+	cloud.google.com/go v0.121.1 // indirect
 	cloud.google.com/go/auth v0.16.4 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/confidentialcomputing v1.9.3-0.20250902151313-51583bd5c9b8 // indirect
@@ -37,6 +37,7 @@ require (
 	github.com/google/certificate-transparency-go v1.1.2 // indirect
 	github.com/google/go-attestation v0.5.1 // indirect
 	github.com/google/go-eventlog v0.0.2-0.20241003021507-01bb555f7cba // indirect
+	github.com/google/go-tpm-tools v0.4.4 // indirect
 	github.com/google/go-tspi v0.3.0 // indirect
 	github.com/google/logger v1.1.1 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
@@ -54,7 +55,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.36.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.41.0 // indirect
-	golang.org/x/exp v0.0.0-20240409090435-93d18d7e34b8 // indirect
+	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
 	golang.org/x/net v0.43.0 // indirect
 	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/sys v0.35.0 // indirect
@@ -67,6 +68,6 @@ require (
 )
 
 replace (
-	github.com/google/go-tpm-tools v0.4.4 => ../
-	github.com/google/go-tpm-tools/verifier v0.4.4 => ../verifier
+	github.com/Layr-Labs/go-tpm-tools v0.4.4 => ../
+	github.com/Layr-Labs/go-tpm-tools/verifier v0.4.4 => ../verifier
 )

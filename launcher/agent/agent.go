@@ -8,6 +8,7 @@ package agent
 import (
 	"bytes"
 	"context"
+	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -23,22 +24,21 @@ import (
 	tg "github.com/google/go-tdx-guest/client"
 	tlabi "github.com/google/go-tdx-guest/client/linuxabi"
 
-	"github.com/google/go-tpm-tools/cel"
-	"github.com/google/go-tpm-tools/client"
-	"github.com/google/go-tpm-tools/internal"
-	"github.com/google/go-tpm-tools/launcher/internal/logging"
-	"github.com/google/go-tpm-tools/launcher/internal/signaturediscovery"
-	"github.com/google/go-tpm-tools/launcher/spec"
-	pb "github.com/google/go-tpm-tools/proto/attest"
-	"github.com/google/go-tpm-tools/verifier"
-	"github.com/google/go-tpm-tools/verifier/models"
-	"github.com/google/go-tpm-tools/verifier/oci"
-	"github.com/google/go-tpm-tools/verifier/util"
+	"github.com/Layr-Labs/go-tpm-tools/cel"
+	"github.com/Layr-Labs/go-tpm-tools/client"
+	"github.com/Layr-Labs/go-tpm-tools/internal"
+	"github.com/Layr-Labs/go-tpm-tools/internal/nonce"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/signaturediscovery"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/spec"
+	pb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
+	"github.com/Layr-Labs/go-tpm-tools/verifier"
+	"github.com/Layr-Labs/go-tpm-tools/verifier/models"
+	"github.com/Layr-Labs/go-tpm-tools/verifier/oci"
+	"github.com/Layr-Labs/go-tpm-tools/verifier/util"
 )
 
-const (
-	audienceSTS = "https://sts.googleapis.com"
-)
+const audienceSTS = "https://sts.googleapis.com"
 
 type principalIDTokenFetcher func(audience string) ([][]byte, error)
 
@@ -49,8 +49,17 @@ type AttestationAgent interface {
 	MeasureEvent(cel.Content) error
 	Attest(context.Context, AttestAgentOpts) ([]byte, error)
 	AttestWithClient(ctx context.Context, opts AttestAgentOpts, client verifier.Client) ([]byte, error)
+	BoundAttestationEvidence(opts BoundAttestationOpts) (*pb.Attestation, error)
 	Refresh(context.Context) error
 	Close() error
+}
+
+// BoundAttestationOpts contains options for BoundAttestationEvidence.
+type BoundAttestationOpts struct {
+	// Challenge is used for attestation freshness. Required, non-empty.
+	Challenge []byte
+	// ExtraData is optional application-specific data bound into the nonce.
+	ExtraData []byte
 }
 
 type attestRoot interface {
@@ -72,6 +81,7 @@ type AttestAgentOpts struct {
 type agent struct {
 	measuredRots     []attestRoot
 	avRot            attestRoot
+	platformTag      string
 	fetchedAK        *client.Key
 	client           verifier.Client
 	principalFetcher principalIDTokenFetcher
@@ -118,6 +128,7 @@ func CreateAttestationAgent(tpm io.ReadWriteCloser, akFetcher util.TpmKeyFetcher
 	if err != nil {
 		return nil, err
 	}
+
 	// Use qp.IsSupported to check the TDX RTMR interface is enabled
 	if qp.IsSupported() == nil {
 		logger.Info("Adding TDX RTMRs for measurement.")
@@ -134,9 +145,15 @@ func CreateAttestationAgent(tpm io.ReadWriteCloser, akFetcher util.TpmKeyFetcher
 
 		logger.Info("Using TDX RTMR as attestation root.")
 		attestAgent.avRot = tdxAR
+		attestAgent.platformTag = nonce.PlatformTagIntelTDX
+	} else if _, err := client.CreateSevSnpQuoteProvider(); err == nil {
+		logger.Info("Using TPM PCR as attestation root (SEV-SNP detected).")
+		attestAgent.avRot = tpmAR
+		attestAgent.platformTag = nonce.PlatformTagAMDSevSnp
 	} else {
 		logger.Info("Using TPM PCR as attestation root.")
 		attestAgent.avRot = tpmAR
+		attestAgent.platformTag = nonce.PlatformTagGCPShieldedVM
 	}
 
 	return attestAgent, nil
@@ -363,6 +380,60 @@ func (a *agent) Refresh(ctx context.Context) error {
 	a.sigsCache.set(signatures)
 	a.logger.Info("Refreshed container image signature cache", "signatures", signatures)
 	return nil
+}
+
+// BoundAttestationEvidence returns a pb.Attestation with TPM quotes, event log,
+// AK certs, and TEE attestation for self-verification. The challenge, AK public
+// key, and optional extra data are cryptographically bound into both nonces.
+func (a *agent) BoundAttestationEvidence(opts BoundAttestationOpts) (*pb.Attestation, error) {
+	teeDevice, err := createTEEDevice()
+	if err != nil {
+		return nil, err
+	}
+	if teeDevice != nil {
+		defer teeDevice.Close()
+	}
+
+	// Compute AK public key DER for nonce binding.
+	akPubDER, err := x509.MarshalPKIXPublicKey(a.fetchedAK.PublicKey())
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal AK public key: %w", err)
+	}
+
+	// Compute nonces. Platform tag was locked at agent creation for anti-downgrade protection.
+	tpmNonce := nonce.ComputeTPMNonce(opts.Challenge, a.platformTag, opts.ExtraData)
+
+	// Only compute TEE nonce when a TEE device is available.
+	var teeNonce []byte
+	if teeDevice != nil {
+		teeNonce = nonce.ComputeBoundNonce(opts.Challenge, akPubDER, opts.ExtraData)
+	}
+
+	// Encode the CEL.
+	var celBuf bytes.Buffer
+	if err := a.avRot.GetCEL().EncodeCEL(&celBuf); err != nil {
+		return nil, fmt.Errorf("failed to encode CEL: %w", err)
+	}
+
+	return a.fetchedAK.Attest(client.AttestOpts{
+		Nonce:             tpmNonce,
+		TEENonce:          teeNonce,
+		TEEDevice:         teeDevice,
+		CertChainFetcher:  http.DefaultClient,
+		CanonicalEventLog: celBuf.Bytes(),
+	})
+}
+
+// createTEEDevice returns a TEE quote provider for the current platform,
+// or (nil, nil) if no supported TEE is available (e.g. Shielded VM without CVM).
+func createTEEDevice() (client.TEEDevice, error) {
+	if tdx, err := client.CreateTdxQuoteProvider(); err == nil {
+		return tdx, nil
+	}
+	if snp, err := client.CreateSevSnpQuoteProvider(); err == nil {
+		return snp, nil
+	}
+	return nil, nil
 }
 
 func fetchContainerImageSignatures(ctx context.Context, fetcher signaturediscovery.Fetcher, targetRepos []string, retry func() backoff.BackOff, logger logging.Logger) []oci.Signature {

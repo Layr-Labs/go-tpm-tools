@@ -1,12 +1,12 @@
 syntax = "proto3";
 
-package attest;
+package layr_attest;
 
 import "proto/sevsnp.proto";
 import "proto/tdx.proto";
-import "tpm.proto";
+import "layr_tpm.proto";
 
-option go_package = "github.com/google/go-tpm-tools/proto/attest";
+option go_package = "github.com/Layr-Labs/go-tpm-tools/proto/attest";
 
 // Information uniquely identifying a GCE instance. Can be used to create an
 // instance URL, which can then be used with GCE APIs. Formatted like:
@@ -23,7 +23,7 @@ message Attestation {
   // Attestation Key (AK) Public Area, encoded as a TPMT_PUBLIC
   bytes ak_pub = 1;
   // Quotes over all supported PCR banks
-  repeated tpm.Quote quotes = 2;
+  repeated layr_tpm.Quote quotes = 2;
   // TCG Event Log, encoded in the raw binary format.
   // Can be SHA-1 or crypto-agile.
   bytes event_log = 3;
@@ -266,7 +266,7 @@ message MachineState {
   // The hash algorithm used when verifying the Attestation. This indicates:
   //   - which PCR bank was used for for quote validation and event log replay
   //   - the hash algorithm used to calculate event digests
-  tpm.HashAlgo hash = 4;
+  layr_tpm.HashAlgo hash = 4;
 
   GrubState grub = 5;
 

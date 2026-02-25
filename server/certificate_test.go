@@ -5,7 +5,7 @@ import (
 	"encoding/pem"
 	"testing"
 
-	"github.com/google/go-tpm-tools/internal/test"
+	"github.com/Layr-Labs/go-tpm-tools/internal/test"
 )
 
 func TestGetGCEInstanceInfoWithNilFails(t *testing.T) {

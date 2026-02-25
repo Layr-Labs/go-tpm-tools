@@ -28,4 +28,4 @@
 package proto
 
 //go:generate ./gen_attest.sh
-//go:generate protoc --go_out=. --go_opt=module=github.com/google/go-tpm-tools/proto tpm.proto
+//go:generate protoc --go_out=. --go_opt=module=github.com/Layr-Labs/go-tpm-tools/proto layr_tpm.proto

@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/google/go-tpm-tools/internal/test"
+	"github.com/Layr-Labs/go-tpm-tools/internal/test"
 )
 
 var localClient = http.DefaultClient

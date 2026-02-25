@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Layr-Labs/go-tpm-tools/internal/test"
+	pb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
 	sgtest "github.com/google/go-sev-guest/testing"
 	testclient "github.com/google/go-sev-guest/testing/client"
 	tgtest "github.com/google/go-tdx-guest/testing"
 	tgtestclient "github.com/google/go-tdx-guest/testing/client"
 	tgtestdata "github.com/google/go-tdx-guest/testing/testdata"
-	"github.com/google/go-tpm-tools/internal/test"
-	pb "github.com/google/go-tpm-tools/proto/attest"
 )
 
 var localClient = http.DefaultClient

@@ -16,6 +16,20 @@ import (
 	"time"
 
 	"cloud.google.com/go/compute/metadata"
+	"github.com/Layr-Labs/go-tpm-tools/cel"
+	"github.com/Layr-Labs/go-tpm-tools/client"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/agent"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/healthmonitoring/nodeproblemdetector"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/signaturediscovery"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/launcherfile"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/registryauth"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/spec"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/teeserver"
+	"github.com/Layr-Labs/go-tpm-tools/verifier"
+	"github.com/Layr-Labs/go-tpm-tools/verifier/fake"
+	"github.com/Layr-Labs/go-tpm-tools/verifier/ita"
+	"github.com/Layr-Labs/go-tpm-tools/verifier/util"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
@@ -25,20 +39,6 @@ import (
 	"github.com/containerd/containerd/oci"
 	"github.com/containerd/containerd/remotes"
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/google/go-tpm-tools/cel"
-	"github.com/google/go-tpm-tools/client"
-	"github.com/google/go-tpm-tools/launcher/agent"
-	"github.com/google/go-tpm-tools/launcher/internal/healthmonitoring/nodeproblemdetector"
-	"github.com/google/go-tpm-tools/launcher/internal/logging"
-	"github.com/google/go-tpm-tools/launcher/internal/signaturediscovery"
-	"github.com/google/go-tpm-tools/launcher/launcherfile"
-	"github.com/google/go-tpm-tools/launcher/registryauth"
-	"github.com/google/go-tpm-tools/launcher/spec"
-	"github.com/google/go-tpm-tools/launcher/teeserver"
-	"github.com/google/go-tpm-tools/verifier"
-	"github.com/google/go-tpm-tools/verifier/fake"
-	"github.com/google/go-tpm-tools/verifier/ita"
-	"github.com/google/go-tpm-tools/verifier/util"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"golang.org/x/oauth2"
@@ -584,8 +584,8 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 		return fmt.Errorf("failed to measure CEL events: %v", err)
 	}
 
-	// Only refresh token if agent has a default GCA client (not ITA use case).
-	if r.launchSpec.ITAConfig.ITARegion == "" {
+	// Only refresh token if using GCA (not ITA or self-verification mode).
+	if r.launchSpec.ITAConfig.ITARegion == "" && !r.launchSpec.SelfVerificationEnabled {
 		if err := r.fetchAndWriteToken(ctx); err != nil {
 			return fmt.Errorf("failed to fetch and write OIDC token: %v", err)
 		}
@@ -600,6 +600,9 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 		fakeClient := fake.NewClient(nil)
 		attestClients.GCA = fakeClient
 		attestClients.ITA = fakeClient
+	} else if r.launchSpec.SelfVerificationEnabled {
+		// Self-verification mode: no token endpoints, only raw attestation
+		r.logger.Info("Self-verification mode enabled: GCA and ITA token endpoints disabled")
 	} else if r.launchSpec.ITAConfig.ITARegion != "" {
 		itaClient, err := ita.NewClient(r.launchSpec.ITAConfig)
 		if err != nil {

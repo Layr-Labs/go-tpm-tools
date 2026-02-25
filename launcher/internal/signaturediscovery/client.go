@@ -5,12 +5,12 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/Layr-Labs/go-tpm-tools/verifier/oci"
+	"github.com/Layr-Labs/go-tpm-tools/verifier/oci/cosign"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/remotes"
-	"github.com/google/go-tpm-tools/verifier/oci"
-	"github.com/google/go-tpm-tools/verifier/oci/cosign"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
 

@@ -8,8 +8,8 @@ import (
 	"strconv"
 
 	"cloud.google.com/go/compute/metadata"
-	"github.com/google/go-tpm-tools/client"
-	"github.com/google/go-tpm-tools/proto/attest"
+	"github.com/Layr-Labs/go-tpm-tools/client"
+	"github.com/Layr-Labs/go-tpm-tools/proto/attest"
 	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"

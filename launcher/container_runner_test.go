@@ -14,6 +14,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Layr-Labs/go-tpm-tools/cel"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/agent"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/launcherfile"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/spec"
+	attestpb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
+	"github.com/Layr-Labs/go-tpm-tools/verifier"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/defaults"
@@ -21,12 +28,6 @@ import (
 	"github.com/containerd/containerd/oci"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-tpm-tools/cel"
-	"github.com/google/go-tpm-tools/launcher/agent"
-	"github.com/google/go-tpm-tools/launcher/internal/logging"
-	"github.com/google/go-tpm-tools/launcher/launcherfile"
-	"github.com/google/go-tpm-tools/launcher/spec"
-	"github.com/google/go-tpm-tools/verifier"
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -39,10 +40,11 @@ const (
 
 // Fake attestation agent.
 type fakeAttestationAgent struct {
-	measureEventFunc func(cel.Content) error
-	attestFunc       func(context.Context, agent.AttestAgentOpts) ([]byte, error)
-	sigsCache        []string
-	sigsFetcherFunc  func(context.Context) []string
+	measureEventFunc             func(cel.Content) error
+	attestFunc                   func(context.Context, agent.AttestAgentOpts) ([]byte, error)
+	boundAttestationEvidenceFunc func(opts agent.BoundAttestationOpts) (*attestpb.Attestation, error)
+	sigsCache                    []string
+	sigsFetcherFunc              func(context.Context) []string
 
 	// attMu sits on top of attempts field and protects attempts.
 	attMu    sync.Mutex
@@ -79,6 +81,13 @@ func (f *fakeAttestationAgent) Refresh(ctx context.Context) error {
 
 func (f *fakeAttestationAgent) Close() error {
 	return nil
+}
+
+func (f *fakeAttestationAgent) BoundAttestationEvidence(opts agent.BoundAttestationOpts) (*attestpb.Attestation, error) {
+	if f.boundAttestationEvidenceFunc != nil {
+		return f.boundAttestationEvidenceFunc(opts)
+	}
+	return nil, fmt.Errorf("unimplemented")
 }
 
 type fakeClaims struct {
