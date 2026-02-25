@@ -122,6 +122,8 @@ func triggerBuild(ctx context.Context, config *Config, launcherPath string, sour
 	slog.Info("build complete",
 		"build_id", result.BuildID,
 		"image_id", result.ImageID,
+		"status", result.Status,
+		"duration", result.Duration,
 	)
 	return result, nil
 }

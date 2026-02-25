@@ -26,7 +26,7 @@ type BuildResult struct {
 	// This captures the exact versions of tools like cos-customizer, docker, gcloud used.
 	BuilderImages map[string]string
 
-	// Status is the build status
+	// Status is the build status (e.g., "SUCCESS", "FAILURE")
 	Status string
 
 	// Duration is how long the build took
@@ -185,12 +185,10 @@ func triggerImageBuild(ctx context.Context, config *Config, launcherImage string
 		return nil, fmt.Errorf("build failed: %w", err)
 	}
 
-	duration := time.Since(startTime)
-
 	result := &BuildResult{
 		BuildID:       resp.Id,
 		Status:        resp.Status.String(),
-		Duration:      duration,
+		Duration:      time.Since(startTime),
 		ImageID:       extractImageID(resp),
 		BuilderImages: extractBuilderImages(resp),
 	}

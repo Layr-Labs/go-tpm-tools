@@ -10,9 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net/http"
 	"strings"
-	"time"
 
 	containeranalysis "cloud.google.com/go/containeranalysis/apiv1"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -20,11 +18,6 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	grafeas "google.golang.org/genproto/googleapis/grafeas/v1"
 )
-
-// httpClient is a shared HTTP client with reasonable timeouts for production use.
-var httpClient = &http.Client{
-	Timeout: 60 * time.Second,
-}
 
 // stripImageTag removes the tag from an image reference.
 // e.g., "registry/project/repo/image:v1" -> "registry/project/repo/image"
@@ -126,7 +119,6 @@ func fetchLauncherWithProvenance(ctx context.Context, config *Config) (*Launcher
 		BinaryDigest:  binaryDigest,
 		ImageDigest:   imageDigest,
 		ProvenanceRef: provenanceRef,
-		Data:          launcherData,
 	}
 
 	// Fetch provenance signature

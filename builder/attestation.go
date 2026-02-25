@@ -67,7 +67,7 @@ func waitForTeeSocket() error {
 // with the nonce embedded in the eat_nonce claim.
 func requestTokenFromLauncher(ctx context.Context, nonce []byte, audience string) (string, error) {
 	// Create HTTP client that connects via the teeserver unix socket
-	httpClient := &http.Client{
+	teeClient := &http.Client{
 		Transport: &http.Transport{
 			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
 				return net.Dial("unix", teeServerSocket)
@@ -100,7 +100,7 @@ func requestTokenFromLauncher(ctx context.Context, nonce []byte, audience string
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := httpClient.Do(req)
+	resp, err := teeClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to request token: %w", err)
 	}

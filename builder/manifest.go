@@ -57,7 +57,6 @@ type LauncherResult struct {
 	ImageDigest   string // Container image digest
 	ProvenanceRef string
 	Signature     *ProvenanceSignature
-	Data          []byte
 }
 
 func newManifest(config *Config, launcher *LauncherResult, builder *BuilderResult, build *BuildResult) Manifest {

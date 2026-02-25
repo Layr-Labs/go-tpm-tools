@@ -3,13 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
 const (
@@ -18,13 +15,11 @@ const (
 	defaultOEMSize      = "500M"
 	defaultDiskSizeGB   = 11
 	defaultBuildTimeout = 3000
-	metadataTimeout     = 5 * time.Second
 )
 
 // Config holds builder configuration from environment variables.
 type Config struct {
 	ProjectID         string
-	ProjectNumber     string
 	LauncherArtifact  string // docker://REGION/PROJECT/REPO/IMAGE/VERSION
 	BaseImage         string
 	BaseImageProject  string
@@ -43,7 +38,6 @@ type Config struct {
 func loadConfig(ctx context.Context) (*Config, error) {
 	c := &Config{
 		ProjectID:         os.Getenv("PROJECT_ID"),
-		ProjectNumber:     os.Getenv("PROJECT_NUMBER"),
 		LauncherArtifact:  os.Getenv("LAUNCHER_ARTIFACT"),
 		BaseImage:         os.Getenv("BASE_IMAGE"),
 		BaseImageProject:  os.Getenv("BASE_IMAGE_PROJECT"),
@@ -69,14 +63,6 @@ func loadConfig(ctx context.Context) (*Config, error) {
 
 	if c.ImageEnv != "debug" && c.ImageEnv != "hardened" {
 		return nil, fmt.Errorf("IMAGE_ENV must be debug or hardened, got %q", c.ImageEnv)
-	}
-
-	if c.ProjectNumber == "" {
-		var err error
-		c.ProjectNumber, err = fetchMetadata(ctx, "project/numeric-project-id")
-		if err != nil {
-			slog.Debug("could not fetch project number from metadata", "error", err)
-		}
 	}
 
 	if err := requireEnv(c); err != nil {
@@ -152,7 +138,6 @@ func requireEnv(c *Config) error {
 	}
 
 	check("PROJECT_ID", c.ProjectID)
-	check("PROJECT_NUMBER", c.ProjectNumber)
 	check("LAUNCHER_ARTIFACT", c.LauncherArtifact)
 	check("BASE_IMAGE", c.BaseImage)
 	check("BASE_IMAGE_PROJECT", c.BaseImageProject)
@@ -164,32 +149,4 @@ func requireEnv(c *Config) error {
 		return fmt.Errorf("missing required env: %s", missing)
 	}
 	return nil
-}
-
-func fetchMetadata(ctx context.Context, path string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, metadataTimeout)
-	defer cancel()
-
-	url := "http://metadata.google.internal/computeMetadata/v1/" + path
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Metadata-Flavor", "Google")
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("status %d: %s", resp.StatusCode, body)
-	}
-
-	return string(body), nil
 }

@@ -10,13 +10,12 @@ func TestLoadConfig_RequiredFields(t *testing.T) {
 	// Save original env and restore after test
 	origEnv := map[string]string{
 		"PROJECT_ID":         os.Getenv("PROJECT_ID"),
-		"PROJECT_NUMBER":     os.Getenv("PROJECT_NUMBER"),
 		"LAUNCHER_ARTIFACT":  os.Getenv("LAUNCHER_ARTIFACT"),
 		"BASE_IMAGE":         os.Getenv("BASE_IMAGE"),
 		"BASE_IMAGE_PROJECT": os.Getenv("BASE_IMAGE_PROJECT"),
 		"OUTPUT_IMAGE_NAME":  os.Getenv("OUTPUT_IMAGE_NAME"),
-		"PROVENANCE_BUCKET": os.Getenv("PROVENANCE_BUCKET"),
-		"STAGING_BUCKET":  os.Getenv("STAGING_BUCKET"),
+		"PROVENANCE_BUCKET":  os.Getenv("PROVENANCE_BUCKET"),
+		"STAGING_BUCKET":     os.Getenv("STAGING_BUCKET"),
 		"IMAGE_ENV":          os.Getenv("IMAGE_ENV"),
 	}
 	defer func() {
@@ -32,7 +31,6 @@ func TestLoadConfig_RequiredFields(t *testing.T) {
 	// Set all required fields
 	setAllRequired := func() {
 		os.Setenv("PROJECT_ID", "test-project")
-		os.Setenv("PROJECT_NUMBER", "123456789")
 		os.Setenv("LAUNCHER_ARTIFACT", "docker://us-central1/project/launcher/launcher/v1.0.0")
 		os.Setenv("BASE_IMAGE", "cos-tdx-123")
 		os.Setenv("BASE_IMAGE_PROJECT", "confidential-vm-images")
@@ -85,7 +83,6 @@ func TestLoadConfig_ImageEnv(t *testing.T) {
 
 	setMinimalEnv := func() {
 		os.Setenv("PROJECT_ID", "test-project")
-		os.Setenv("PROJECT_NUMBER", "123456789")
 		os.Setenv("LAUNCHER_ARTIFACT", "docker://us-central1/project/launcher/launcher/v1.0.0")
 		os.Setenv("BASE_IMAGE", "cos-tdx-123")
 		os.Setenv("BASE_IMAGE_PROJECT", "confidential-vm-images")
@@ -200,7 +197,6 @@ func TestLoadConfig_IntegerParsing(t *testing.T) {
 
 	setMinimalEnv := func() {
 		os.Setenv("PROJECT_ID", "test-project")
-		os.Setenv("PROJECT_NUMBER", "123456789")
 		os.Setenv("LAUNCHER_ARTIFACT", "docker://us-central1/project/launcher/launcher/v1.0.0")
 		os.Setenv("BASE_IMAGE", "cos-tdx-123")
 		os.Setenv("BASE_IMAGE_PROJECT", "confidential-vm-images")
