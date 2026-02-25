@@ -28,7 +28,7 @@ env:
   REGION: us-central1
   ZONE: us-central1-c
   AR_REPO_BUILDER: cs-build
-  BASE_IMAGE: cos-tdx-113-18244-521-56
+  BASE_IMAGE: cos-tdx-113-18244-582-2
   BASE_IMAGE_PROJECT: confidential-vm-images
   MACHINE_TYPE: c3-standard-4
 
