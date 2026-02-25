@@ -30,42 +30,80 @@ const (
 // persistent storage device. On first boot it formats and opens the device; on
 // subsequent boots it detects the existing LUKS header and only opens it.
 func SetupEncryptedVolume(logger logging.Logger) error {
-	if _, err := os.Stat(devicePath); err != nil {
+	logger.Info("SetupEncryptedVolume: starting", "device", devicePath, "mount_point", MountPoint)
+
+	fi, err := os.Stat(devicePath)
+	if err != nil {
+		logger.Error("SetupEncryptedVolume: device not found", "device", devicePath, "error", err)
 		return fmt.Errorf("persistent storage device not found at %s: %w", devicePath, err)
 	}
+	logger.Info("SetupEncryptedVolume: device found", "device", devicePath, "mode", fi.Mode().String())
 
 	isLuks, err := isLuksDevice(devicePath)
 	if err != nil {
+		logger.Error("SetupEncryptedVolume: failed to check LUKS status", "error", err)
 		return fmt.Errorf("failed to check LUKS status: %w", err)
 	}
 
 	if !isLuks {
-		logger.Info("No LUKS header detected, formatting device", "device", devicePath)
+		logger.Info("SetupEncryptedVolume: no LUKS header detected, formatting device", "device", devicePath)
 		if err := luksFormat(devicePath); err != nil {
+			logger.Error("SetupEncryptedVolume: luksFormat failed", "error", err)
 			return fmt.Errorf("failed to format LUKS device: %w", err)
 		}
+		logger.Info("SetupEncryptedVolume: luksFormat succeeded")
+
 		if err := luksOpen(devicePath, luksName); err != nil {
+			logger.Error("SetupEncryptedVolume: luksOpen failed after format", "error", err)
 			return fmt.Errorf("failed to open LUKS device: %w", err)
 		}
+		logger.Info("SetupEncryptedVolume: luksOpen succeeded", "mapper", mapperPath)
+
+		// Zero out the mapped device to initialize dm-integrity tags. This is
+		// required because --integrity-no-wipe leaves tags uninitialized, and
+		// any read to an unwritten sector (e.g., mkfs.ext4 checking for
+		// existing superblocks) will fail integrity verification with I/O errors.
+		logger.Info("SetupEncryptedVolume: wiping mapped device to initialize integrity tags", "mapper", mapperPath)
+		if err := wipeDevice(mapperPath); err != nil {
+			logger.Error("SetupEncryptedVolume: wipe failed", "error", err)
+			return fmt.Errorf("failed to wipe mapped device %s: %w", mapperPath, err)
+		}
+		logger.Info("SetupEncryptedVolume: wipe succeeded")
+
 		if err := mkfsExt4(mapperPath); err != nil {
+			logger.Error("SetupEncryptedVolume: mkfs.ext4 failed", "error", err)
 			return fmt.Errorf("failed to create ext4 filesystem: %w", err)
 		}
+		logger.Info("SetupEncryptedVolume: mkfs.ext4 succeeded")
 	} else {
-		logger.Info("LUKS header detected, reusing existing volume", "device", devicePath)
+		logger.Info("SetupEncryptedVolume: LUKS header detected, reusing existing volume", "device", devicePath)
 		if err := luksOpen(devicePath, luksName); err != nil {
+			logger.Error("SetupEncryptedVolume: luksOpen failed", "error", err)
 			return fmt.Errorf("failed to open LUKS device: %w", err)
 		}
+		logger.Info("SetupEncryptedVolume: luksOpen succeeded", "mapper", mapperPath)
+	}
+
+	// Check parent directory state before MkdirAll.
+	parentDir := "/mnt/disks"
+	if pfi, perr := os.Stat(parentDir); perr != nil {
+		logger.Info("SetupEncryptedVolume: parent dir does not exist, will be created", "parent", parentDir, "error", perr)
+	} else {
+		logger.Info("SetupEncryptedVolume: parent dir exists", "parent", parentDir, "mode", pfi.Mode().String(), "is_dir", pfi.IsDir())
 	}
 
 	if err := os.MkdirAll(MountPoint, 0755); err != nil {
+		logger.Error("SetupEncryptedVolume: MkdirAll failed", "mount_point", MountPoint, "error", err)
 		return fmt.Errorf("failed to create mount point %s: %w", MountPoint, err)
 	}
+	logger.Info("SetupEncryptedVolume: mount point directory ready", "mount_point", MountPoint)
 
 	if err := mount(mapperPath, MountPoint); err != nil {
+		logger.Error("SetupEncryptedVolume: mount failed", "source", mapperPath, "target", MountPoint, "error", err)
 		return fmt.Errorf("failed to mount %s at %s: %w", mapperPath, MountPoint, err)
 	}
 
-	logger.Info("Encrypted volume ready", "mount_point", MountPoint)
+	logger.Info("SetupEncryptedVolume: encrypted volume ready", "mount_point", MountPoint)
 	return nil
 }
 
@@ -85,8 +123,16 @@ func isLuksDevice(device string) (bool, error) {
 }
 
 // luksFormat formats the device with LUKS and hmac-sha256 integrity.
+//
+// --integrity-no-wipe skips the full-disk integrity tag initialization. Without
+// it, cryptsetup must zero every integrity tag on the device, which creates
+// temporary device-mapper entries ("temporary-cryptsetup-*") and can take hours
+// on large disks (e.g. 128GB), causing process timeouts. Skipping the wipe is
+// safe for a freshly formatted ext4 filesystem: mkfs.ext4 writes all metadata
+// blocks (superblocks, inode tables, journal) which initializes their integrity
+// tags, and ext4 never reads unallocated blocks during normal operation.
 func luksFormat(device string) error {
-	cmd := exec.Command("cryptsetup", "luksFormat", "--integrity", "hmac-sha256", device, "-")
+	cmd := exec.Command("cryptsetup", "luksFormat", "--integrity", "hmac-sha256", "--integrity-no-wipe", "--pbkdf", "pbkdf2", device, "-")
 	cmd.Stdin = strings.NewReader(defaultKey)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -103,6 +149,26 @@ func luksOpen(device, name string) error {
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%w: %s", err, stderr.String())
+	}
+	return nil
+}
+
+// wipeDevice writes zeros to the entire device using dd. This initializes the
+// dm-integrity tags through the normal IO stack, which is required after
+// --integrity-no-wipe. Unlike the luksFormat internal wipe, this does not
+// create temporary device-mapper entries, so an interrupted wipe leaves the
+// device in a usable state (partially wiped rather than with stale mappings).
+func wipeDevice(device string) error {
+	cmd := exec.Command("dd", "if=/dev/zero", "of="+device, "bs=1M", "status=progress")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		// dd returns an error when it hits the end of the device ("No space left
+		// on device"), which is expected — the entire device has been written.
+		if strings.Contains(stderr.String(), "No space left on device") {
+			return nil
+		}
 		return fmt.Errorf("%w: %s", err, stderr.String())
 	}
 	return nil
