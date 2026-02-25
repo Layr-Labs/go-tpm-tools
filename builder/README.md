@@ -30,12 +30,20 @@ Source Code ──> Cloud Build ──> Launcher Container ──> CVM Builder �
 ```
 Tag launcher-v* ──> Build Launcher ──┐
                     + provenance     │
-                                     ├──> Manual Dispatch ──> Deploy ──> Create Tag
-Tag builder-v*  ──> Build Builder  ──┘         │               │             │
-                    + provenance               ↓               ↓             ↓
-                                           3 versions      GCE Images    image-v0.1.0
-                                           (references)    + attestation (on success)
+                                     ├──> Deploy ──> candidate ──> Promote ──> dev ──> Promote ──> prod
+Tag builder-v*  ──> Build Builder  ──┘                   │                      │                    │
+                    + provenance                         ↓                      ↓                    ↓
+                                                    project-private       project-private        public + tag
+                                                    (no approval)         (no approval)          (approval required)
 ```
+
+### Image Lifecycle
+
+| Tier | Family | Access | Approval |
+|------|--------|--------|----------|
+| candidate | `cs-image-{env}-candidate` | Project-only | None (auto after build) |
+| dev | `cs-image-{env}-dev` | Project-only | None |
+| prod | `cs-image-{env}` | `allAuthenticatedUsers` | Required |
 
 ### Workflows
 
@@ -43,7 +51,8 @@ Tag builder-v*  ──> Build Builder  ──┘         │               │  
 |----------|---------|-------------|
 | `build-launcher.yml` | Tag `launcher-v*` | Builds launcher container to `cs-build/launcher` |
 | `build-builder.yml` | Tag `builder-v*` | Builds builder container to `cs-build/builder` |
-| `deploy-builder.yml` | Manual dispatch | Deploys CVM builders, creates GCE images, tags on success |
+| `deploy-builder.yml` | Manual dispatch | Deploys CVM builders, creates candidate GCE images |
+| `promote-image.yml` | Manual dispatch | Promotes images: candidate → dev → prod |
 
 ### Deploying Images
 
@@ -52,8 +61,14 @@ Tag builder-v*  ──> Build Builder  ──┘         │               │  
    - `image_version`: e.g., `v0.1.0`
    - `builder_version`: e.g., `v0.1.0`
    - `launcher_version`: e.g., `v0.1.0`
-3. Approve the deployment (requires `production` environment approval)
-4. On success, creates tag `image-v0.1.0` with builder/launcher versions in message
+3. On success, images are created as **candidates** (project-private, `cs-image-{env}-candidate` family)
+
+### Promoting Images
+
+1. Go to **Actions** → **Promote Image** → **Run workflow**
+2. Enter the image name (e.g., `cs-image-0-1-0-hardened`) and target tier (`dev` or `prod`)
+3. Promotion enforces a strict path: candidate → dev → prod
+4. Promoting to **prod** requires `production` environment approval, makes the image public, and creates a git tag
 
 ### Building Components Separately
 

@@ -17,7 +17,7 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
   id-token: write
 
 env:
@@ -105,7 +105,6 @@ jobs:
     name: Deploy ${{ matrix.image_env }}
     needs: validate
     runs-on: ubuntu-latest
-    environment: production
     strategy:
       matrix:
         image_env: [debug, hardened]
@@ -119,7 +118,7 @@ jobs:
 
           IMAGE_NAME="cs-image-${IMAGE_VERSION}-${{ matrix.image_env }}"
           INSTANCE_NAME="cs-builder-${IMAGE_VERSION}-${{ matrix.image_env }}"
-          IMAGE_FAMILY="cs-image-${{ matrix.image_env }}"
+          IMAGE_FAMILY="cs-image-${{ matrix.image_env }}-candidate"
 
           echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
           echo "instance_name=$INSTANCE_NAME" >> $GITHUB_OUTPUT
@@ -261,18 +260,11 @@ jobs:
             --gcs-log-dir="gs://${{ env.PROJECT_ID }}_cloudbuild/logs" \
             launcher/image/test/
 
-      - name: Make Image Public
-        run: |
-          gcloud compute images add-iam-policy-binding "${{ steps.config.outputs.image_name }}" \
-            --member=allAuthenticatedUsers \
-            --role=roles/compute.imageUser \
-            --project="${{ env.PROJECT_ID }}"
-
       - name: Summary
         if: success()
         run: |
           cat <<EOF >> $GITHUB_STEP_SUMMARY
-          ### ${{ matrix.image_env }} Build Complete
+          ### ${{ matrix.image_env }} Candidate Built
 
           | Property | Value |
           |:--- |:--- |
@@ -281,29 +273,12 @@ jobs:
           | **Launcher** | \`${{ needs.validate.outputs.launcher_version }}\` |
           | **Image** | \`${{ steps.config.outputs.image_name }}\` |
           | **Family** | \`${{ steps.config.outputs.image_family }}\` |
-          | **Public** | ✓ |
+          | **Status** | Candidate (project-private) |
+
+          **Next:** Promote via **Actions → Promote Image** (candidate → dev → prod)
 
           **View attestation:**
           \`\`\`bash
           gsutil cat gs://${{ env.PROVENANCE_BUCKET }}/${{ steps.config.outputs.image_name }}/attestation.json | jq .
           \`\`\`
           EOF
-
-  tag:
-    name: Create Release Tag
-    needs: [validate, deploy]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Create Tag
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "image-${{ needs.validate.outputs.image_version }}" \
-            -m "CS Image ${{ needs.validate.outputs.image_version }}
-
-          Builder: ${{ needs.validate.outputs.builder_version }}
-          Launcher: ${{ needs.validate.outputs.launcher_version }}"
-          git push origin "image-${{ needs.validate.outputs.image_version }}"

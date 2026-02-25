@@ -1,0 +1,209 @@
+name: Promote Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_name:
+        description: 'Image name (e.g., cs-image-0-1-0-hardened)'
+        required: true
+        type: string
+      target_tier:
+        description: 'Target promotion tier'
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  PROVENANCE_BUCKET: ${{ secrets.GCP_PROVENANCE_BUCKET }}
+
+jobs:
+  validate:
+    name: Validate Promotion
+    runs-on: ubuntu-latest
+    outputs:
+      image_name: ${{ inputs.image_name }}
+      image_env: ${{ steps.detect.outputs.image_env }}
+      target_family: ${{ steps.detect.outputs.target_family }}
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Verify Image Exists
+        run: |
+          if ! gcloud compute images describe "${{ inputs.image_name }}" \
+              --project="${{ env.PROJECT_ID }}" 2>/dev/null; then
+            echo "::error::Image '${{ inputs.image_name }}' not found in project ${{ env.PROJECT_ID }}"
+            exit 1
+          fi
+          echo "✓ Image exists"
+
+      - name: Detect Image Type and Validate Promotion Path
+        id: detect
+        run: |
+          IMAGE_NAME="${{ inputs.image_name }}"
+          TARGET_TIER="${{ inputs.target_tier }}"
+
+          # Detect image type from name suffix
+          if [[ "$IMAGE_NAME" == *-debug ]]; then
+            IMAGE_ENV="debug"
+          elif [[ "$IMAGE_NAME" == *-hardened ]]; then
+            IMAGE_ENV="hardened"
+          else
+            echo "::error::Cannot detect image type from name '$IMAGE_NAME'. Expected suffix -debug or -hardened."
+            exit 1
+          fi
+          echo "image_env=$IMAGE_ENV" >> $GITHUB_OUTPUT
+
+          # Get current family
+          CURRENT_FAMILY=$(gcloud compute images describe "$IMAGE_NAME" \
+            --project="${{ env.PROJECT_ID }}" \
+            --format='value(family)' 2>/dev/null || echo "")
+
+          # Determine expected current family and target family
+          if [ "$TARGET_TIER" = "dev" ]; then
+            EXPECTED_FAMILY="cs-image-${IMAGE_ENV}-candidate"
+            TARGET_FAMILY="cs-image-${IMAGE_ENV}-dev"
+          elif [ "$TARGET_TIER" = "prod" ]; then
+            EXPECTED_FAMILY="cs-image-${IMAGE_ENV}-dev"
+            TARGET_FAMILY="cs-image-${IMAGE_ENV}"
+          fi
+
+          echo "target_family=$TARGET_FAMILY" >> $GITHUB_OUTPUT
+
+          echo "Image type: $IMAGE_ENV"
+          echo "Current family: $CURRENT_FAMILY"
+          echo "Expected family: $EXPECTED_FAMILY"
+          echo "Target family: $TARGET_FAMILY"
+
+          # Enforce strict promotion path
+          if [ "$CURRENT_FAMILY" != "$EXPECTED_FAMILY" ]; then
+            echo "::error::Promotion path violation: image is in family '$CURRENT_FAMILY' but must be in '$EXPECTED_FAMILY' to promote to $TARGET_TIER"
+            exit 1
+          fi
+          echo "✓ Promotion path valid"
+
+      - name: Verify Attestation Exists
+        run: |
+          ATTESTATION_PATH="gs://${{ env.PROVENANCE_BUCKET }}/${{ inputs.image_name }}/attestation.json"
+          if ! gsutil -q stat "$ATTESTATION_PATH" 2>/dev/null; then
+            echo "::error::Attestation not found at $ATTESTATION_PATH"
+            exit 1
+          fi
+          echo "✓ Attestation exists"
+
+  promote-dev:
+    name: Promote to Dev
+    needs: validate
+    if: inputs.target_tier == 'dev'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Update Image Family
+        run: |
+          gcloud compute images update "${{ needs.validate.outputs.image_name }}" \
+            --family="${{ needs.validate.outputs.target_family }}" \
+            --project="${{ env.PROJECT_ID }}"
+          echo "✓ Image promoted to family ${{ needs.validate.outputs.target_family }}"
+
+      - name: Summary
+        run: |
+          cat <<EOF >> $GITHUB_STEP_SUMMARY
+          ### Promoted to Dev
+
+          | Property | Value |
+          |:--- |:--- |
+          | **Image** | \`${{ needs.validate.outputs.image_name }}\` |
+          | **Type** | \`${{ needs.validate.outputs.image_env }}\` |
+          | **Family** | \`${{ needs.validate.outputs.target_family }}\` |
+          | **Access** | Project-only |
+
+          **Next:** Promote to prod via **Actions → Promote Image** with target \`prod\`
+          EOF
+
+  promote-prod:
+    name: Promote to Prod
+    needs: validate
+    if: inputs.target_tier == 'prod'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Update Image Family
+        run: |
+          gcloud compute images update "${{ needs.validate.outputs.image_name }}" \
+            --family="${{ needs.validate.outputs.target_family }}" \
+            --project="${{ env.PROJECT_ID }}"
+          echo "✓ Image promoted to family ${{ needs.validate.outputs.target_family }}"
+
+      - name: Make Image Public
+        run: |
+          gcloud compute images add-iam-policy-binding "${{ needs.validate.outputs.image_name }}" \
+            --member=allAuthenticatedUsers \
+            --role=roles/compute.imageUser \
+            --project="${{ env.PROJECT_ID }}"
+          echo "✓ Image is now public"
+
+      - name: Create Release Tag
+        run: |
+          # Extract version from image name (cs-image-0-1-0-hardened -> v0.1.0)
+          VERSION=$(echo "${{ needs.validate.outputs.image_name }}" | sed 's/cs-image-//' | sed "s/-${{ needs.validate.outputs.image_env }}//" | tr '-' '.')
+          TAG="image-v${VERSION}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists, skipping"
+          else
+            git tag -a "$TAG" -m "CS Image v${VERSION}"
+            git push origin "$TAG"
+            echo "✓ Created tag $TAG"
+          fi
+
+      - name: Summary
+        run: |
+          VERSION=$(echo "${{ needs.validate.outputs.image_name }}" | sed 's/cs-image-//' | sed "s/-${{ needs.validate.outputs.image_env }}//" | tr '-' '.')
+
+          cat <<EOF >> $GITHUB_STEP_SUMMARY
+          ### Promoted to Production
+
+          | Property | Value |
+          |:--- |:--- |
+          | **Image** | \`${{ needs.validate.outputs.image_name }}\` |
+          | **Type** | \`${{ needs.validate.outputs.image_env }}\` |
+          | **Family** | \`${{ needs.validate.outputs.target_family }}\` |
+          | **Access** | \`allAuthenticatedUsers\` |
+          | **Tag** | \`image-v${VERSION}\` |
+          EOF
