@@ -17,6 +17,7 @@ import (
 	"github.com/Layr-Labs/go-tpm-tools/client"
 	"github.com/Layr-Labs/go-tpm-tools/launcher"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/storage"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/launcherfile"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/registryauth"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/spec"
@@ -87,6 +88,13 @@ func main() {
 
 	if err := verifyFsAndMount(); err != nil {
 		logger.Error(fmt.Sprintf("failed to verify filesystem and mounts: %v\n", err))
+		exitCode = rebootRC
+		logger.Error(exitMessage, "exit_code", exitCode, "exit_msg", rcMessage[exitCode])
+		return
+	}
+
+	if err := storage.SetupEncryptedVolume(logger); err != nil {
+		logger.Error(fmt.Sprintf("failed to set up encrypted volume: %v\n", err))
 		exitCode = rebootRC
 		logger.Error(exitMessage, "exit_code", exitCode, "exit_msg", rcMessage[exitCode])
 		return
