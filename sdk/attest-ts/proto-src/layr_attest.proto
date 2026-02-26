@@ -1,0 +1,166 @@
+syntax = "proto3";
+
+package layr_attest;
+
+import "sevsnp.proto";
+import "tdx.proto";
+import "layr_tpm.proto";
+
+message GCEInstanceInfo {
+  string zone = 1;
+  string project_id = 2;
+  uint64 project_number = 3;
+  string instance_name = 4;
+  uint64 instance_id = 5;
+}
+
+message Attestation {
+  bytes ak_pub = 1;
+  repeated layr_tpm.Quote quotes = 2;
+  bytes event_log = 3;
+  GCEInstanceInfo instance_info = 4;
+  bytes canonical_event_log = 5;
+  bytes ak_cert = 6;
+  repeated bytes intermediate_certs = 7;
+  oneof tee_attestation {
+    sevsnp.Attestation sev_snp_attestation = 8;
+    tdx.QuoteV4 tdx_attestation = 9;
+  }
+}
+
+enum GCEConfidentialTechnology {
+  NONE = 0;
+  AMD_SEV = 1;
+  AMD_SEV_ES = 2;
+  INTEL_TDX = 3;
+  AMD_SEV_SNP = 4;
+}
+
+message PlatformState {
+  oneof firmware {
+    bytes scrtm_version_id = 1;
+    uint32 gce_version = 2;
+  }
+  GCEConfidentialTechnology technology = 3;
+  GCEInstanceInfo instance_info = 4;
+}
+
+message GrubFile {
+  bytes digest = 1;
+  bytes untrusted_filename = 2;
+}
+
+message GrubState {
+  repeated GrubFile files = 1;
+  repeated string commands = 2;
+}
+
+message LinuxKernelState {
+  string command_line = 1;
+}
+
+message Event {
+  uint32 pcr_index = 1;
+  uint32 untrusted_type = 2;
+  bytes data = 3;
+  bytes digest = 4;
+  bool digest_verified = 5;
+}
+
+enum RestartPolicy {
+  Always = 0;
+  OnFailure = 1;
+  Never = 2;
+}
+
+message ContainerState {
+  string image_reference = 1;
+  string image_digest = 2;
+  RestartPolicy restart_policy = 3;
+  string image_id = 4;
+  repeated string args = 5;
+  map<string, string> env_vars = 6;
+  repeated string overridden_args = 7;
+  map<string, string> overridden_env_vars = 8;
+}
+
+message SemanticVersion {
+  uint32 major = 1;
+  uint32 minor = 2;
+  uint32 patch = 3;
+}
+
+message HealthMonitoringState {
+  optional bool memory_enabled = 1;
+}
+
+enum GPUDeviceCCMode {
+  UNSET = 0;
+  ON = 1;
+  OFF = 2;
+  DEVTOOLS = 3;
+}
+
+message GpuDeviceState {
+  GPUDeviceCCMode cc_mode = 1;
+}
+
+message AttestedCosState {
+  ContainerState container = 1;
+  SemanticVersion cos_version = 2;
+  SemanticVersion launcher_version = 3;
+  HealthMonitoringState health_monitoring = 4;
+  GpuDeviceState gpu_device_state = 5;
+}
+
+message MachineState {
+  PlatformState platform = 1;
+  SecureBootState secure_boot = 2;
+  repeated Event raw_events = 3;
+  layr_tpm.HashAlgo hash = 4;
+  GrubState grub = 5;
+  LinuxKernelState linux_kernel = 6;
+  AttestedCosState cos = 7;
+  EfiState efi = 8;
+  oneof tee_attestation {
+    sevsnp.Attestation sev_snp_attestation = 9;
+    tdx.QuoteV4 tdx_attestation = 10;
+  }
+}
+
+message EfiApp {
+  bytes digest = 1;
+}
+
+message EfiState {
+  repeated EfiApp apps = 1;
+}
+
+message Certificate {
+  oneof representation {
+    bytes der = 1;
+    WellKnownCertificate well_known = 2;
+  }
+}
+
+enum WellKnownCertificate {
+  UNKNOWN = 0;
+  MS_WINDOWS_PROD_PCA_2011 = 1;
+  MS_THIRD_PARTY_UEFI_CA_2011 = 2;
+  MS_THIRD_PARTY_KEK_CA_2011 = 3;
+  GCE_DEFAULT_PK = 4;
+}
+
+message Database {
+  repeated Certificate certs = 1;
+  repeated bytes hashes = 2;
+}
+
+message SecureBootState {
+  bool enabled = 1;
+  Database db = 2;
+  Database dbx = 3;
+  Database authority = 4;
+  Database pk = 5;
+  Database kek = 6;
+}

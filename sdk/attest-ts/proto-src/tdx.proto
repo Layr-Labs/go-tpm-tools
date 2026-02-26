@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package tdx;
+
+message QuoteV4 {
+  Header header = 1;
+  TDQuoteBody td_quote_body = 2;
+  uint32 signed_data_size = 3;
+  Ecdsa256BitQuoteV4AuthData signed_data = 4;
+  bytes extra_bytes = 5;
+}
+
+message Header {
+  uint32 version = 1;
+  uint32 attestation_key_type = 2;
+  uint32 tee_type = 3;
+  bytes qe_svn = 4;
+  bytes pce_svn = 5;
+  bytes qe_vendor_id = 6;
+  bytes user_data = 7;
+}
+
+message TDQuoteBody {
+  bytes tee_tcb_svn = 1;
+  bytes mr_seam = 2;
+  bytes mr_signer_seam = 3;
+  bytes seam_attributes = 4;
+  bytes td_attributes = 5;
+  bytes xfam = 6;
+  bytes mr_td = 7;
+  bytes mr_config_id = 8;
+  bytes mr_owner = 9;
+  bytes mr_owner_config = 10;
+  repeated bytes rtmrs = 11;
+  bytes report_data = 12;
+}
+
+message Ecdsa256BitQuoteV4AuthData {
+  bytes signature = 1;
+  bytes ecdsa_attestation_key = 2;
+  CertificationData certification_data = 3;
+}
+
+message CertificationData {
+  uint32 certificate_data_type = 1;
+  uint32 size = 2;
+  QEReportCertificationData qe_report_certification_data = 3;
+}
+
+message QEReportCertificationData {
+  EnclaveReport qe_report = 1;
+  bytes qe_report_signature = 2;
+  QeAuthData qe_auth_data = 3;
+  PCKCertificateChainData pck_certificate_chain_data = 4;
+}
+
+message PCKCertificateChainData {
+  uint32 certificate_data_type = 1;
+  uint32 size = 2;
+  bytes pck_cert_chain = 3;
+}
+
+message QeAuthData {
+  uint32 parsed_data_size = 1;
+  bytes data = 2;
+}
+
+message EnclaveReport {
+  bytes cpu_svn = 1;
+  uint32 misc_select = 2;
+  bytes reserved1 = 3;
+  bytes attributes = 4;
+  bytes mr_enclave = 5;
+  bytes reserved2 = 6;
+  bytes mr_signer = 7;
+  bytes reserved3 = 8;
+  uint32 isv_prod_id = 9;
+  uint32 isv_svn = 10;
+  bytes reserved4 = 11;
+  bytes report_data = 12;
+}

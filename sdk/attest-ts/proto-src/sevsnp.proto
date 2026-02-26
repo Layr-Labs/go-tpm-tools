@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package sevsnp;
+
+message Report {
+  uint32 version = 1;
+  uint32 guest_svn = 2;
+  uint64 policy = 3;
+  bytes family_id = 4;
+  bytes image_id = 5;
+  uint32 vmpl = 6;
+  uint32 signature_algo = 7;
+  uint64 current_tcb = 8;
+  uint64 platform_info = 9;
+  uint32 signer_info = 10;
+  bytes report_data = 11;
+  bytes measurement = 12;
+  bytes host_data = 13;
+  bytes id_key_digest = 14;
+  bytes author_key_digest = 15;
+  bytes report_id = 16;
+  bytes report_id_ma = 17;
+  uint64 reported_tcb = 18;
+  bytes chip_id = 19;
+  uint64 committed_tcb = 20;
+  uint32 current_build = 21;
+  uint32 current_minor = 22;
+  uint32 current_major = 23;
+  uint32 committed_build = 24;
+  uint32 committed_minor = 25;
+  uint32 committed_major = 26;
+  uint64 launch_tcb = 27;
+  bytes signature = 28;
+  uint32 cpuid1eax_fms = 29;
+  uint64 launch_mit_vector = 30;
+  uint64 current_mit_vector = 31;
+}
+
+message CertificateChain {
+  bytes vcek_cert = 1;
+  bytes vlek_cert = 6;
+  bytes ask_cert = 2;
+  bytes ark_cert = 3;
+  bytes firmware_cert = 4 [deprecated = true];
+  map<string, bytes> extras = 7;
+}
+
+message SevProduct {
+  enum SevProductName {
+    SEV_PRODUCT_UNKNOWN = 0;
+    SEV_PRODUCT_MILAN = 1;
+    SEV_PRODUCT_GENOA = 2;
+    SEV_PRODUCT_TURIN = 3;
+  }
+  SevProductName name = 1;
+  uint32 stepping = 2 [deprecated = true];
+}
+
+message Attestation {
+  Report report = 1;
+  CertificateChain certificate_chain = 2;
+  SevProduct product = 3;
+}

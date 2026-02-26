@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package layr_tpm;
+
+enum ObjectType {
+  OBJECT_INVALID = 0x0000;
+  RSA = 0x0001;
+  ECC = 0x0023;
+}
+
+enum HashAlgo {
+  HASH_INVALID = 0x0000;
+  SHA1 = 0x0004;
+  SHA256 = 0x000B;
+  SHA384 = 0x000C;
+  SHA512 = 0x000D;
+}
+
+message Quote {
+  bytes quote = 1;
+  bytes raw_sig = 2;
+  PCRs pcrs = 3;
+}
+
+message PCRs {
+  HashAlgo hash = 1;
+  map<uint32, bytes> pcrs = 2;
+}
