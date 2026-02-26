@@ -659,7 +659,7 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 	// Currently mounts are not included in the CEL, so this does not affect attestation.
 	// If mounts are ever added to the measurement, this ordering must be revisited.
 	r.logger.Info("Updating container spec with user data mount", "source", storage.MountPoint, "destination", storage.ContainerMountPoint)
-	if err := r.container.Update(ctx, func(ctx context.Context, client *containerd.Client, c *containers.Container) error {
+	if err := r.container.Update(ctx, func(ctx context.Context, _ *containerd.Client, c *containers.Container) error {
 		containerSpec, err := r.container.Spec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to get container spec: %w", err)
