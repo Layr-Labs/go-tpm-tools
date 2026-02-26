@@ -3,19 +3,26 @@ package main
 import (
 	"archive/tar"
 	"context"
+	"crypto"
+	"crypto/ecdsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"log/slog"
 	"strings"
 
 	containeranalysis "cloud.google.com/go/containeranalysis/apiv1"
+	kms "cloud.google.com/go/kms/apiv1"
+	"cloud.google.com/go/kms/apiv1/kmspb"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/google"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/secure-systems-lab/go-securesystemslib/dsse"
 	grafeas "google.golang.org/genproto/googleapis/grafeas/v1"
 )
 
@@ -125,11 +132,10 @@ func fetchLauncherWithProvenance(ctx context.Context, config *Config) (*Launcher
 	slog.Info("querying provenance", "resourceUri", provenanceRef)
 	signature, err := fetchProvenanceSignature(ctx, config.ProjectID, provenanceRef)
 	if err != nil {
-		slog.Warn("could not fetch launcher provenance signature", "error", err)
-	} else {
-		result.Signature = signature
-		slog.Info("launcher provenance signature fetched")
+		return nil, fmt.Errorf("failed to fetch launcher provenance signature: %w", err)
 	}
+	result.Signature = signature
+	slog.Info("launcher provenance signature fetched")
 
 	return result, nil
 }
@@ -217,11 +223,7 @@ func fetchBuilderProvenance(ctx context.Context, config *Config) (*BuilderResult
 	slog.Info("querying provenance", "resourceUri", provenanceRef)
 	signature, err := fetchProvenanceSignature(ctx, config.ProjectID, provenanceRef)
 	if err != nil {
-		slog.Warn("could not fetch builder provenance signature",
-			"error", err,
-			"resourceUri", provenanceRef,
-			"imageDigest", imageDigest)
-		return result, nil
+		return nil, fmt.Errorf("failed to fetch builder provenance signature: %w", err)
 	}
 
 	result.Signature = signature
@@ -293,20 +295,122 @@ func fetchProvenanceSignature(ctx context.Context, projectID, resourceURL string
 	}
 
 	// Extract signature from envelope if available
-	if envelope := occ.GetEnvelope(); envelope != nil && len(envelope.Signatures) > 0 {
-		sig := envelope.Signatures[0]
-		slog.Info("found DSSE signature", "keyid", sig.Keyid)
-		return &ProvenanceSignature{
-			KeyID:     sig.Keyid,
-			Signature: base64.StdEncoding.EncodeToString(sig.Sig),
-		}, nil
+	envelope := occ.GetEnvelope()
+	if envelope == nil || len(envelope.Signatures) == 0 {
+		return nil, fmt.Errorf("no DSSE envelope found for %s (expected Cloud Build provenance)", resourceURL)
 	}
 
-	// If no DSSE envelope, provenance was verified by Container Analysis itself.
-	// Return a sentinel value indicating Google-verified provenance.
-	slog.Info("no DSSE envelope, provenance verified by container analysis")
+	sig := envelope.Signatures[0]
+	slog.Info("found DSSE signature", "keyid", sig.Keyid)
+
+	// Verify the DSSE signature before returning it
+	if err := verifyDSSESignature(ctx, envelope); err != nil {
+		return nil, fmt.Errorf("DSSE signature verification failed for %s: %w", resourceURL, err)
+	}
+	slog.Info("DSSE signature verified", "keyid", sig.Keyid)
+
 	return &ProvenanceSignature{
-		KeyID:     "google-cloud-build",
-		Signature: "verified-by-container-analysis",
+		KeyID:     sig.Keyid,
+		Signature: base64.StdEncoding.EncodeToString(sig.Sig),
 	}, nil
+}
+
+// verifyDSSESignature verifies a grafeas DSSE envelope by fetching the signing
+// key from Cloud KMS and using the go-securesystemslib DSSE verifier.
+func verifyDSSESignature(ctx context.Context, grafeasEnv *grafeas.Envelope) error {
+	if len(grafeasEnv.Signatures) == 0 {
+		return fmt.Errorf("envelope has no signatures")
+	}
+
+	// Strip gcpkms:// prefix to get the KMS resource name
+	keyID := grafeasEnv.Signatures[0].Keyid
+	kmsResourceName := strings.TrimPrefix(keyID, "gcpkms://")
+
+	// Fetch the public key from Cloud KMS
+	kmsClient, err := kms.NewKeyManagementClient(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create KMS client: %w", err)
+	}
+	defer kmsClient.Close()
+
+	pubKeyResp, err := kmsClient.GetPublicKey(ctx, &kmspb.GetPublicKeyRequest{
+		Name: kmsResourceName,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get public key from KMS (%s): %w", kmsResourceName, err)
+	}
+
+	// Parse the PEM-encoded public key
+	block, _ := pem.Decode([]byte(pubKeyResp.Pem))
+	if block == nil {
+		return fmt.Errorf("failed to decode PEM block from KMS public key")
+	}
+
+	pubKey, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return fmt.Errorf("failed to parse public key: %w", err)
+	}
+
+	ecdsaKey, ok := pubKey.(*ecdsa.PublicKey)
+	if !ok {
+		return fmt.Errorf("KMS key is not ECDSA (got %T)", pubKey)
+	}
+
+	return verifyGrafeasEnvelope(ctx, grafeasEnv, ecdsaKey, keyID)
+}
+
+// verifyGrafeasEnvelope converts a grafeas DSSE envelope (raw bytes) to a
+// go-securesystemslib dsse.Envelope (base64 strings) and verifies the signature.
+func verifyGrafeasEnvelope(ctx context.Context, grafeasEnv *grafeas.Envelope, pubKey *ecdsa.PublicKey, keyID string) error {
+	if len(grafeasEnv.Signatures) == 0 {
+		return fmt.Errorf("envelope has no signatures")
+	}
+
+	// Convert grafeas envelope to go-securesystemslib dsse.Envelope
+	dsseEnv := &dsse.Envelope{
+		PayloadType: grafeasEnv.PayloadType,
+		Payload:     base64.StdEncoding.EncodeToString(grafeasEnv.Payload),
+	}
+	for _, gs := range grafeasEnv.Signatures {
+		dsseEnv.Signatures = append(dsseEnv.Signatures, dsse.Signature{
+			KeyID: gs.Keyid,
+			Sig:   base64.StdEncoding.EncodeToString(gs.Sig),
+		})
+	}
+
+	// Create a DSSE verifier and verify the envelope
+	v := &ecdsaVerifier{key: pubKey, keyID: keyID}
+	envelopeVerifier, err := dsse.NewEnvelopeVerifier(v)
+	if err != nil {
+		return fmt.Errorf("failed to create envelope verifier: %w", err)
+	}
+
+	_, err = envelopeVerifier.Verify(ctx, dsseEnv)
+	if err != nil {
+		return fmt.Errorf("envelope verification failed: %w", err)
+	}
+
+	return nil
+}
+
+// ecdsaVerifier implements the dsse.Verifier interface for ECDSA public keys.
+type ecdsaVerifier struct {
+	key   *ecdsa.PublicKey
+	keyID string
+}
+
+func (v *ecdsaVerifier) Verify(ctx context.Context, data, sig []byte) error {
+	hash := sha256.Sum256(data)
+	if !ecdsa.VerifyASN1(v.key, hash[:], sig) {
+		return fmt.Errorf("ECDSA signature verification failed")
+	}
+	return nil
+}
+
+func (v *ecdsaVerifier) KeyID() (string, error) {
+	return v.keyID, nil
+}
+
+func (v *ecdsaVerifier) Public() crypto.PublicKey {
+	return v.key
 }
