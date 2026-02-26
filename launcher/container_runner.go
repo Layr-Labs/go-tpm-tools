@@ -33,6 +33,7 @@ import (
 	"github.com/Layr-Labs/go-tpm-tools/verifier/util"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/containerd/containerd"
+	"github.com/containerd/typeurl/v2"
 	"github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/content"
@@ -94,7 +95,6 @@ func NewRunner(ctx context.Context, cdClient *containerd.Client, token oauth2.To
 		mounts = append(mounts, lsMnt.SpecsMount())
 	}
 	mounts = appendTokenMounts(mounts)
-	mounts = appendUserDataMount(mounts)
 	var cgroupOpts []oci.SpecOpts
 	if launchSpec.CgroupNamespace {
 		mounts = appendCgroupRw(mounts)
@@ -246,6 +246,9 @@ func NewRunner(ctx context.Context, cdClient *containerd.Client, token oauth2.To
 	var verifierClient verifier.Client
 	if launchSpec.FakeVerifierEnabled {
 		verifierClient = fake.NewClient(nil)
+	} else if launchSpec.SelfVerificationEnabled {
+		// Self-verification mode: no remote verifier needed.
+		logger.Info("Self-verification mode enabled: skipping remote verifier client creation")
 	} else if launchSpec.ITAConfig.ITARegion == "" {
 		gcaClient, err := util.NewRESTClient(ctx, asAddr, launchSpec.ProjectID, launchSpec.Region)
 		if err != nil {
@@ -644,6 +647,34 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 	if r.launchSpec.MonitoringEnabled == spec.None {
 		r.logger.Info("MemoryMonitoring is disabled by the VM operator")
 	}
+
+	r.logger.Info("Setting up encrypted volume")
+	if err := storage.SetupEncryptedVolume(r.logger); err != nil {
+		return fmt.Errorf("failed to set up encrypted volume: %v", err)
+	}
+	r.logger.Info("Encrypted volume setup complete")
+
+	// Add the user-data bind mount now that the encrypted volume is ready.
+	// NOTE: This updates the container spec after CEL measurement (measureCELEvents).
+	// Currently mounts are not included in the CEL, so this does not affect attestation.
+	// If mounts are ever added to the measurement, this ordering must be revisited.
+	r.logger.Info("Updating container spec with user data mount", "source", storage.MountPoint, "destination", storage.ContainerMountPoint)
+	if err := r.container.Update(ctx, func(ctx context.Context, client *containerd.Client, c *containers.Container) error {
+		containerSpec, err := r.container.Spec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get container spec: %w", err)
+		}
+		containerSpec.Mounts = appendUserDataMount(containerSpec.Mounts)
+		newSpec, err := typeurl.MarshalAny(containerSpec)
+		if err != nil {
+			return fmt.Errorf("failed to marshal updated spec: %w", err)
+		}
+		c.Spec = newSpec
+		return nil
+	}); err != nil {
+		return fmt.Errorf("failed to update container with user data mount: %v", err)
+	}
+	r.logger.Info("Container spec updated with user data mount")
 
 	var streamOpt cio.Opt
 	switch r.launchSpec.LogRedirect {
