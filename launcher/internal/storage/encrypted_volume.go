@@ -12,7 +12,6 @@ import (
 )
 
 const (
-	devicePath = "/dev/nvme0n2"
 	luksName   = "userdata"
 	mapperPath = "/dev/mapper/userdata"
 
@@ -26,6 +25,26 @@ const (
 	defaultKey = "test-key-123"
 )
 
+// secondaryDevicePaths lists the possible device paths for the secondary
+// persistent storage disk, in order of preference. The actual path depends
+// on the machine type: NVMe-based machines use /dev/nvme0n2, while
+// SCSI-based machines use /dev/sdb.
+var secondaryDevicePaths = []string{
+	"/dev/nvme0n2",
+	"/dev/sdb",
+}
+
+// findSecondaryDevice returns the path of the first secondary storage device
+// found, or empty string if none exists.
+func findSecondaryDevice() string {
+	for _, path := range secondaryDevicePaths {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	return ""
+}
+
 // SetupSecondaryEncryptedVolume sets up persistent storage for user data.
 // If a secondary storage device exists, it sets up an encrypted LUKS volume on it.
 // On first boot it formats and opens the device; on subsequent boots it detects
@@ -33,10 +52,11 @@ const (
 // If no secondary device is found, it falls back to a directory on the boot disk,
 // and persistent storage is not unsupported if only boot disk is available.
 func SetupSecondaryEncryptedVolume(logger logging.Logger) error {
-	logger.Info("SetupSecondaryEncryptedVolume: starting", "device", devicePath, "mount_point", MountPoint)
+	logger.Info("SetupSecondaryEncryptedVolume: starting", "mount_point", MountPoint)
 
-	if _, err := os.Stat(devicePath); err != nil {
-		logger.Info("SetupSecondaryEncryptedVolume: no secondary storage device found at %s, using boot disk for persistent storage", devicePath)
+	devicePath := findSecondaryDevice()
+	if devicePath == "" {
+		logger.Info("SetupSecondaryEncryptedVolume: no secondary storage device found, using boot disk for persistent storage")
 		// No secondary device: create the mount point as a plain directory on the
 		// boot disk. The boot disk is already encrypted, so no LUKS setup is needed.
 		// We reuse the same MountPoint path so that the container bind mount and
