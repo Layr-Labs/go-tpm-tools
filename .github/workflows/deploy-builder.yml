@@ -244,12 +244,11 @@ jobs:
             --zone="${{ env.ZONE }}" --project="${{ env.PROJECT_ID }}" 2>/dev/null | tail -100
           exit 1
 
-      # TODO: re-enable cleanup after debugging
-      # - name: Cleanup Builder VM
-      #   if: always()
-      #   run: |
-      #     gcloud compute instances delete "${{ steps.config.outputs.instance_name }}" \
-      #       --zone="${{ env.ZONE }}" --project="${{ env.PROJECT_ID }}" --quiet 2>/dev/null || true
+      - name: Cleanup Builder VM
+        if: always()
+        run: |
+          gcloud compute instances delete "${{ steps.config.outputs.instance_name }}" \
+            --zone="${{ env.ZONE }}" --project="${{ env.PROJECT_ID }}" --quiet 2>/dev/null || true
 
       - name: Run Tests
         run: |
