@@ -1,0 +1,578 @@
+[
+  {
+    "name": "Intel TDX - debug - no extra data",
+    "tpm_claims": {
+      "platform": "INTEL_TDX",
+      "hardened": false,
+      "pcrs": {
+        "0": "0cca9ec161b09288802e5a112255d21340ed5b797f5fe29cecccfd8f67b9f802",
+        "4": "8d7ce5f296d649f6d56c4bd73ac7999be1f563f3f0de76567457a1890d644759",
+        "8": "babf7bdcaea5728706e320cd38a2a6feb261403f26a7c8bdf638a70730063a14",
+        "9": "2c8e0a4c9b9fc25a5d681a2eb75c204b94601c28895110423a33d9eb7c0a0925"
+      },
+      "gce": {
+        "project_id": "data-axiom-440223-j1",
+        "project_number": "525298585311",
+        "zone": "us-central1-a",
+        "instance_id": "4832317044092392783",
+        "instance_name": "tv-dbg-tdx-1771891608"
+      }
+    },
+    "tee_claims": {
+      "platform": "INTEL_TDX",
+      "tdx": {
+        "mrtd": "a5844e88897b70c318bef929ef4dfd6c7304c52c4bc9c3f39132f0fdccecf3eb5bab70110ee42a12509a31c037288694",
+        "rtmr0": "d48d765727cd8fbd82cd186c456bde83e18f2773ff95341d38e500f9f7d6e31c50500900fd08ed7e94b7f8eaadd420dd",
+        "rtmr1": "d14ab34df21d46c2009f86d919765964c32be28787eb55ad1b7d3ea1f6ed7430c42fdbd5603850997724070e206497d1",
+        "rtmr2": "3a999f5995df20d6c4354a08df0d7a1125d9a1c6900f4146b24a948e4da528858c4156b4ca5105c965a9c5225eff5d14",
+        "rtmr3": "0c8255b06d3b9c01c44260d80ab52e6dfed8b0615b9458e3c883e6bcf038cab839c392cb5df1dfe5d50b168ed44957f7",
+        "tee_tcb_svn": "0d010800000000000000000000000000",
+        "attributes": {
+          "debug": false,
+          "sept_ve_disable": false,
+          "pks": false,
+          "kl": false,
+          "perf_mon": false
+        }
+      }
+    },
+    "container_claims": {
+      "image_reference": "docker.io/cavaneigen/teeverify-capture:latest",
+      "image_digest": "sha256:a1b0135e6b83e3cbb3a2ed8532f4ae1aedb6d3ad2e2fc1f4c8fadb2befadae85",
+      "image_id": "sha256:e7ba1bbe6761d058e5dbde1cfa51efc5e211613a057e28a1e02627deb37d01ac",
+      "restart_policy": "Never",
+      "args": [
+        "/workload"
+      ],
+      "env_vars": {
+        "GCS_OUTPUT": "gs://data-axiom-440223-j1_cloudbuild/teeverify-vectors/tv-dbg-tdx-1771891608.json",
+        "HARDENED": "false",
+        "HOSTNAME": "tv-dbg-tdx-1771891608",
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      }
+    }
+  },
+  {
+    "name": "Intel TDX - debug - with extra data",
+    "tpm_claims": {
+      "platform": "INTEL_TDX",
+      "hardened": false,
+      "pcrs": {
+        "0": "0cca9ec161b09288802e5a112255d21340ed5b797f5fe29cecccfd8f67b9f802",
+        "4": "8d7ce5f296d649f6d56c4bd73ac7999be1f563f3f0de76567457a1890d644759",
+        "8": "babf7bdcaea5728706e320cd38a2a6feb261403f26a7c8bdf638a70730063a14",
+        "9": "2c8e0a4c9b9fc25a5d681a2eb75c204b94601c28895110423a33d9eb7c0a0925"
+      },
+      "gce": {
+        "project_id": "data-axiom-440223-j1",
+        "project_number": "525298585311",
+        "zone": "us-central1-a",
+        "instance_id": "4832317044092392783",
+        "instance_name": "tv-dbg-tdx-1771891608"
+      }
+    },
+    "tee_claims": {
+      "platform": "INTEL_TDX",
+      "tdx": {
+        "mrtd": "a5844e88897b70c318bef929ef4dfd6c7304c52c4bc9c3f39132f0fdccecf3eb5bab70110ee42a12509a31c037288694",
+        "rtmr0": "d48d765727cd8fbd82cd186c456bde83e18f2773ff95341d38e500f9f7d6e31c50500900fd08ed7e94b7f8eaadd420dd",
+        "rtmr1": "d14ab34df21d46c2009f86d919765964c32be28787eb55ad1b7d3ea1f6ed7430c42fdbd5603850997724070e206497d1",
+        "rtmr2": "3a999f5995df20d6c4354a08df0d7a1125d9a1c6900f4146b24a948e4da528858c4156b4ca5105c965a9c5225eff5d14",
+        "rtmr3": "0c8255b06d3b9c01c44260d80ab52e6dfed8b0615b9458e3c883e6bcf038cab839c392cb5df1dfe5d50b168ed44957f7",
+        "tee_tcb_svn": "0d010800000000000000000000000000",
+        "attributes": {
+          "debug": false,
+          "sept_ve_disable": false,
+          "pks": false,
+          "kl": false,
+          "perf_mon": false
+        }
+      }
+    },
+    "container_claims": {
+      "image_reference": "docker.io/cavaneigen/teeverify-capture:latest",
+      "image_digest": "sha256:a1b0135e6b83e3cbb3a2ed8532f4ae1aedb6d3ad2e2fc1f4c8fadb2befadae85",
+      "image_id": "sha256:e7ba1bbe6761d058e5dbde1cfa51efc5e211613a057e28a1e02627deb37d01ac",
+      "restart_policy": "Never",
+      "args": [
+        "/workload"
+      ],
+      "env_vars": {
+        "GCS_OUTPUT": "gs://data-axiom-440223-j1_cloudbuild/teeverify-vectors/tv-dbg-tdx-1771891608.json",
+        "HARDENED": "false",
+        "HOSTNAME": "tv-dbg-tdx-1771891608",
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      }
+    }
+  },
+  {
+    "name": "AMD SEV-SNP - debug - no extra data",
+    "tpm_claims": {
+      "platform": "AMD_SEV_SNP",
+      "hardened": false,
+      "pcrs": {
+        "0": "50597a27846e91d025eef597abbc89f72bff9af849094db97b0684d8bc4c515e",
+        "4": "563aa520fe9a41ef337a95724b91018d5ca387ce77789c6221bf346c1e677c01",
+        "8": "babf7bdcaea5728706e320cd38a2a6feb261403f26a7c8bdf638a70730063a14",
+        "9": "2c8e0a4c9b9fc25a5d681a2eb75c204b94601c28895110423a33d9eb7c0a0925"
+      },
+      "gce": {
+        "project_id": "data-axiom-440223-j1",
+        "project_number": "525298585311",
+        "zone": "us-central1-a",
+        "instance_id": "1721648690330948946",
+        "instance_name": "tv-dbg-sev-1771891608"
+      }
+    },
+    "tee_claims": {
+      "platform": "AMD_SEV_SNP",
+      "sevsnp": {
+        "measurement": "14195fde36852b69f2ac17166ebf3223351b1c34814f110339412652819073e061ed7c47e6e00d02a817aeb4992ce20d",
+        "host_data": "0000000000000000000000000000000000000000000000000000000000000000",
+        "current_tcb": "16004667175767900164",
+        "reported_tcb": "16004667175767900164",
+        "committed_tcb": "16004667175767900164",
+        "guest_svn": 0,
+        "policy": {
+          "debug": false,
+          "migrate_ma": false,
+          "smt": true,
+          "abi_minor": 0,
+          "abi_major": 0,
+          "single_socket": false,
+          "ciphertext_hiding_dram": false
+        }
+      }
+    },
+    "container_claims": {
+      "image_reference": "docker.io/cavaneigen/teeverify-capture:latest",
+      "image_digest": "sha256:a1b0135e6b83e3cbb3a2ed8532f4ae1aedb6d3ad2e2fc1f4c8fadb2befadae85",
+      "image_id": "sha256:e7ba1bbe6761d058e5dbde1cfa51efc5e211613a057e28a1e02627deb37d01ac",
+      "restart_policy": "Never",
+      "args": [
+        "/workload"
+      ],
+      "env_vars": {
+        "GCS_OUTPUT": "gs://data-axiom-440223-j1_cloudbuild/teeverify-vectors/tv-dbg-sev-1771891608.json",
+        "HARDENED": "false",
+        "HOSTNAME": "tv-dbg-sev-1771891608",
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      }
+    }
+  },
+  {
+    "name": "AMD SEV-SNP - debug - with extra data",
+    "tpm_claims": {
+      "platform": "AMD_SEV_SNP",
+      "hardened": false,
+      "pcrs": {
+        "0": "50597a27846e91d025eef597abbc89f72bff9af849094db97b0684d8bc4c515e",
+        "4": "563aa520fe9a41ef337a95724b91018d5ca387ce77789c6221bf346c1e677c01",
+        "8": "babf7bdcaea5728706e320cd38a2a6feb261403f26a7c8bdf638a70730063a14",
+        "9": "2c8e0a4c9b9fc25a5d681a2eb75c204b94601c28895110423a33d9eb7c0a0925"
+      },
+      "gce": {
+        "project_id": "data-axiom-440223-j1",
+        "project_number": "525298585311",
+        "zone": "us-central1-a",
+        "instance_id": "1721648690330948946",
+        "instance_name": "tv-dbg-sev-1771891608"
+      }
+    },
+    "tee_claims": {
+      "platform": "AMD_SEV_SNP",
+      "sevsnp": {
+        "measurement": "14195fde36852b69f2ac17166ebf3223351b1c34814f110339412652819073e061ed7c47e6e00d02a817aeb4992ce20d",
+        "host_data": "0000000000000000000000000000000000000000000000000000000000000000",
+        "current_tcb": "16004667175767900164",
+        "reported_tcb": "16004667175767900164",
+        "committed_tcb": "16004667175767900164",
+        "guest_svn": 0,
+        "policy": {
+          "debug": false,
+          "migrate_ma": false,
+          "smt": true,
+          "abi_minor": 0,
+          "abi_major": 0,
+          "single_socket": false,
+          "ciphertext_hiding_dram": false
+        }
+      }
+    },
+    "container_claims": {
+      "image_reference": "docker.io/cavaneigen/teeverify-capture:latest",
+      "image_digest": "sha256:a1b0135e6b83e3cbb3a2ed8532f4ae1aedb6d3ad2e2fc1f4c8fadb2befadae85",
+      "image_id": "sha256:e7ba1bbe6761d058e5dbde1cfa51efc5e211613a057e28a1e02627deb37d01ac",
+      "restart_policy": "Never",
+      "args": [
+        "/workload"
+      ],
+      "env_vars": {
+        "GCS_OUTPUT": "gs://data-axiom-440223-j1_cloudbuild/teeverify-vectors/tv-dbg-sev-1771891608.json",
+        "HARDENED": "false",
+        "HOSTNAME": "tv-dbg-sev-1771891608",
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      }
+    }
+  },
+  {
+    "name": "GCP Shielded VM - debug - no extra data",
+    "tpm_claims": {
+      "platform": "GCP_SHIELDED_VM",
+      "hardened": false,
+      "pcrs": {
+        "0": "d0c70a9310cd0b55767084333022ce53f42befbb69c059ee6c0a32766f160783",
+        "4": "563aa520fe9a41ef337a95724b91018d5ca387ce77789c6221bf346c1e677c01",
+        "8": "babf7bdcaea5728706e320cd38a2a6feb261403f26a7c8bdf638a70730063a14",
+        "9": "2c8e0a4c9b9fc25a5d681a2eb75c204b94601c28895110423a33d9eb7c0a0925"
+      },
+      "gce": {
+        "project_id": "data-axiom-440223-j1",
+        "project_number": "525298585311",
+        "zone": "us-central1-a",
+        "instance_id": "5999761456624653573",
+        "instance_name": "tv-dbg-svm-1771891608"
+      }
+    },
+    "tee_claims": null,
+    "container_claims": {
+      "image_reference": "docker.io/cavaneigen/teeverify-capture:latest",
+      "image_digest": "sha256:a1b0135e6b83e3cbb3a2ed8532f4ae1aedb6d3ad2e2fc1f4c8fadb2befadae85",
+      "image_id": "sha256:e7ba1bbe6761d058e5dbde1cfa51efc5e211613a057e28a1e02627deb37d01ac",
+      "restart_policy": "Never",
+      "args": [
+        "/workload"
+      ],
+      "env_vars": {
+        "GCS_OUTPUT": "gs://data-axiom-440223-j1_cloudbuild/teeverify-vectors/tv-dbg-svm-1771891608.json",
+        "HARDENED": "false",
+        "HOSTNAME": "tv-dbg-svm-1771891608",
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      }
+    }
+  },
+  {
+    "name": "GCP Shielded VM - debug - with extra data",
+    "tpm_claims": {
+      "platform": "GCP_SHIELDED_VM",
+      "hardened": false,
+      "pcrs": {
+        "0": "d0c70a9310cd0b55767084333022ce53f42befbb69c059ee6c0a32766f160783",
+        "4": "563aa520fe9a41ef337a95724b91018d5ca387ce77789c6221bf346c1e677c01",
+        "8": "babf7bdcaea5728706e320cd38a2a6feb261403f26a7c8bdf638a70730063a14",
+        "9": "2c8e0a4c9b9fc25a5d681a2eb75c204b94601c28895110423a33d9eb7c0a0925"
+      },
+      "gce": {
+        "project_id": "data-axiom-440223-j1",
+        "project_number": "525298585311",
+        "zone": "us-central1-a",
+        "instance_id": "5999761456624653573",
+        "instance_name": "tv-dbg-svm-1771891608"
+      }
+    },
+    "tee_claims": null,
+    "container_claims": {
+      "image_reference": "docker.io/cavaneigen/teeverify-capture:latest",
+      "image_digest": "sha256:a1b0135e6b83e3cbb3a2ed8532f4ae1aedb6d3ad2e2fc1f4c8fadb2befadae85",
+      "image_id": "sha256:e7ba1bbe6761d058e5dbde1cfa51efc5e211613a057e28a1e02627deb37d01ac",
+      "restart_policy": "Never",
+      "args": [
+        "/workload"
+      ],
+      "env_vars": {
+        "GCS_OUTPUT": "gs://data-axiom-440223-j1_cloudbuild/teeverify-vectors/tv-dbg-svm-1771891608.json",
+        "HARDENED": "false",
+        "HOSTNAME": "tv-dbg-svm-1771891608",
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      }
+    }
+  },
+  {
+    "name": "Intel TDX - hardened - no extra data",
+    "tpm_claims": {
+      "platform": "INTEL_TDX",
+      "hardened": true,
+      "pcrs": {
+        "0": "0cca9ec161b09288802e5a112255d21340ed5b797f5fe29cecccfd8f67b9f802",
+        "4": "8d7ce5f296d649f6d56c4bd73ac7999be1f563f3f0de76567457a1890d644759",
+        "8": "fdab15bd8a68d015a237206f401a3cad14ec1e08327da0d02fa6f6a3d6c44090",
+        "9": "05c55fe4afbb9bc2f7309bc05f453201b0de1e10db514edb4518cf81d0848ed9"
+      },
+      "gce": {
+        "project_id": "data-axiom-440223-j1",
+        "project_number": "525298585311",
+        "zone": "us-central1-a",
+        "instance_id": "194080267985572586",
+        "instance_name": "tv-hrd-tdx-1771891608"
+      }
+    },
+    "tee_claims": {
+      "platform": "INTEL_TDX",
+      "tdx": {
+        "mrtd": "a5844e88897b70c318bef929ef4dfd6c7304c52c4bc9c3f39132f0fdccecf3eb5bab70110ee42a12509a31c037288694",
+        "rtmr0": "d48d765727cd8fbd82cd186c456bde83e18f2773ff95341d38e500f9f7d6e31c50500900fd08ed7e94b7f8eaadd420dd",
+        "rtmr1": "d14ab34df21d46c2009f86d919765964c32be28787eb55ad1b7d3ea1f6ed7430c42fdbd5603850997724070e206497d1",
+        "rtmr2": "19c0195be4855a7de92cdcb045d1ed8c46dfceb979995ed38c48b60ec4b19793ba91b57b8e5752e475431d5aa14bb31b",
+        "rtmr3": "0a027eff0c13146323239bf9d732c1e4663e4005d54158defc6ee932deb6b003a0784ed77dccc5948e809e363b230dfd",
+        "tee_tcb_svn": "0d010800000000000000000000000000",
+        "attributes": {
+          "debug": false,
+          "sept_ve_disable": false,
+          "pks": false,
+          "kl": false,
+          "perf_mon": false
+        }
+      }
+    },
+    "container_claims": {
+      "image_reference": "docker.io/cavaneigen/teeverify-capture:latest",
+      "image_digest": "sha256:a1b0135e6b83e3cbb3a2ed8532f4ae1aedb6d3ad2e2fc1f4c8fadb2befadae85",
+      "image_id": "sha256:e7ba1bbe6761d058e5dbde1cfa51efc5e211613a057e28a1e02627deb37d01ac",
+      "restart_policy": "Never",
+      "args": [
+        "/workload"
+      ],
+      "env_vars": {
+        "GCS_OUTPUT": "gs://data-axiom-440223-j1_cloudbuild/teeverify-vectors/tv-hrd-tdx-1771891608.json",
+        "HARDENED": "true",
+        "HOSTNAME": "tv-hrd-tdx-1771891608",
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      }
+    }
+  },
+  {
+    "name": "Intel TDX - hardened - with extra data",
+    "tpm_claims": {
+      "platform": "INTEL_TDX",
+      "hardened": true,
+      "pcrs": {
+        "0": "0cca9ec161b09288802e5a112255d21340ed5b797f5fe29cecccfd8f67b9f802",
+        "4": "8d7ce5f296d649f6d56c4bd73ac7999be1f563f3f0de76567457a1890d644759",
+        "8": "fdab15bd8a68d015a237206f401a3cad14ec1e08327da0d02fa6f6a3d6c44090",
+        "9": "05c55fe4afbb9bc2f7309bc05f453201b0de1e10db514edb4518cf81d0848ed9"
+      },
+      "gce": {
+        "project_id": "data-axiom-440223-j1",
+        "project_number": "525298585311",
+        "zone": "us-central1-a",
+        "instance_id": "194080267985572586",
+        "instance_name": "tv-hrd-tdx-1771891608"
+      }
+    },
+    "tee_claims": {
+      "platform": "INTEL_TDX",
+      "tdx": {
+        "mrtd": "a5844e88897b70c318bef929ef4dfd6c7304c52c4bc9c3f39132f0fdccecf3eb5bab70110ee42a12509a31c037288694",
+        "rtmr0": "d48d765727cd8fbd82cd186c456bde83e18f2773ff95341d38e500f9f7d6e31c50500900fd08ed7e94b7f8eaadd420dd",
+        "rtmr1": "d14ab34df21d46c2009f86d919765964c32be28787eb55ad1b7d3ea1f6ed7430c42fdbd5603850997724070e206497d1",
+        "rtmr2": "19c0195be4855a7de92cdcb045d1ed8c46dfceb979995ed38c48b60ec4b19793ba91b57b8e5752e475431d5aa14bb31b",
+        "rtmr3": "0a027eff0c13146323239bf9d732c1e4663e4005d54158defc6ee932deb6b003a0784ed77dccc5948e809e363b230dfd",
+        "tee_tcb_svn": "0d010800000000000000000000000000",
+        "attributes": {
+          "debug": false,
+          "sept_ve_disable": false,
+          "pks": false,
+          "kl": false,
+          "perf_mon": false
+        }
+      }
+    },
+    "container_claims": {
+      "image_reference": "docker.io/cavaneigen/teeverify-capture:latest",
+      "image_digest": "sha256:a1b0135e6b83e3cbb3a2ed8532f4ae1aedb6d3ad2e2fc1f4c8fadb2befadae85",
+      "image_id": "sha256:e7ba1bbe6761d058e5dbde1cfa51efc5e211613a057e28a1e02627deb37d01ac",
+      "restart_policy": "Never",
+      "args": [
+        "/workload"
+      ],
+      "env_vars": {
+        "GCS_OUTPUT": "gs://data-axiom-440223-j1_cloudbuild/teeverify-vectors/tv-hrd-tdx-1771891608.json",
+        "HARDENED": "true",
+        "HOSTNAME": "tv-hrd-tdx-1771891608",
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      }
+    }
+  },
+  {
+    "name": "AMD SEV-SNP - hardened - no extra data",
+    "tpm_claims": {
+      "platform": "AMD_SEV_SNP",
+      "hardened": true,
+      "pcrs": {
+        "0": "50597a27846e91d025eef597abbc89f72bff9af849094db97b0684d8bc4c515e",
+        "4": "563aa520fe9a41ef337a95724b91018d5ca387ce77789c6221bf346c1e677c01",
+        "8": "fdab15bd8a68d015a237206f401a3cad14ec1e08327da0d02fa6f6a3d6c44090",
+        "9": "05c55fe4afbb9bc2f7309bc05f453201b0de1e10db514edb4518cf81d0848ed9"
+      },
+      "gce": {
+        "project_id": "data-axiom-440223-j1",
+        "project_number": "525298585311",
+        "zone": "us-central1-a",
+        "instance_id": "2148878557666955904",
+        "instance_name": "tv-hrd-sev-1771891608"
+      }
+    },
+    "tee_claims": {
+      "platform": "AMD_SEV_SNP",
+      "sevsnp": {
+        "measurement": "14195fde36852b69f2ac17166ebf3223351b1c34814f110339412652819073e061ed7c47e6e00d02a817aeb4992ce20d",
+        "host_data": "0000000000000000000000000000000000000000000000000000000000000000",
+        "current_tcb": "16004667175767900164",
+        "reported_tcb": "16004667175767900164",
+        "committed_tcb": "16004667175767900164",
+        "guest_svn": 0,
+        "policy": {
+          "debug": false,
+          "migrate_ma": false,
+          "smt": true,
+          "abi_minor": 0,
+          "abi_major": 0,
+          "single_socket": false,
+          "ciphertext_hiding_dram": false
+        }
+      }
+    },
+    "container_claims": {
+      "image_reference": "docker.io/cavaneigen/teeverify-capture:latest",
+      "image_digest": "sha256:a1b0135e6b83e3cbb3a2ed8532f4ae1aedb6d3ad2e2fc1f4c8fadb2befadae85",
+      "image_id": "sha256:e7ba1bbe6761d058e5dbde1cfa51efc5e211613a057e28a1e02627deb37d01ac",
+      "restart_policy": "Never",
+      "args": [
+        "/workload"
+      ],
+      "env_vars": {
+        "GCS_OUTPUT": "gs://data-axiom-440223-j1_cloudbuild/teeverify-vectors/tv-hrd-sev-1771891608.json",
+        "HARDENED": "true",
+        "HOSTNAME": "tv-hrd-sev-1771891608",
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      }
+    }
+  },
+  {
+    "name": "AMD SEV-SNP - hardened - with extra data",
+    "tpm_claims": {
+      "platform": "AMD_SEV_SNP",
+      "hardened": true,
+      "pcrs": {
+        "0": "50597a27846e91d025eef597abbc89f72bff9af849094db97b0684d8bc4c515e",
+        "4": "563aa520fe9a41ef337a95724b91018d5ca387ce77789c6221bf346c1e677c01",
+        "8": "fdab15bd8a68d015a237206f401a3cad14ec1e08327da0d02fa6f6a3d6c44090",
+        "9": "05c55fe4afbb9bc2f7309bc05f453201b0de1e10db514edb4518cf81d0848ed9"
+      },
+      "gce": {
+        "project_id": "data-axiom-440223-j1",
+        "project_number": "525298585311",
+        "zone": "us-central1-a",
+        "instance_id": "2148878557666955904",
+        "instance_name": "tv-hrd-sev-1771891608"
+      }
+    },
+    "tee_claims": {
+      "platform": "AMD_SEV_SNP",
+      "sevsnp": {
+        "measurement": "14195fde36852b69f2ac17166ebf3223351b1c34814f110339412652819073e061ed7c47e6e00d02a817aeb4992ce20d",
+        "host_data": "0000000000000000000000000000000000000000000000000000000000000000",
+        "current_tcb": "16004667175767900164",
+        "reported_tcb": "16004667175767900164",
+        "committed_tcb": "16004667175767900164",
+        "guest_svn": 0,
+        "policy": {
+          "debug": false,
+          "migrate_ma": false,
+          "smt": true,
+          "abi_minor": 0,
+          "abi_major": 0,
+          "single_socket": false,
+          "ciphertext_hiding_dram": false
+        }
+      }
+    },
+    "container_claims": {
+      "image_reference": "docker.io/cavaneigen/teeverify-capture:latest",
+      "image_digest": "sha256:a1b0135e6b83e3cbb3a2ed8532f4ae1aedb6d3ad2e2fc1f4c8fadb2befadae85",
+      "image_id": "sha256:e7ba1bbe6761d058e5dbde1cfa51efc5e211613a057e28a1e02627deb37d01ac",
+      "restart_policy": "Never",
+      "args": [
+        "/workload"
+      ],
+      "env_vars": {
+        "GCS_OUTPUT": "gs://data-axiom-440223-j1_cloudbuild/teeverify-vectors/tv-hrd-sev-1771891608.json",
+        "HARDENED": "true",
+        "HOSTNAME": "tv-hrd-sev-1771891608",
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      }
+    }
+  },
+  {
+    "name": "GCP Shielded VM - hardened - no extra data",
+    "tpm_claims": {
+      "platform": "GCP_SHIELDED_VM",
+      "hardened": true,
+      "pcrs": {
+        "0": "d0c70a9310cd0b55767084333022ce53f42befbb69c059ee6c0a32766f160783",
+        "4": "563aa520fe9a41ef337a95724b91018d5ca387ce77789c6221bf346c1e677c01",
+        "8": "fdab15bd8a68d015a237206f401a3cad14ec1e08327da0d02fa6f6a3d6c44090",
+        "9": "05c55fe4afbb9bc2f7309bc05f453201b0de1e10db514edb4518cf81d0848ed9"
+      },
+      "gce": {
+        "project_id": "data-axiom-440223-j1",
+        "project_number": "525298585311",
+        "zone": "us-central1-a",
+        "instance_id": "2728336698926781394",
+        "instance_name": "tv-hrd-svm-1771891608"
+      }
+    },
+    "tee_claims": null,
+    "container_claims": {
+      "image_reference": "docker.io/cavaneigen/teeverify-capture:latest",
+      "image_digest": "sha256:a1b0135e6b83e3cbb3a2ed8532f4ae1aedb6d3ad2e2fc1f4c8fadb2befadae85",
+      "image_id": "sha256:e7ba1bbe6761d058e5dbde1cfa51efc5e211613a057e28a1e02627deb37d01ac",
+      "restart_policy": "Never",
+      "args": [
+        "/workload"
+      ],
+      "env_vars": {
+        "GCS_OUTPUT": "gs://data-axiom-440223-j1_cloudbuild/teeverify-vectors/tv-hrd-svm-1771891608.json",
+        "HARDENED": "true",
+        "HOSTNAME": "tv-hrd-svm-1771891608",
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      }
+    }
+  },
+  {
+    "name": "GCP Shielded VM - hardened - with extra data",
+    "tpm_claims": {
+      "platform": "GCP_SHIELDED_VM",
+      "hardened": true,
+      "pcrs": {
+        "0": "d0c70a9310cd0b55767084333022ce53f42befbb69c059ee6c0a32766f160783",
+        "4": "563aa520fe9a41ef337a95724b91018d5ca387ce77789c6221bf346c1e677c01",
+        "8": "fdab15bd8a68d015a237206f401a3cad14ec1e08327da0d02fa6f6a3d6c44090",
+        "9": "05c55fe4afbb9bc2f7309bc05f453201b0de1e10db514edb4518cf81d0848ed9"
+      },
+      "gce": {
+        "project_id": "data-axiom-440223-j1",
+        "project_number": "525298585311",
+        "zone": "us-central1-a",
+        "instance_id": "2728336698926781394",
+        "instance_name": "tv-hrd-svm-1771891608"
+      }
+    },
+    "tee_claims": null,
+    "container_claims": {
+      "image_reference": "docker.io/cavaneigen/teeverify-capture:latest",
+      "image_digest": "sha256:a1b0135e6b83e3cbb3a2ed8532f4ae1aedb6d3ad2e2fc1f4c8fadb2befadae85",
+      "image_id": "sha256:e7ba1bbe6761d058e5dbde1cfa51efc5e211613a057e28a1e02627deb37d01ac",
+      "restart_policy": "Never",
+      "args": [
+        "/workload"
+      ],
+      "env_vars": {
+        "GCS_OUTPUT": "gs://data-axiom-440223-j1_cloudbuild/teeverify-vectors/tv-hrd-svm-1771891608.json",
+        "HARDENED": "true",
+        "HOSTNAME": "tv-hrd-svm-1771891608",
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      }
+    }
+  }
+]
