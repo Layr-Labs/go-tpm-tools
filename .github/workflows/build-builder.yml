@@ -20,9 +20,6 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Parse Version
         id: config
         run: |
@@ -45,11 +42,12 @@ jobs:
       - name: Build with SLSA provenance
         run: |
           gcloud builds submit \
+            "projects/${{ env.PROJECT_ID }}/locations/${{ env.REGION }}/connections/layr-labs/repositories/go-tpm-tools" \
+            --revision=${{ github.sha }} \
             --config=builder/cloudbuild-builder.yaml \
             --substitutions="_VERSION=${{ steps.config.outputs.version }},_REGION=${{ env.REGION }}" \
             --project="${{ env.PROJECT_ID }}" \
-            --gcs-source-staging-dir="gs://${{ env.PROJECT_ID }}_cloudbuild/source" \
-            --gcs-log-dir="gs://${{ env.PROJECT_ID }}_cloudbuild/logs"
+            --region=${{ env.REGION }}
 
       - name: Summary
         if: success()

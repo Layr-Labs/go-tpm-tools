@@ -98,6 +98,8 @@ func downloadImageContents(ctx context.Context, imageRef, filePath string) (dige
 type BuilderResult struct {
 	ImageDigest   string // Container image digest
 	ProvenanceRef string // URL to fetch provenance
+	GitURL        string // Source repository URL from provenance
+	SourceSHA     string // Source commit SHA from provenance
 	Signature     *ProvenanceSignature
 }
 
@@ -128,14 +130,16 @@ func fetchLauncherWithProvenance(ctx context.Context, config *Config) (*Launcher
 		ProvenanceRef: provenanceRef,
 	}
 
-	// Fetch provenance signature
+	// Fetch provenance
 	slog.Info("querying provenance", "resourceUri", provenanceRef)
-	signature, err := fetchProvenanceSignature(ctx, config.ProjectID, provenanceRef)
+	prov, err := fetchProvenance(ctx, config.ProjectID, provenanceRef)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch launcher provenance signature: %w", err)
+		return nil, fmt.Errorf("failed to fetch launcher provenance: %w", err)
 	}
-	result.Signature = signature
-	slog.Info("launcher provenance signature fetched")
+	result.Signature = prov.Signature
+	result.GitURL = prov.GitURL
+	result.SourceSHA = prov.SourceSHA
+	slog.Info("launcher provenance fetched")
 
 	return result, nil
 }
@@ -219,14 +223,16 @@ func fetchBuilderProvenance(ctx context.Context, config *Config) (*BuilderResult
 		ProvenanceRef: provenanceRef,
 	}
 
-	// Query Container Analysis for provenance signature
+	// Query Container Analysis for provenance
 	slog.Info("querying provenance", "resourceUri", provenanceRef)
-	signature, err := fetchProvenanceSignature(ctx, config.ProjectID, provenanceRef)
+	prov, err := fetchProvenance(ctx, config.ProjectID, provenanceRef)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch builder provenance signature: %w", err)
+		return nil, fmt.Errorf("failed to fetch builder provenance: %w", err)
 	}
 
-	result.Signature = signature
+	result.Signature = prov.Signature
+	result.GitURL = prov.GitURL
+	result.SourceSHA = prov.SourceSHA
 	return result, nil
 }
 
@@ -265,9 +271,9 @@ func parseContainerInfoFromToken(token string) (digest, imageRef string, err err
 	return claims.Submods.Container.ImageDigest, claims.Submods.Container.ImageReference, nil
 }
 
-// fetchProvenanceSignature queries Container Analysis for provenance signature on a container image.
-// Returns the DSSE signature for offline verification.
-func fetchProvenanceSignature(ctx context.Context, projectID, resourceURL string) (*ProvenanceSignature, error) {
+// fetchProvenance queries Container Analysis for provenance on a container image.
+// Returns the DSSE signature and source info for offline verification.
+func fetchProvenance(ctx context.Context, projectID, resourceURL string) (*ProvenanceResult, error) {
 	client, err := containeranalysis.NewClient(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Container Analysis client: %w", err)
@@ -294,7 +300,15 @@ func fetchProvenanceSignature(ctx context.Context, projectID, resourceURL string
 		return nil, fmt.Errorf("occurrence has no build data for %s", resourceURL)
 	}
 
-	// Extract signature from envelope if available
+	result := &ProvenanceResult{}
+
+	// Extract source info from provenance
+	result.GitURL, result.SourceSHA, err = extractSourceInfo(occ.GetBuild())
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract source info for %s: %w", resourceURL, err)
+	}
+
+	// Extract and verify signature from envelope
 	envelope := occ.GetEnvelope()
 	if envelope == nil || len(envelope.Signatures) == 0 {
 		return nil, fmt.Errorf("no DSSE envelope found for %s (expected Cloud Build provenance)", resourceURL)
@@ -303,16 +317,55 @@ func fetchProvenanceSignature(ctx context.Context, projectID, resourceURL string
 	sig := envelope.Signatures[0]
 	slog.Info("found DSSE signature", "keyid", sig.Keyid)
 
-	// Verify the DSSE signature before returning it
 	if err := verifyDSSESignature(ctx, envelope); err != nil {
 		return nil, fmt.Errorf("DSSE signature verification failed for %s: %w", resourceURL, err)
 	}
 	slog.Info("DSSE signature verified", "keyid", sig.Keyid)
 
-	return &ProvenanceSignature{
+	result.Signature = &ProvenanceSignature{
 		KeyID:     sig.Keyid,
 		Signature: base64.StdEncoding.EncodeToString(sig.Sig),
-	}, nil
+	}
+	return result, nil
+}
+
+// extractSourceInfo extracts the git URL and commit SHA from a build occurrence.
+// Tries SLSA v1 (ResolvedDependencies) first, then falls back to SLSA v0.2 (Materials).
+func extractSourceInfo(build *grafeas.BuildOccurrence) (string, string, error) {
+	// Try SLSA v1: ResolvedDependencies
+	if v1 := build.GetInTotoSlsaProvenanceV1(); v1 != nil {
+		for _, dep := range v1.GetPredicate().GetBuildDefinition().GetResolvedDependencies() {
+			if uri := dep.GetUri(); uri != "" {
+				if sha, ok := dep.GetDigest()["sha1"]; ok {
+					return uri, sha, nil
+				}
+			}
+		}
+	}
+
+	// Try SLSA v0.2: Materials
+	if stmt := build.GetIntotoStatement(); stmt != nil {
+		for _, m := range stmt.GetSlsaProvenanceZeroTwo().GetMaterials() {
+			if uri := m.GetUri(); uri != "" {
+				if sha, ok := m.GetDigest()["sha1"]; ok {
+					return uri, sha, nil
+				}
+			}
+		}
+	}
+
+	// Try SLSA v0.1: IntotoStatement → SlsaProvenance → Materials
+	if stmt := build.GetIntotoStatement(); stmt != nil {
+		for _, m := range stmt.GetSlsaProvenance().GetMaterials() {
+			if uri := m.GetUri(); uri != "" {
+				if sha, ok := m.GetDigest()["sha1"]; ok {
+					return uri, sha, nil
+				}
+			}
+		}
+	}
+
+	return "", "", fmt.Errorf("no source info found in provenance")
 }
 
 // verifyDSSESignature verifies a grafeas DSSE envelope by fetching the signing
