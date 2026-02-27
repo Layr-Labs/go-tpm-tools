@@ -280,24 +280,40 @@ func fetchProvenance(ctx context.Context, projectID, resourceURL string) (*Prove
 	}
 	defer client.Close()
 
-	// Query for BUILD occurrences with specific resourceUri
+	// Query for BUILD occurrences with specific resourceUri.
+	// Cloud Build may create multiple occurrences per image (v0.1 and v1 formats).
+	// Iterate to find one with a valid DSSE envelope.
 	filter := fmt.Sprintf(`kind="BUILD" AND resourceUri="%s"`, resourceURL)
 	req := &grafeas.ListOccurrencesRequest{
-		Parent:   fmt.Sprintf("projects/%s", projectID),
-		Filter:   filter,
-		PageSize: 1,
+		Parent: fmt.Sprintf("projects/%s", projectID),
+		Filter: filter,
 	}
 
 	slog.Info("querying container analysis", "resourceUri", resourceURL)
 
+	var occ *grafeas.Occurrence
 	it := client.GetGrafeasClient().ListOccurrences(ctx, req)
-	occ, err := it.Next()
-	if err != nil {
-		return nil, fmt.Errorf("no provenance found for %s", resourceURL)
+	for {
+		candidate, err := it.Next()
+		if err != nil {
+			break
+		}
+		if candidate.GetBuild() == nil {
+			continue
+		}
+		env := candidate.GetEnvelope()
+		if env != nil && len(env.Signatures) > 0 {
+			occ = candidate
+			break
+		}
+		// Keep first occurrence with build data as fallback
+		if occ == nil {
+			occ = candidate
+		}
 	}
 
-	if occ.GetBuild() == nil {
-		return nil, fmt.Errorf("occurrence has no build data for %s", resourceURL)
+	if occ == nil {
+		return nil, fmt.Errorf("no provenance found for %s", resourceURL)
 	}
 
 	result := &ProvenanceResult{}
