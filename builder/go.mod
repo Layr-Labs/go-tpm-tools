@@ -4,11 +4,6 @@ go 1.24.0
 
 toolchain go1.24.2
 
-replace (
-	github.com/Layr-Labs/go-tpm-tools => ..
-	github.com/Layr-Labs/go-tpm-tools/sdk/attest => ../sdk/attest
-)
-
 require (
 	cloud.google.com/go/cloudbuild v1.25.0
 	cloud.google.com/go/containeranalysis v0.14.2

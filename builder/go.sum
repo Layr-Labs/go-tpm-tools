@@ -112,6 +112,10 @@ github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/cloudmock v0
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.54.0 h1:s0WlVbf9qpvkh1c/uDAPElam0WrL7fHRIidgZJ7UqZI=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.54.0/go.mod h1:Mf6O40IAyB9zR/1J8nGDDPirZQQPbYJni8Yisy7NTMc=
 github.com/Knetic/govaluate v3.0.1-0.20171022003610-9aa49832a739+incompatible/go.mod h1:r7JcOSlj0wfOMncg0iLm8Leh48TZaKVeNIfJntJ2wa0=
+github.com/Layr-Labs/go-tpm-tools v0.4.8-0.20260224211508-3df47b419268 h1:5mpMuCYR1K0QFQR63AWbdabCa+bvJdOB0OJ0MUbQXIo=
+github.com/Layr-Labs/go-tpm-tools v0.4.8-0.20260224211508-3df47b419268/go.mod h1:f9RkynScDma5kRoHhcX70ftr0+TY0U9laf71rjSBhao=
+github.com/Layr-Labs/go-tpm-tools/sdk/attest v0.0.0-20260225172416-bbd228942d4a h1:+9gicsKViWUZiJ3iN9O7SJhxaCoN3m0v/GR5qpIu7Nw=
+github.com/Layr-Labs/go-tpm-tools/sdk/attest v0.0.0-20260225172416-bbd228942d4a/go.mod h1:rKilwaZKgl4AIKqtaFNTRdE0ys6ujXvTY2oZWp/iE/0=
 github.com/Masterminds/goutils v1.1.0/go.mod h1:8cTjp+g8YejhMuvIA5y2vz3BpJxksy863GQaJW2MFNU=
 github.com/Masterminds/semver v1.4.2/go.mod h1:MB6lktGJrhw8PrUyiEoblNEGEQ+RzHPF078ddwwvV3Y=
 github.com/Masterminds/semver v1.5.0/go.mod h1:MB6lktGJrhw8PrUyiEoblNEGEQ+RzHPF078ddwwvV3Y=
