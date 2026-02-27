@@ -302,12 +302,6 @@ func fetchProvenance(ctx context.Context, projectID, resourceURL string) (*Prove
 
 	result := &ProvenanceResult{}
 
-	// Extract source info from provenance
-	result.GitURL, result.SourceSHA, err = extractSourceInfo(occ.GetBuild())
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract source info for %s: %w", resourceURL, err)
-	}
-
 	// Extract and verify signature from envelope
 	envelope := occ.GetEnvelope()
 	if envelope == nil || len(envelope.Signatures) == 0 {
@@ -316,6 +310,18 @@ func fetchProvenance(ctx context.Context, projectID, resourceURL string) (*Prove
 
 	sig := envelope.Signatures[0]
 	slog.Info("found DSSE signature", "keyid", sig.Keyid)
+
+	// Extract source info: try proto fields first, fall back to envelope payload.
+	// The gRPC API doesn't always populate GetInTotoSlsaProvenanceV1() for v1 provenance,
+	// but the envelope payload always contains the full in-toto statement.
+	result.GitURL, result.SourceSHA, err = extractSourceInfo(occ.GetBuild())
+	if err != nil {
+		slog.Info("proto fields didn't contain source info, trying envelope payload")
+		result.GitURL, result.SourceSHA, err = extractSourceInfoFromEnvelope(envelope.Payload)
+		if err != nil {
+			return nil, fmt.Errorf("failed to extract source info for %s: %w", resourceURL, err)
+		}
+	}
 
 	if err := verifyDSSESignature(ctx, envelope); err != nil {
 		return nil, fmt.Errorf("DSSE signature verification failed for %s: %w", resourceURL, err)
@@ -368,6 +374,75 @@ func extractSourceInfo(build *grafeas.BuildOccurrence) (string, string, error) {
 	}
 
 	return "", "", fmt.Errorf("no source info found in provenance")
+}
+
+// extractSourceInfoFromEnvelope parses the DSSE envelope payload (JSON in-toto statement)
+// to extract git URL and commit SHA. This handles cases where the gRPC API doesn't
+// populate the proto fields but the envelope payload contains the full provenance.
+func extractSourceInfoFromEnvelope(payload []byte) (string, string, error) {
+	var stmt struct {
+		Predicate struct {
+			// SLSA v1: buildDefinition.resolvedDependencies
+			BuildDefinition struct {
+				ResolvedDependencies []struct {
+					URI    string            `json:"uri"`
+					Digest map[string]string `json:"digest"`
+				} `json:"resolvedDependencies"`
+			} `json:"buildDefinition"`
+			// SLSA v0.1/v0.2: materials
+			Materials []struct {
+				URI    string            `json:"uri"`
+				Digest map[string]string `json:"digest"`
+			} `json:"materials"`
+		} `json:"predicate"`
+		SlsaProvenance struct {
+			Materials []struct {
+				URI    string            `json:"uri"`
+				Digest map[string]string `json:"digest"`
+			} `json:"materials"`
+		} `json:"slsaProvenance"`
+	}
+
+	if err := json.Unmarshal(payload, &stmt); err != nil {
+		return "", "", fmt.Errorf("failed to parse envelope payload: %w", err)
+	}
+
+	digestKeys := []string{"gitCommit", "sha1"}
+
+	// Try v1 resolvedDependencies
+	for _, dep := range stmt.Predicate.BuildDefinition.ResolvedDependencies {
+		if dep.URI != "" {
+			for _, key := range digestKeys {
+				if sha, ok := dep.Digest[key]; ok {
+					return dep.URI, sha, nil
+				}
+			}
+		}
+	}
+
+	// Try v0.2 predicate.materials
+	for _, m := range stmt.Predicate.Materials {
+		if m.URI != "" {
+			for _, key := range digestKeys {
+				if sha, ok := m.Digest[key]; ok {
+					return m.URI, sha, nil
+				}
+			}
+		}
+	}
+
+	// Try v0.1 slsaProvenance.materials
+	for _, m := range stmt.SlsaProvenance.Materials {
+		if m.URI != "" {
+			for _, key := range digestKeys {
+				if sha, ok := m.Digest[key]; ok {
+					return m.URI, sha, nil
+				}
+			}
+		}
+	}
+
+	return "", "", fmt.Errorf("no source info found in envelope payload")
 }
 
 // verifyDSSESignature verifies a grafeas DSSE envelope by fetching the signing
