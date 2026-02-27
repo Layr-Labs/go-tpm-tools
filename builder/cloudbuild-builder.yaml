@@ -84,5 +84,6 @@ images:
 
 options:
   requestedVerifyOption: VERIFIED
+  logging: CLOUD_LOGGING_ONLY
 
 timeout: '600s'
