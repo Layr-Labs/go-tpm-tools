@@ -34,7 +34,7 @@ steps:
       - -c
       - |
         set -e
-        VERSION="$${_VERSION#launcher-}"
+        VERSION=$$(echo "${_VERSION}" | sed 's/^launcher-//')
         if [[ ! "$$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$$ ]]; then
           echo "ERROR: Invalid version: $$VERSION (expected v<major>.<minor>.<patch>)"
           exit 1
