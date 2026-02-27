@@ -16,7 +16,7 @@
 #     --tag-pattern="launcher-v.*" \
 #     --build-config="builder/cloudbuild-launcher.yaml" \
 #     --region="us-central1" \
-#     --service-account="projects/tee-compute-global/serviceAccounts/760133435411@cloudbuild.gserviceaccount.com" \
+#     --service-account="projects/tee-compute-global/serviceAccounts/verifiable-builds@tee-compute-global.iam.gserviceaccount.com" \
 #     --substitutions="_VERSION=\$TAG_NAME,_REGION=us-central1" \
 #     --project="tee-compute-global"
 
