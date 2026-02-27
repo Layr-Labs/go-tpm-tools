@@ -7,9 +7,15 @@ Build custom Confidential Space images with cryptographic proof linking source c
 ```
 Source Code ──> Cloud Build ──> Launcher Container ──> CVM Builder ──> GCE Image
                      │                                      │
-                     ↓                                      ↓
-              SLSA Provenance                        GCA Attestation
-              (proves source)                      (proves TEE + inputs)
+                     ↓                                      │
+              SLSA Provenance                               ├──> PCR Capture (TDX, SEV-SNP, Shielded)
+              (proves source)                               │         │
+                                                            │         ↓
+                                                            ├──> Manifest (with pcrs)
+                                                            │
+                                                            ↓
+                                                      GCA Attestation
+                                                    (proves TEE + inputs)
 ```
 
 **Trust chain:**
@@ -28,16 +34,18 @@ Source Code ──> Cloud Build ──> Launcher Container ──> CVM Builder �
 ### Release Flow
 
 ```
-Tag launcher-v* ──> Build Launcher ──┐
-                    + provenance     │
-                                     ├──> Deploy ──> candidate
-Tag builder-v*  ──> Build Builder  ──┘         │
-                    + provenance               │
-                                               ├── Promote to dev ──> copy image to dev family
-                                               │                      (no approval)
-                                               │
-                                               └── Promote to prod ─> move original to prod family
-                                                                       (requires approval, public + tag)
+Tag launcher-v*    ──> Build Launcher    ──┐
+                       + provenance        │
+                                           ├──> Deploy ──> candidate
+Tag builder-v*     ──> Build Builder     ──┤                  │
+                       + provenance        │                  │
+                                           │                  │
+Tag pcr-capture-v* ──> Build PCR Capture ──┘                  │
+                       + provenance                           │
+                                                              │
+                                           Promote to dev  ───┤──> copy to dev family (no approval)
+                                                              │
+                                           Promote to prod ───┘──> move to prod family (requires approval)
 ```
 
 ### Image Lifecycle
@@ -54,18 +62,20 @@ Dev promotion **copies** the image (original stays in candidate). Prod promotion
 
 | Workflow | Trigger | Description |
 |----------|---------|-------------|
-| `build-launcher.yml` | Tag `launcher-v*` | Builds launcher container to `cs-build/launcher` |
-| `build-builder.yml` | Tag `builder-v*` | Builds builder container to `cs-build/builder` |
+| `cloudbuild-launcher.yaml` | Tag `launcher-v*` | Builds launcher container to `cs-build/launcher` |
+| `cloudbuild-builder.yaml` | Tag `builder-v*` | Builds builder container to `cs-build/builder` |
+| `cloudbuild-pcr-capture.yaml` | Tag `pcr-capture-v*` | Builds PCR capture container to `cs-build/pcr-capture` |
 | `deploy-builder.yml` | Manual dispatch | Deploys CVM builders, creates candidate GCE images |
 | `promote-image.yml` | Manual dispatch | Promotes images: candidate → dev → prod |
 
 ### Deploying Images
 
 1. Go to **Actions** → **Deploy Builder** → **Run workflow**
-2. Enter all three versions:
+2. Enter all four versions:
    - `image_version`: e.g., `v0.1.0`
    - `builder_version`: e.g., `v0.1.0`
    - `launcher_version`: e.g., `v0.1.0`
+   - `pcr_capture_version`: e.g., `v0.1.0`
 3. On success, images are created as **candidates** (project-private, `cs-image-{env}-candidate` family)
 
 ### Promoting Images
@@ -80,11 +90,14 @@ Dev promotion **copies** the image (original stays in candidate). Prod promotion
 ### Building Components Separately
 
 ```bash
-# Build launcher (creates tag, triggers workflow)
+# Build launcher (creates tag, triggers Cloud Build)
 git tag launcher-v0.1.0 && git push origin launcher-v0.1.0
 
-# Build builder (creates tag, triggers workflow)
+# Build builder (creates tag, triggers Cloud Build)
 git tag builder-v0.1.0 && git push origin builder-v0.1.0
+
+# Build PCR capture (creates tag, triggers Cloud Build)
+git tag pcr-capture-v0.1.0 && git push origin pcr-capture-v0.1.0
 ```
 
 ## Quick Start (Manual)
@@ -141,6 +154,7 @@ Output: GCE image + attestation in `gs://$PROVENANCE_BUCKET/$OUTPUT_IMAGE_NAME/a
 | `IMAGE_ENV` | `debug` or `hardened` |
 | `STAGING_BUCKET` | GCS bucket for cos-customizer temp files (private) |
 | `PROVENANCE_BUCKET` | GCS bucket for attestations (public read) |
+| `PCR_CAPTURE_IMAGE` | PCR capture container image (e.g., `us-central1-docker.pkg.dev/proj/cs-build/pcr-capture:v0.1.0`) |
 
 ### Optional
 
@@ -152,6 +166,7 @@ Output: GCE image + attestation in `gs://$PROVENANCE_BUCKET/$OUTPUT_IMAGE_NAME/a
 | `OEM_SIZE` | `500M` | OEM partition size |
 | `DISK_SIZE_GB` | `11` | Output image disk size |
 | `BUILD_TIMEOUT_SECONDS` | `3000` | Cloud Build timeout |
+| `SEV_ZONE` | same as `ZONE` | Zone with SEV-SNP support for PCR capture VMs |
 
 ## Verification
 
@@ -204,7 +219,24 @@ gsutil cat gs://$PROVENANCE_BUCKET/$IMAGE_NAME/attestation.json > attestation.js
     "id": "2141778560127797559",
     "project": "my-project"
   },
-  "cloud_build_id": "46c0cc8d-5826-4d5e-a936-2dc38b0e347a"
+  "cloud_build_id": "46c0cc8d-5826-4d5e-a936-2dc38b0e347a",
+  "pcrs": {
+    "intel_tdx": {
+      "pcr4": "a1b2c3d4...",
+      "pcr8": "e5f6a7b8...",
+      "pcr9": "c9d0e1f2..."
+    },
+    "amd_sev_snp": {
+      "pcr4": "1a2b3c4d...",
+      "pcr8": "5e6f7a8b...",
+      "pcr9": "9c0d1e2f..."
+    },
+    "gcp_shielded_vm": {
+      "pcr4": "f1e2d3c4...",
+      "pcr8": "b5a6f7e8...",
+      "pcr9": "d9c0b1a2..."
+    }
+  }
 }
 ```
 
@@ -220,8 +252,11 @@ The `builder_images` field captures the SHA256 digests of the container images u
 | `source.go` | Uploads cos-customizer scripts to GCS |
 | `manifest.go` | Manifest structure and creation |
 | `attestation.go` | GCA attestation + storage |
+| `pcr.go` | PCR capture orchestration (boots VMs, collects PCRs) |
+| `pcr_capture/` | PCR capture workload (runs inside CVM) |
 | `cloudbuild-launcher.yaml` | Launcher build config |
 | `cloudbuild-builder.yaml` | Builder container build config |
+| `cloudbuild-pcr-capture.yaml` | PCR capture container build config |
 | `Dockerfile` | Builder container image |
 | `test-action.sh` | Local testing script (mirrors GitHub Action) |
 

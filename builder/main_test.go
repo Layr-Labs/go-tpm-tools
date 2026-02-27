@@ -10,6 +10,7 @@ func TestLoadConfig_RequiredFields(t *testing.T) {
 	// Save original env and restore after test
 	origEnv := map[string]string{
 		"PROJECT_ID":         os.Getenv("PROJECT_ID"),
+		"PROJECT_NUMBER":     os.Getenv("PROJECT_NUMBER"),
 		"LAUNCHER_ARTIFACT":  os.Getenv("LAUNCHER_ARTIFACT"),
 		"BASE_IMAGE":         os.Getenv("BASE_IMAGE"),
 		"BASE_IMAGE_PROJECT": os.Getenv("BASE_IMAGE_PROJECT"),
@@ -17,6 +18,7 @@ func TestLoadConfig_RequiredFields(t *testing.T) {
 		"PROVENANCE_BUCKET":  os.Getenv("PROVENANCE_BUCKET"),
 		"STAGING_BUCKET":     os.Getenv("STAGING_BUCKET"),
 		"IMAGE_ENV":          os.Getenv("IMAGE_ENV"),
+		"PCR_CAPTURE_IMAGE":  os.Getenv("PCR_CAPTURE_IMAGE"),
 	}
 	defer func() {
 		for k, v := range origEnv {
@@ -31,6 +33,7 @@ func TestLoadConfig_RequiredFields(t *testing.T) {
 	// Set all required fields
 	setAllRequired := func() {
 		os.Setenv("PROJECT_ID", "test-project")
+		os.Setenv("PROJECT_NUMBER", "123456789")
 		os.Setenv("LAUNCHER_ARTIFACT", "docker://us-central1/project/launcher/launcher/v1.0.0")
 		os.Setenv("BASE_IMAGE", "cos-tdx-123")
 		os.Setenv("BASE_IMAGE_PROJECT", "confidential-vm-images")
@@ -38,6 +41,7 @@ func TestLoadConfig_RequiredFields(t *testing.T) {
 		os.Setenv("PROVENANCE_BUCKET", "test-bucket")
 		os.Setenv("STAGING_BUCKET", "test-bucket")
 		os.Setenv("IMAGE_ENV", "hardened")
+		os.Setenv("PCR_CAPTURE_IMAGE", "us-central1-docker.pkg.dev/test/cs-build/pcr-capture:v0.1.0")
 	}
 
 	t.Run("all required fields set", func(t *testing.T) {
@@ -83,12 +87,14 @@ func TestLoadConfig_ImageEnv(t *testing.T) {
 
 	setMinimalEnv := func() {
 		os.Setenv("PROJECT_ID", "test-project")
+		os.Setenv("PROJECT_NUMBER", "123456789")
 		os.Setenv("LAUNCHER_ARTIFACT", "docker://us-central1/project/launcher/launcher/v1.0.0")
 		os.Setenv("BASE_IMAGE", "cos-tdx-123")
 		os.Setenv("BASE_IMAGE_PROJECT", "confidential-vm-images")
 		os.Setenv("OUTPUT_IMAGE_NAME", "test-image")
 		os.Setenv("PROVENANCE_BUCKET", "test-bucket")
 		os.Setenv("STAGING_BUCKET", "test-bucket")
+		os.Setenv("PCR_CAPTURE_IMAGE", "us-central1-docker.pkg.dev/test/cs-build/pcr-capture:v0.1.0")
 	}
 
 	tests := []struct {
@@ -147,6 +153,7 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	os.Setenv("PROVENANCE_BUCKET", "test-bucket")
 	os.Setenv("STAGING_BUCKET", "test-bucket")
 	os.Setenv("IMAGE_ENV", "hardened")
+	os.Setenv("PCR_CAPTURE_IMAGE", "us-central1-docker.pkg.dev/test/cs-build/pcr-capture:v0.1.0")
 
 	// Clear optional fields
 	os.Unsetenv("GCA_ENDPOINT")
@@ -197,6 +204,7 @@ func TestLoadConfig_IntegerParsing(t *testing.T) {
 
 	setMinimalEnv := func() {
 		os.Setenv("PROJECT_ID", "test-project")
+		os.Setenv("PROJECT_NUMBER", "123456789")
 		os.Setenv("LAUNCHER_ARTIFACT", "docker://us-central1/project/launcher/launcher/v1.0.0")
 		os.Setenv("BASE_IMAGE", "cos-tdx-123")
 		os.Setenv("BASE_IMAGE_PROJECT", "confidential-vm-images")
@@ -204,6 +212,7 @@ func TestLoadConfig_IntegerParsing(t *testing.T) {
 		os.Setenv("PROVENANCE_BUCKET", "test-bucket")
 		os.Setenv("STAGING_BUCKET", "test-bucket")
 		os.Setenv("IMAGE_ENV", "hardened")
+		os.Setenv("PCR_CAPTURE_IMAGE", "us-central1-docker.pkg.dev/test/cs-build/pcr-capture:v0.1.0")
 	}
 
 	t.Run("valid DISK_SIZE_GB", func(t *testing.T) {

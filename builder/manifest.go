@@ -6,26 +6,34 @@ import (
 	"time"
 )
 
+// PlatformPCRs contains the expected TPM PCR values for a CVM platform.
+type PlatformPCRs struct {
+	PCR4 string `json:"pcr4"`
+	PCR8 string `json:"pcr8"`
+	PCR9 string `json:"pcr9"`
+}
+
 // Manifest represents a build manifest binding provenance to output.
 type Manifest struct {
-	Version       string            `json:"version"`
-	Timestamp     time.Time         `json:"timestamp"`
-	Source        SourceInfo        `json:"source"`
-	BuilderImages map[string]string `json:"builder_images"`
-	BaseImage     ImageRef          `json:"base_image"`
-	Output        ImageRef          `json:"output"`
-	CloudBuildID  string            `json:"cloud_build_id"`
+	Version       string                  `json:"version"`
+	Timestamp     time.Time               `json:"timestamp"`
+	Source        SourceInfo              `json:"source"`
+	BuilderImages map[string]string       `json:"builder_images"`
+	BaseImage     ImageRef                `json:"base_image"`
+	Output        ImageRef                `json:"output"`
+	CloudBuildID  string                  `json:"cloud_build_id"`
+	PCRs          map[string]PlatformPCRs `json:"pcrs"`
 }
 
 // SourceInfo contains provenance information for build inputs.
 type SourceInfo struct {
-	Launcher ArtifactInfo `json:"launcher"`
-	Builder  ArtifactInfo `json:"builder"`
+	Launcher   ArtifactInfo `json:"launcher"`
+	Builder    ArtifactInfo `json:"builder"`
+	PCRCapture ArtifactInfo `json:"pcr_capture"`
 }
 
 // ArtifactInfo contains hash and provenance details for an artifact.
 type ArtifactInfo struct {
-	BinaryDigest  string               `json:"binary_digest,omitempty"`
 	ImageDigest   string               `json:"image_digest,omitempty"`
 	ProvenanceRef string               `json:"provenance_ref"`
 	GitURL        string               `json:"git_url,omitempty"`
@@ -60,23 +68,12 @@ type BuildAttestation struct {
 	GCAToken       string   `json:"gca_token"`
 }
 
-// LauncherResult contains the fetched launcher artifact and its provenance.
-type LauncherResult struct {
-	BinaryDigest  string // SHA256 hash of the launcher binary
-	ImageDigest   string // Container image digest
-	ProvenanceRef string
-	GitURL        string // Source repository URL from provenance
-	SourceSHA     string // Source commit SHA from provenance
-	Signature     *ProvenanceSignature
-}
-
-func newManifest(config *Config, launcher *LauncherResult, builder *BuilderResult, build *BuildResult) Manifest {
+func newManifest(config *Config, launcher *BuilderResult, builder *BuilderResult, pcrCapture *BuilderResult, build *BuildResult, pcrs map[string]PlatformPCRs) Manifest {
 	return Manifest{
 		Version:   "1",
 		Timestamp: time.Now().UTC(),
 		Source: SourceInfo{
 			Launcher: ArtifactInfo{
-				BinaryDigest:  launcher.BinaryDigest,
 				ImageDigest:   launcher.ImageDigest,
 				ProvenanceRef: launcher.ProvenanceRef,
 				GitURL:        launcher.GitURL,
@@ -90,6 +87,13 @@ func newManifest(config *Config, launcher *LauncherResult, builder *BuilderResul
 				SourceSHA:     builder.SourceSHA,
 				Signature:     builder.Signature,
 			},
+			PCRCapture: ArtifactInfo{
+				ImageDigest:   pcrCapture.ImageDigest,
+				ProvenanceRef: pcrCapture.ProvenanceRef,
+				GitURL:        pcrCapture.GitURL,
+				SourceSHA:     pcrCapture.SourceSHA,
+				Signature:     pcrCapture.Signature,
+			},
 		},
 		BuilderImages: build.BuilderImages,
 		BaseImage: ImageRef{
@@ -102,6 +106,7 @@ func newManifest(config *Config, launcher *LauncherResult, builder *BuilderResul
 			Project: config.ProjectID,
 		},
 		CloudBuildID: build.BuildID,
+		PCRs:         pcrs,
 	}
 }
 
