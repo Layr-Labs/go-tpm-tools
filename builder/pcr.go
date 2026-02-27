@@ -215,9 +215,6 @@ func buildCaptureInstance(config *Config, pcrCaptureImage string, spec platformS
 				Scopes: []string{"https://www.googleapis.com/auth/cloud-platform"},
 			},
 		},
-		Scheduling: &compute.Scheduling{
-			OnHostMaintenance: "TERMINATE",
-		},
 		ShieldedInstanceConfig: &compute.ShieldedInstanceConfig{
 			EnableSecureBoot: true,
 		},
@@ -226,6 +223,9 @@ func buildCaptureInstance(config *Config, pcrCaptureImage string, spec platformS
 	if spec.ConfidentialType != "" {
 		instance.ConfidentialInstanceConfig = &compute.ConfidentialInstanceConfig{
 			ConfidentialInstanceType: spec.ConfidentialType,
+		}
+		instance.Scheduling = &compute.Scheduling{
+			OnHostMaintenance: "TERMINATE",
 		}
 	}
 
