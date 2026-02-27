@@ -50,6 +50,11 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("fetch builder: %w", err)
 	}
 
+	pcrCapture, err := fetchPCRCapture(ctx, config)
+	if err != nil {
+		return fmt.Errorf("fetch pcr capture: %w", err)
+	}
+
 	// Upload cos-customizer scripts to GCS for Cloud Build to use as source
 	// Returns generation number to prevent TOCTOU attacks on the source archive
 	sourceGen, err := uploadSource(ctx, config)
@@ -62,13 +67,18 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("trigger build: %w", err)
 	}
 
+	// Pin the PCR capture image to the digest we verified provenance for,
+	// preventing TOCTOU attacks where the tag could be updated between
+	// provenance verification and VM launch.
+	pcrCaptureByDigest := stripImageTag(config.PCRCaptureImage) + "@" + pcrCapture.ImageDigest
+
 	// Capture PCR values by booting the image on all CVM platforms
-	pcrs, err := capturePCRs(ctx, config)
+	pcrs, err := capturePCRs(ctx, config, pcrCaptureByDigest, pcrCapture.ImageDigest)
 	if err != nil {
 		return fmt.Errorf("capture pcrs: %w", err)
 	}
 
-	manifest := newManifest(config, launcher, builder, build, pcrs)
+	manifest := newManifest(config, launcher, builder, pcrCapture, build, pcrs)
 
 	attestation, err := attest(ctx, config, manifest)
 	if err != nil {
@@ -87,8 +97,13 @@ func run(ctx context.Context) error {
 	return nil
 }
 
-func fetchLauncher(ctx context.Context, config *Config) (*LauncherResult, error) {
-	result, err := fetchLauncherWithProvenance(ctx, config)
+func fetchLauncher(ctx context.Context, config *Config) (*BuilderResult, error) {
+	launcherImageRef, err := dockerPathToImageRef(config.LauncherArtifact)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := fetchImageProvenance(ctx, config.ProjectID, launcherImageRef)
 	if err != nil {
 		return nil, err
 	}
@@ -96,10 +111,7 @@ func fetchLauncher(ctx context.Context, config *Config) (*LauncherResult, error)
 		return nil, fmt.Errorf("launcher missing provenance signature")
 	}
 
-	slog.Info("launcher fetched",
-		"binaryDigest", result.BinaryDigest,
-		"imageDigest", result.ImageDigest,
-	)
+	slog.Info("launcher fetched", "imageDigest", result.ImageDigest)
 	return result, nil
 }
 
@@ -113,6 +125,19 @@ func fetchBuilder(ctx context.Context, config *Config) (*BuilderResult, error) {
 	}
 
 	slog.Info("builder fetched", "imageDigest", result.ImageDigest)
+	return result, nil
+}
+
+func fetchPCRCapture(ctx context.Context, config *Config) (*BuilderResult, error) {
+	result, err := fetchImageProvenance(ctx, config.ProjectID, config.PCRCaptureImage)
+	if err != nil {
+		return nil, err
+	}
+	if result.Signature == nil {
+		return nil, fmt.Errorf("pcr capture image missing provenance signature")
+	}
+
+	slog.Info("pcr capture fetched", "imageDigest", result.ImageDigest)
 	return result, nil
 }
 

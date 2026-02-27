@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +13,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	sdkattest "github.com/Layr-Labs/go-tpm-tools/sdk/attest"
 	compute "google.golang.org/api/compute/v1"
 )
 
@@ -27,19 +30,21 @@ type platformSpec struct {
 	ConfidentialType string // empty for Shielded VM
 }
 
-// pcrCaptureResult matches the JSON output from the pcr-capture workload.
-type pcrCaptureResult struct {
-	Platform string            `json:"platform"`
-	PCRs     map[string]string `json:"pcrs"`
+// attestationEvidence wraps the raw attestation and challenge from pcr-capture.
+type attestationEvidence struct {
+	Challenge   string `json:"challenge"`   // base64-encoded nonce
+	Attestation string `json:"attestation"` // base64-encoded attestation proto
 }
 
 // capturePCRs boots the output image on all CVM platforms and collects PCR values.
-func capturePCRs(ctx context.Context, config *Config) (map[string]PlatformPCRs, error) {
+// pcrCaptureImage should be pinned by digest (e.g., "registry/image@sha256:...").
+// pcrCaptureImageDigest is the expected container image digest (e.g., "sha256:abc...") for attestation verification.
+func capturePCRs(ctx context.Context, config *Config, pcrCaptureImage, pcrCaptureImageDigest string) (map[string]PlatformPCRs, error) {
 	specs := []platformSpec{
 		{
 			Name:             "intel_tdx",
 			MachineType:      "c3-standard-4",
-			Zone:             config.Zone,
+			Zone:             config.TDXZone,
 			ConfidentialType: "TDX",
 		},
 		{
@@ -50,8 +55,8 @@ func capturePCRs(ctx context.Context, config *Config) (map[string]PlatformPCRs, 
 		},
 		{
 			Name:             "gcp_shielded_vm",
-			MachineType:      "n2d-standard-2",
-			Zone:             config.SEVZone,
+			MachineType:      "e2-medium",
+			Zone:             config.Zone,
 			ConfidentialType: "", // no confidential compute for shielded
 		},
 	}
@@ -80,7 +85,7 @@ func capturePCRs(ctx context.Context, config *Config) (map[string]PlatformPCRs, 
 		wg.Add(1)
 		go func(s platformSpec) {
 			defer wg.Done()
-			pcrs, err := capturePlatformPCRs(ctx, config, computeSvc, storageSvc, s)
+			pcrs, err := capturePlatformPCRs(ctx, config, pcrCaptureImage, pcrCaptureImageDigest, computeSvc, storageSvc, s)
 			results <- captureResult{spec: s, pcrs: pcrs, err: err}
 		}(spec)
 	}
@@ -113,8 +118,8 @@ func capturePCRs(ctx context.Context, config *Config) (map[string]PlatformPCRs, 
 	return allPCRs, nil
 }
 
-// capturePlatformPCRs creates a VM, waits for PCR results in GCS, and cleans up.
-func capturePlatformPCRs(ctx context.Context, config *Config, computeSvc *compute.Service, storageSvc *storage.Client, spec platformSpec) (PlatformPCRs, error) {
+// capturePlatformPCRs creates a VM, waits for attestation evidence in GCS, verifies it, and cleans up.
+func capturePlatformPCRs(ctx context.Context, config *Config, pcrCaptureImage, pcrCaptureImageDigest string, computeSvc *compute.Service, storageSvc *storage.Client, spec platformSpec) (PlatformPCRs, error) {
 	instanceName := fmt.Sprintf("pcr-capture-%s-%s", config.OutputImageName, spec.Name)
 	// GCE instance names must be <= 63 chars, lowercase, no underscores
 	instanceName = strings.ReplaceAll(instanceName, "_", "-")
@@ -140,30 +145,41 @@ func capturePlatformPCRs(ctx context.Context, config *Config, computeSvc *comput
 		}
 	}()
 
-	instance := buildCaptureInstance(config, spec, instanceName, gcsURI)
+	instance := buildCaptureInstance(config, pcrCaptureImage, spec, instanceName, gcsURI)
 
-	if _, err := computeSvc.Instances.Insert(config.ProjectID, spec.Zone, instance).Context(ctx).Do(); err != nil {
+	op, err := computeSvc.Instances.Insert(config.ProjectID, spec.Zone, instance).Context(ctx).Do()
+	if err != nil {
 		return PlatformPCRs{}, fmt.Errorf("create VM: %w", err)
 	}
+	if op.TargetId == 0 {
+		return PlatformPCRs{}, fmt.Errorf("instance insert returned zero TargetId")
+	}
+	slog.Info("PCR capture VM created",
+		"platform", spec.Name,
+		"instanceID", op.TargetId,
+	)
 
-	// Poll GCS for the result file.
+	// Poll GCS for the attestation evidence file.
 	bucket := storageSvc.Bucket(config.ProvenanceBucket)
-	result, err := pollForPCRResult(ctx, bucket, gcsPath, spec)
+	attestPath := fmt.Sprintf("%s/pcr_%s.attestation.json", config.OutputImageName, spec.Name)
+	evidence, err := pollForAttestation(ctx, bucket, attestPath, spec)
 	if err != nil {
 		return PlatformPCRs{}, err
 	}
 
-	return PlatformPCRs{
-		PCR4: result.PCRs["4"],
-		PCR8: result.PCRs["8"],
-		PCR9: result.PCRs["9"],
-	}, nil
+	// Verify attestation and extract PCRs.
+	pcrs, err := verifyPCRAttestation(evidence, op.TargetId, pcrCaptureImageDigest)
+	if err != nil {
+		return PlatformPCRs{}, fmt.Errorf("verify attestation: %w", err)
+	}
+
+	return pcrs, nil
 }
 
 // buildCaptureInstance creates the Compute Engine instance spec for a PCR capture VM.
-func buildCaptureInstance(config *Config, spec platformSpec, instanceName, gcsURI string) *compute.Instance {
+func buildCaptureInstance(config *Config, pcrCaptureImage string, spec platformSpec, instanceName, gcsURI string) *compute.Instance {
 	metadata := []*compute.MetadataItems{
-		{Key: "tee-image-reference", Value: strPtr(config.PCRCaptureImage)},
+		{Key: "tee-image-reference", Value: strPtr(pcrCaptureImage)},
 		{Key: "tee-restart-policy", Value: strPtr("Never")},
 		{Key: "tee-container-log-redirect", Value: strPtr("true")},
 		{Key: "tee-env-GCS_OUTPUT", Value: strPtr(gcsURI)},
@@ -216,8 +232,8 @@ func buildCaptureInstance(config *Config, spec platformSpec, instanceName, gcsUR
 	return instance
 }
 
-// pollForPCRResult polls GCS until the PCR result file appears or timeout.
-func pollForPCRResult(ctx context.Context, bucket *storage.BucketHandle, gcsPath string, spec platformSpec) (*pcrCaptureResult, error) {
+// pollForAttestation polls GCS until the attestation evidence file appears or timeout.
+func pollForAttestation(ctx context.Context, bucket *storage.BucketHandle, gcsPath string, spec platformSpec) (*attestationEvidence, error) {
 	deadline := time.Now().Add(pcrCaptureTimeout)
 
 	for time.Now().Before(deadline) {
@@ -226,22 +242,18 @@ func pollForPCRResult(ctx context.Context, bucket *storage.BucketHandle, gcsPath
 			data, err := io.ReadAll(reader)
 			reader.Close()
 			if err != nil {
-				return nil, fmt.Errorf("read GCS result: %w", err)
+				return nil, fmt.Errorf("read GCS attestation: %w", err)
 			}
 
-			var result pcrCaptureResult
-			if err := json.Unmarshal(data, &result); err != nil {
-				return nil, fmt.Errorf("parse PCR result: %w", err)
+			var evidence attestationEvidence
+			if err := json.Unmarshal(data, &evidence); err != nil {
+				return nil, fmt.Errorf("parse attestation evidence: %w", err)
+			}
+			if evidence.Challenge == "" || evidence.Attestation == "" {
+				return nil, fmt.Errorf("incomplete attestation evidence from %s", spec.Name)
 			}
 
-			// Validate the result has the expected PCR indices.
-			for _, idx := range []string{"4", "8", "9"} {
-				if result.PCRs[idx] == "" {
-					return nil, fmt.Errorf("PCR %s missing from %s result", idx, spec.Name)
-				}
-			}
-
-			return &result, nil
+			return &evidence, nil
 		}
 
 		select {
@@ -251,7 +263,72 @@ func pollForPCRResult(ctx context.Context, bucket *storage.BucketHandle, gcsPath
 		}
 	}
 
-	return nil, fmt.Errorf("timeout waiting for PCR capture result from %s after %v", spec.Name, pcrCaptureTimeout)
+	return nil, fmt.Errorf("timeout waiting for attestation from %s after %v", spec.Name, pcrCaptureTimeout)
+}
+
+// verifyPCRAttestation verifies the TPM+TEE attestation from a pcr-capture VM
+// and extracts verified PCR values.
+func verifyPCRAttestation(evidence *attestationEvidence, expectedInstanceID uint64, expectedImageDigest string) (PlatformPCRs, error) {
+	challenge, err := base64.StdEncoding.DecodeString(evidence.Challenge)
+	if err != nil {
+		return PlatformPCRs{}, fmt.Errorf("decode challenge: %w", err)
+	}
+	attestBytes, err := base64.StdEncoding.DecodeString(evidence.Attestation)
+	if err != nil {
+		return PlatformPCRs{}, fmt.Errorf("decode attestation: %w", err)
+	}
+
+	att, err := sdkattest.Parse(attestBytes)
+	if err != nil {
+		return PlatformPCRs{}, fmt.Errorf("parse attestation: %w", err)
+	}
+
+	// Verify TPM quote.
+	tpmResult, err := att.VerifyTPM(challenge, nil)
+	if err != nil {
+		return PlatformPCRs{}, fmt.Errorf("verify TPM: %w", err)
+	}
+
+	// Verify TEE binding (TDX/SEV-SNP). Shielded VM has no TEE layer.
+	if _, err := att.VerifyBoundTEE(challenge, nil); err != nil {
+		if att.Platform() != sdkattest.PlatformGCPShieldedVM {
+			return PlatformPCRs{}, fmt.Errorf("verify TEE: %w", err)
+		}
+	}
+
+	// Extract verified TPM claims with requested PCR indices.
+	claims, err := tpmResult.ExtractTPMClaims(sdkattest.ExtractOptions{
+		PCRIndices: []uint32{4, 8, 9},
+	})
+	if err != nil {
+		return PlatformPCRs{}, fmt.Errorf("extract TPM claims: %w", err)
+	}
+
+	// Verify instance ID matches the VM the builder launched.
+	if claims.GCE == nil {
+		return PlatformPCRs{}, fmt.Errorf("no GCE info in attestation")
+	}
+	if claims.GCE.InstanceID != expectedInstanceID {
+		return PlatformPCRs{}, fmt.Errorf("instance ID mismatch: attestation=%d, expected=%d", claims.GCE.InstanceID, expectedInstanceID)
+	}
+
+	// Verify the pcr-capture container image digest.
+	container, err := att.ExtractContainerClaims()
+	if err != nil {
+		return PlatformPCRs{}, fmt.Errorf("extract container claims: %w", err)
+	}
+	if container.ImageDigest != expectedImageDigest {
+		return PlatformPCRs{}, fmt.Errorf("container image digest mismatch: attestation=%q, expected=%q", container.ImageDigest, expectedImageDigest)
+	}
+
+	pcr4 := claims.PCRs[4]
+	pcr8 := claims.PCRs[8]
+	pcr9 := claims.PCRs[9]
+	return PlatformPCRs{
+		PCR4: hex.EncodeToString(pcr4[:]),
+		PCR8: hex.EncodeToString(pcr8[:]),
+		PCR9: hex.EncodeToString(pcr9[:]),
+	}, nil
 }
 
 func strPtr(s string) *string {

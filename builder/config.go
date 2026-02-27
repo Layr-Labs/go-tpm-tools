@@ -31,11 +31,12 @@ type Config struct {
 	GCAEndpoint       string
 	ImageEnv          string
 	Zone              string
+	TDXZone           string // Zone for TDX platforms (default: same as Zone)
+	SEVZone           string // Zone for SEV-SNP/Shielded VM platforms (default: same as Zone)
 	DiskSizeGB        int
 	OEMSize           string
 	BuildTimeout      int64
 	PCRCaptureImage   string // e.g. "us-central1-docker.pkg.dev/proj/cs-build/pcr-capture:v0.1.0"
-	SEVZone           string // Zone with SEV-SNP support (default: same as Zone)
 }
 
 func loadConfig(ctx context.Context) (*Config, error) {
@@ -55,6 +56,7 @@ func loadConfig(ctx context.Context) (*Config, error) {
 		Zone:              zone,
 		OEMSize:           envOr("OEM_SIZE", defaultOEMSize),
 		PCRCaptureImage:   os.Getenv("PCR_CAPTURE_IMAGE"),
+		TDXZone:           envOr("TDX_ZONE", zone),
 		SEVZone:           envOr("SEV_ZONE", zone),
 	}
 

@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	attestpb "github.com/Layr-Labs/go-tpm-tools/proto/attest"
@@ -25,6 +26,12 @@ import (
 type pcrResult struct {
 	Platform string            `json:"platform"`
 	PCRs     map[string]string `json:"pcrs"`
+}
+
+// attestationEvidence wraps the raw attestation and challenge for builder verification.
+type attestationEvidence struct {
+	Challenge   string `json:"challenge"`   // base64-encoded nonce
+	Attestation string `json:"attestation"` // base64-encoded attestation proto
 }
 
 func main() {
@@ -49,7 +56,7 @@ func main() {
 		Timeout: 30 * time.Second,
 	}
 
-	attestBytes, err := fetchAttestation(client)
+	nonce, attestBytes, err := fetchAttestation(client)
 	if err != nil {
 		fatal("fetch attestation: %v", err)
 	}
@@ -67,6 +74,7 @@ func main() {
 		fatal("extract PCRs: %v", err)
 	}
 
+	// Upload PCR JSON (informational, for debugging/backward compat).
 	result := pcrResult{
 		Platform: platform,
 		PCRs: map[string]string{
@@ -84,6 +92,22 @@ func main() {
 	fmt.Fprintf(os.Stderr, "uploading PCR result to %s\n", gcsOutput)
 	if err := uploadToGCS(context.Background(), gcsOutput, data); err != nil {
 		fatal("upload to GCS: %v", err)
+	}
+
+	// Upload attestation evidence (source of truth for builder verification).
+	evidence := attestationEvidence{
+		Challenge:   base64.StdEncoding.EncodeToString(nonce),
+		Attestation: base64.StdEncoding.EncodeToString(attestBytes),
+	}
+	evidenceData, err := json.Marshal(evidence)
+	if err != nil {
+		fatal("marshal attestation evidence: %v", err)
+	}
+
+	attestURI := strings.TrimSuffix(gcsOutput, ".json") + ".attestation.json"
+	fmt.Fprintf(os.Stderr, "uploading attestation evidence to %s\n", attestURI)
+	if err := uploadToGCS(context.Background(), attestURI, evidenceData); err != nil {
+		fatal("upload attestation to GCS: %v", err)
 	}
 	fmt.Fprintf(os.Stderr, "done\n")
 }
@@ -104,10 +128,10 @@ func waitForSocket(path string, timeout time.Duration) error {
 	return fmt.Errorf("socket %s did not appear within %v", path, timeout)
 }
 
-func fetchAttestation(client *http.Client) ([]byte, error) {
-	nonce := make([]byte, 32)
+func fetchAttestation(client *http.Client) (nonce []byte, attestBytes []byte, err error) {
+	nonce = make([]byte, 32)
 	if _, err := rand.Read(nonce); err != nil {
-		return nil, fmt.Errorf("generate nonce: %w", err)
+		return nil, nil, fmt.Errorf("generate nonce: %w", err)
 	}
 	reqBody, err := json.Marshal(struct {
 		Challenge string `json:"challenge"`
@@ -115,23 +139,23 @@ func fetchAttestation(client *http.Client) ([]byte, error) {
 		Challenge: base64.StdEncoding.EncodeToString(nonce),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
+		return nil, nil, fmt.Errorf("marshal request: %w", err)
 	}
 
 	resp, err := client.Post("http://localhost/v1/bound_evidence", "application/json", bytes.NewReader(reqBody))
 	if err != nil {
-		return nil, fmt.Errorf("POST /v1/bound_evidence: %w", err)
+		return nil, nil, fmt.Errorf("POST /v1/bound_evidence: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
+		return nil, nil, fmt.Errorf("read response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(respBytes))
+		return nil, nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(respBytes))
 	}
-	return respBytes, nil
+	return nonce, respBytes, nil
 }
 
 func detectPlatform(attestation *attestpb.Attestation) string {
