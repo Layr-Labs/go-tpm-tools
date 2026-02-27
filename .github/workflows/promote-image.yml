@@ -31,6 +31,7 @@ jobs:
       image_name: ${{ inputs.image_name }}
       image_env: ${{ steps.detect.outputs.image_env }}
       target_family: ${{ steps.detect.outputs.target_family }}
+      dev_image_name: ${{ steps.detect.outputs.dev_image_name }}
     steps:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -67,32 +68,61 @@ jobs:
           fi
           echo "image_env=$IMAGE_ENV" >> $GITHUB_OUTPUT
 
-          # Get current family
+          # Dev copy name (used for both dev and prod promotion)
+          DEV_IMAGE_NAME="${IMAGE_NAME}-dev"
+          echo "dev_image_name=$DEV_IMAGE_NAME" >> $GITHUB_OUTPUT
+
+          # Get current family of the original image
           CURRENT_FAMILY=$(gcloud compute images describe "$IMAGE_NAME" \
             --project="${{ env.PROJECT_ID }}" \
             --format='value(family)' 2>/dev/null || echo "")
 
-          # Determine expected current family and target family
+          # Check if dev copy exists
+          DEV_COPY_EXISTS=false
+          if gcloud compute images describe "$DEV_IMAGE_NAME" \
+              --project="${{ env.PROJECT_ID }}" 2>/dev/null; then
+            DEV_COPY_EXISTS=true
+          fi
+
+          CANDIDATE_FAMILY="cs-image-${IMAGE_ENV}-candidate"
+
           if [ "$TARGET_TIER" = "dev" ]; then
-            EXPECTED_FAMILY="cs-image-${IMAGE_ENV}-candidate"
             TARGET_FAMILY="cs-image-${IMAGE_ENV}-dev"
+
+            # Original must be in candidate family
+            if [ "$CURRENT_FAMILY" != "$CANDIDATE_FAMILY" ]; then
+              echo "::error::Promotion path violation: image is in family '$CURRENT_FAMILY' but must be in '$CANDIDATE_FAMILY' to promote to dev"
+              exit 1
+            fi
+
+            # Dev copy must NOT already exist (overwrite protection)
+            if [ "$DEV_COPY_EXISTS" = "true" ]; then
+              echo "::error::Dev copy '$DEV_IMAGE_NAME' already exists. Image has already been promoted to dev."
+              exit 1
+            fi
+
           elif [ "$TARGET_TIER" = "prod" ]; then
-            EXPECTED_FAMILY="cs-image-${IMAGE_ENV}-dev"
             TARGET_FAMILY="cs-image-${IMAGE_ENV}"
+
+            # Original must still be in candidate family (not already promoted to prod)
+            if [ "$CURRENT_FAMILY" != "$CANDIDATE_FAMILY" ]; then
+              echo "::error::Promotion path violation: image is in family '$CURRENT_FAMILY' but must be in '$CANDIDATE_FAMILY' to promote to prod"
+              exit 1
+            fi
+
+            # Dev copy MUST exist (enforces candidate → dev → prod path)
+            if [ "$DEV_COPY_EXISTS" != "true" ]; then
+              echo "::error::Dev copy '$DEV_IMAGE_NAME' not found. Image must be promoted to dev before prod."
+              exit 1
+            fi
           fi
 
           echo "target_family=$TARGET_FAMILY" >> $GITHUB_OUTPUT
 
           echo "Image type: $IMAGE_ENV"
           echo "Current family: $CURRENT_FAMILY"
-          echo "Expected family: $EXPECTED_FAMILY"
+          echo "Dev copy exists: $DEV_COPY_EXISTS"
           echo "Target family: $TARGET_FAMILY"
-
-          # Enforce strict promotion path
-          if [ "$CURRENT_FAMILY" != "$EXPECTED_FAMILY" ]; then
-            echo "::error::Promotion path violation: image is in family '$CURRENT_FAMILY' but must be in '$EXPECTED_FAMILY' to promote to $TARGET_TIER"
-            exit 1
-          fi
           echo "✓ Promotion path valid"
 
       - name: Verify Attestation Exists
@@ -119,26 +149,30 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Update Image Family
+      - name: Copy Image to Dev Family
         run: |
-          gcloud compute images update "${{ needs.validate.outputs.image_name }}" \
+          gcloud compute images create "${{ needs.validate.outputs.dev_image_name }}" \
+            --source-image="${{ needs.validate.outputs.image_name }}" \
+            --source-image-project="${{ env.PROJECT_ID }}" \
             --family="${{ needs.validate.outputs.target_family }}" \
             --project="${{ env.PROJECT_ID }}"
-          echo "✓ Image promoted to family ${{ needs.validate.outputs.target_family }}"
+          echo "✓ Created dev copy '${{ needs.validate.outputs.dev_image_name }}' in family ${{ needs.validate.outputs.target_family }}"
+          echo "✓ Original '${{ needs.validate.outputs.image_name }}' unchanged in candidate"
 
       - name: Summary
         run: |
           cat <<EOF >> $GITHUB_STEP_SUMMARY
-          ### Promoted to Dev
+          ### Promoted to Dev (Copy)
 
           | Property | Value |
           |:--- |:--- |
-          | **Image** | \`${{ needs.validate.outputs.image_name }}\` |
+          | **Dev Copy** | \`${{ needs.validate.outputs.dev_image_name }}\` |
+          | **Original** | \`${{ needs.validate.outputs.image_name }}\` (unchanged in candidate) |
           | **Type** | \`${{ needs.validate.outputs.image_env }}\` |
           | **Family** | \`${{ needs.validate.outputs.target_family }}\` |
           | **Access** | Project-only |
 
-          **Next:** Promote to prod via **Actions → Promote Image** with target \`prod\`
+          **Next:** Promote to prod via **Actions → Promote Image** with target \`prod\` (uses the original image name)
           EOF
 
   promote-prod:
@@ -201,7 +235,8 @@ jobs:
 
           | Property | Value |
           |:--- |:--- |
-          | **Image** | \`${{ needs.validate.outputs.image_name }}\` |
+          | **Image** | \`${{ needs.validate.outputs.image_name }}\` (original, preserves attestation chain) |
+          | **Dev Copy** | \`${{ needs.validate.outputs.dev_image_name }}\` (persists in dev family) |
           | **Type** | \`${{ needs.validate.outputs.image_env }}\` |
           | **Family** | \`${{ needs.validate.outputs.target_family }}\` |
           | **Access** | \`allAuthenticatedUsers\` |
