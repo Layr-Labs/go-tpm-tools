@@ -336,8 +336,10 @@ func extractSourceInfo(build *grafeas.BuildOccurrence) (string, string, error) {
 	if v1 := build.GetInTotoSlsaProvenanceV1(); v1 != nil {
 		for _, dep := range v1.GetPredicate().GetBuildDefinition().GetResolvedDependencies() {
 			if uri := dep.GetUri(); uri != "" {
-				if sha, ok := dep.GetDigest()["sha1"]; ok {
-					return uri, sha, nil
+				for _, key := range []string{"gitCommit", "sha1"} {
+					if sha, ok := dep.GetDigest()[key]; ok {
+						return uri, sha, nil
+					}
 				}
 			}
 		}
