@@ -105,6 +105,7 @@ jobs:
     name: Deploy ${{ matrix.image_env }}
     needs: validate
     runs-on: ubuntu-latest
+    environment: production
     strategy:
       matrix:
         image_env: [debug, hardened]
