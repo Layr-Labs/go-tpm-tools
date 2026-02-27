@@ -6,15 +6,23 @@ import (
 	"time"
 )
 
+// PlatformPCRs contains the expected TPM PCR values for a CVM platform.
+type PlatformPCRs struct {
+	PCR4 string `json:"pcr4"`
+	PCR8 string `json:"pcr8"`
+	PCR9 string `json:"pcr9"`
+}
+
 // Manifest represents a build manifest binding provenance to output.
 type Manifest struct {
-	Version       string            `json:"version"`
-	Timestamp     time.Time         `json:"timestamp"`
-	Source        SourceInfo        `json:"source"`
-	BuilderImages map[string]string `json:"builder_images"`
-	BaseImage     ImageRef          `json:"base_image"`
-	Output        ImageRef          `json:"output"`
-	CloudBuildID  string            `json:"cloud_build_id"`
+	Version       string                   `json:"version"`
+	Timestamp     time.Time                `json:"timestamp"`
+	Source        SourceInfo               `json:"source"`
+	BuilderImages map[string]string        `json:"builder_images"`
+	BaseImage     ImageRef                 `json:"base_image"`
+	Output        ImageRef                 `json:"output"`
+	CloudBuildID  string                   `json:"cloud_build_id"`
+	PCRs          map[string]PlatformPCRs  `json:"pcrs"`
 }
 
 // SourceInfo contains provenance information for build inputs.
@@ -70,7 +78,7 @@ type LauncherResult struct {
 	Signature     *ProvenanceSignature
 }
 
-func newManifest(config *Config, launcher *LauncherResult, builder *BuilderResult, build *BuildResult) Manifest {
+func newManifest(config *Config, launcher *LauncherResult, builder *BuilderResult, build *BuildResult, pcrs map[string]PlatformPCRs) Manifest {
 	return Manifest{
 		Version:   "1",
 		Timestamp: time.Now().UTC(),
@@ -102,6 +110,7 @@ func newManifest(config *Config, launcher *LauncherResult, builder *BuilderResul
 			Project: config.ProjectID,
 		},
 		CloudBuildID: build.BuildID,
+		PCRs: pcrs,
 	}
 }
 

@@ -20,6 +20,7 @@ const (
 // Config holds builder configuration from environment variables.
 type Config struct {
 	ProjectID         string
+	ProjectNumber     string
 	LauncherArtifact  string // docker://REGION/PROJECT/REPO/IMAGE/VERSION
 	BaseImage         string
 	BaseImageProject  string
@@ -33,11 +34,15 @@ type Config struct {
 	DiskSizeGB        int
 	OEMSize           string
 	BuildTimeout      int64
+	PCRCaptureImage   string // e.g. "us-central1-docker.pkg.dev/proj/cs-build/pcr-capture:v0.1.0"
+	SEVZone           string // Zone with SEV-SNP support (default: same as Zone)
 }
 
 func loadConfig(ctx context.Context) (*Config, error) {
+	zone := envOr("ZONE", defaultZone)
 	c := &Config{
 		ProjectID:         os.Getenv("PROJECT_ID"),
+		ProjectNumber:     os.Getenv("PROJECT_NUMBER"),
 		LauncherArtifact:  os.Getenv("LAUNCHER_ARTIFACT"),
 		BaseImage:         os.Getenv("BASE_IMAGE"),
 		BaseImageProject:  os.Getenv("BASE_IMAGE_PROJECT"),
@@ -47,8 +52,10 @@ func loadConfig(ctx context.Context) (*Config, error) {
 		ProvenanceBucket:  os.Getenv("PROVENANCE_BUCKET"),
 		GCAEndpoint:       envOr("GCA_ENDPOINT", defaultGCAEndpoint),
 		ImageEnv:          os.Getenv("IMAGE_ENV"),
-		Zone:              envOr("ZONE", defaultZone),
+		Zone:              zone,
 		OEMSize:           envOr("OEM_SIZE", defaultOEMSize),
+		PCRCaptureImage:   os.Getenv("PCR_CAPTURE_IMAGE"),
+		SEVZone:           envOr("SEV_ZONE", zone),
 	}
 
 	var err error
@@ -138,12 +145,14 @@ func requireEnv(c *Config) error {
 	}
 
 	check("PROJECT_ID", c.ProjectID)
+	check("PROJECT_NUMBER", c.ProjectNumber)
 	check("LAUNCHER_ARTIFACT", c.LauncherArtifact)
 	check("BASE_IMAGE", c.BaseImage)
 	check("BASE_IMAGE_PROJECT", c.BaseImageProject)
 	check("OUTPUT_IMAGE_NAME", c.OutputImageName)
 	check("STAGING_BUCKET", c.StagingBucket)
 	check("PROVENANCE_BUCKET", c.ProvenanceBucket)
+	check("PCR_CAPTURE_IMAGE", c.PCRCaptureImage)
 
 	if missing != "" {
 		return fmt.Errorf("missing required env: %s", missing)

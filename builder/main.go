@@ -62,7 +62,13 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("trigger build: %w", err)
 	}
 
-	manifest := newManifest(config, launcher, builder, build)
+	// Capture PCR values by booting the image on all CVM platforms
+	pcrs, err := capturePCRs(ctx, config)
+	if err != nil {
+		return fmt.Errorf("capture pcrs: %w", err)
+	}
+
+	manifest := newManifest(config, launcher, builder, build, pcrs)
 
 	attestation, err := attest(ctx, config, manifest)
 	if err != nil {

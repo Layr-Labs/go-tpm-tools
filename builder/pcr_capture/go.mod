@@ -1,14 +1,14 @@
-module github.com/Layr-Labs/go-tpm-tools/sdk/testdata/workload
+module github.com/Layr-Labs/go-tpm-tools/builder/pcr_capture
 
-go 1.23.0
+go 1.24.0
 
-toolchain go1.24.4
+toolchain go1.24.2
 
-replace github.com/Layr-Labs/go-tpm-tools => ../../..
+replace github.com/Layr-Labs/go-tpm-tools => ../..
 
 require (
 	github.com/Layr-Labs/go-tpm-tools v0.4.4
-	google.golang.org/protobuf v1.36.7
+	google.golang.org/protobuf v1.36.11
 )
 
 require (

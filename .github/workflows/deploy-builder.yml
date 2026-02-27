@@ -15,6 +15,10 @@ on:
         description: 'Launcher version (e.g., v0.1.0)'
         required: true
         type: string
+      pcr_capture_version:
+        description: 'PCR capture version (e.g., v0.1.0)'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -40,6 +44,7 @@ jobs:
       image_version: ${{ steps.versions.outputs.image_version }}
       builder_version: ${{ steps.versions.outputs.builder_version }}
       launcher_version: ${{ steps.versions.outputs.launcher_version }}
+      pcr_capture_version: ${{ steps.versions.outputs.pcr_capture_version }}
     steps:
       - name: Validate Versions
         id: versions
@@ -49,6 +54,7 @@ jobs:
           IMAGE_VERSION="${{ inputs.image_version }}"
           BUILDER_VERSION="${{ inputs.builder_version }}"
           LAUNCHER_VERSION="${{ inputs.launcher_version }}"
+          PCR_CAPTURE_VERSION="${{ inputs.pcr_capture_version }}"
 
           if [[ ! "$IMAGE_VERSION" =~ $REGEX ]]; then
             echo "::error::Image version '$IMAGE_VERSION' invalid. Expected vX.Y.Z"
@@ -62,14 +68,20 @@ jobs:
             echo "::error::Launcher version '$LAUNCHER_VERSION' invalid. Expected vX.Y.Z"
             exit 1
           fi
+          if [[ ! "$PCR_CAPTURE_VERSION" =~ $REGEX ]]; then
+            echo "::error::PCR capture version '$PCR_CAPTURE_VERSION' invalid. Expected vX.Y.Z"
+            exit 1
+          fi
 
           echo "image_version=$IMAGE_VERSION" >> $GITHUB_OUTPUT
           echo "builder_version=$BUILDER_VERSION" >> $GITHUB_OUTPUT
           echo "launcher_version=$LAUNCHER_VERSION" >> $GITHUB_OUTPUT
+          echo "pcr_capture_version=$PCR_CAPTURE_VERSION" >> $GITHUB_OUTPUT
 
           echo "Image: $IMAGE_VERSION"
           echo "Builder: $BUILDER_VERSION"
           echo "Launcher: $LAUNCHER_VERSION"
+          echo "PCR Capture: $PCR_CAPTURE_VERSION"
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -100,6 +112,15 @@ jobs:
             exit 1
           fi
           echo "✓ Builder image exists"
+
+          PCR_CAPTURE_IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO_BUILDER }}/pcr-capture:${{ steps.versions.outputs.pcr_capture_version }}"
+          echo "Checking PCR capture image: $PCR_CAPTURE_IMAGE"
+          if ! gcloud artifacts docker images describe "$PCR_CAPTURE_IMAGE" --project="${{ env.PROJECT_ID }}"; then
+            echo "::error::PCR capture image not found: $PCR_CAPTURE_IMAGE"
+            echo "Run the build-pcr-capture trigger first with tag pcr-capture-${{ steps.versions.outputs.pcr_capture_version }}"
+            exit 1
+          fi
+          echo "✓ PCR capture image exists"
 
   deploy:
     name: Deploy ${{ matrix.image_env }}
@@ -162,6 +183,8 @@ jobs:
           # docker:// format: docker://REGION/PROJECT/REPO/IMAGE/VERSION
           LAUNCHER_ARTIFACT="docker://${{ env.REGION }}/${{ env.PROJECT_ID }}/${{ env.AR_REPO_BUILDER }}/launcher/${{ needs.validate.outputs.launcher_version }}"
 
+          PCR_CAPTURE_IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO_BUILDER }}/pcr-capture:${{ needs.validate.outputs.pcr_capture_version }}"
+
           # Build metadata
           METADATA_PAIRS=(
             "tee-image-reference=${AR_IMAGE}"
@@ -179,6 +202,7 @@ jobs:
             "tee-env-GCA_ENDPOINT=https://confidentialcomputing.googleapis.com"
             "tee-env-IMAGE_ENV=${{ matrix.image_env }}"
             "tee-env-ZONE=${{ env.ZONE }}"
+            "tee-env-PCR_CAPTURE_IMAGE=${PCR_CAPTURE_IMAGE}"
           )
           
           IFS="~"
@@ -272,6 +296,7 @@ jobs:
           | **Image Version** | \`${{ needs.validate.outputs.image_version }}\` |
           | **Builder** | \`${{ needs.validate.outputs.builder_version }}\` |
           | **Launcher** | \`${{ needs.validate.outputs.launcher_version }}\` |
+          | **PCR Capture** | \`${{ needs.validate.outputs.pcr_capture_version }}\` |
           | **Image** | \`${{ steps.config.outputs.image_name }}\` |
           | **Family** | \`${{ steps.config.outputs.image_family }}\` |
           | **Status** | Candidate (project-private) |

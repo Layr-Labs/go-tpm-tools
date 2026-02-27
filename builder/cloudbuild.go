@@ -113,6 +113,8 @@ func triggerImageBuild(ctx context.Context, config *Config, launcherImage string
 				},
 			},
 			// Step 8: Finish image build
+			// The ek-certificate-license tells GCE to provision EK/AK certs in the vTPM,
+			// which is required for attestation on all platforms (including Shielded VM).
 			{
 				Name: "gcr.io/cos-cloud/cos-customizer",
 				Id:   "FinishImageBuild",
@@ -123,6 +125,7 @@ func triggerImageBuild(ctx context.Context, config *Config, launcherImage string
 					fmt.Sprintf("-image-name=%s", config.OutputImageName),
 					fmt.Sprintf("-image-family=%s", config.OutputImageFamily),
 					fmt.Sprintf("-image-project=%s", config.ProjectID),
+					"-licenses=projects/confidential-space-images/global/licenses/ek-certificate-license",
 					fmt.Sprintf("-zone=%s", config.Zone),
 					fmt.Sprintf("-project=%s", config.ProjectID),
 				},
