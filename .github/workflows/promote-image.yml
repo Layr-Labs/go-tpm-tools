@@ -159,6 +159,14 @@ jobs:
           echo "✓ Created dev copy '${{ needs.validate.outputs.dev_image_name }}' in family ${{ needs.validate.outputs.target_family }}"
           echo "✓ Original '${{ needs.validate.outputs.image_name }}' unchanged in candidate"
 
+      - name: Grant Dev Project Access
+        run: |
+          gcloud compute images add-iam-policy-binding "${{ needs.validate.outputs.dev_image_name }}" \
+            --member="serviceAccount:${{ secrets.GCP_COMPUTE_SEPOLIA_DEV_PROJECT_NUMBER }}-compute@developer.gserviceaccount.com" \
+            --role=roles/compute.imageUser \
+            --project="${{ env.PROJECT_ID }}"
+          echo "✓ Granted dev project compute SA access to ${{ needs.validate.outputs.dev_image_name }}"
+
       - name: Summary
         run: |
           cat <<EOF >> $GITHUB_STEP_SUMMARY
