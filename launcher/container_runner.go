@@ -3,6 +3,7 @@ package launcher
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -664,8 +665,19 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 		r.logger.Info("MemoryMonitoring is disabled by the VM operator")
 	}
 
+	// Derive storage encryption key from the KMS mnemonic.
+	if r.mnemonic == "" {
+		return fmt.Errorf("mnemonic is required for storage encryption but not available")
+	}
+	storageKeyBytes, err := storage.DeriveStorageKey(r.mnemonic)
+	if err != nil {
+		return fmt.Errorf("failed to derive storage key from mnemonic: %v", err)
+	}
+	storageKey := hex.EncodeToString(storageKeyBytes)
+	storage.ZeroBytes(storageKeyBytes)
+
 	r.logger.Info("Setting up encrypted volume")
-	if err := storage.SetupSecondaryEncryptedVolume(r.logger); err != nil {
+	if err := storage.SetupSecondaryEncryptedVolume(r.logger, storageKey); err != nil {
 		return fmt.Errorf("failed to set up encrypted volume: %v", err)
 	}
 	r.logger.Info("Encrypted volume setup complete")
