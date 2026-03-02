@@ -12,6 +12,6 @@ require (
 )
 
 require (
-	github.com/google/go-sev-guest v0.14.0 // indirect
+	github.com/google/go-sev-guest v0.14.1 // indirect
 	github.com/google/go-tdx-guest v0.3.2-0.20241009005452-097ee70d0843 // indirect
 )

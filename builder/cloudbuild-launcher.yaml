@@ -1,0 +1,109 @@
+# Cloud Build config for building the launcher binary with SLSA provenance.
+#
+# Designed for trigger-based builds (tag pattern: launcher-v*).
+# The trigger sets _VERSION=$TAG_NAME (e.g., launcher-v1.0.0).
+# A ParseVersion step extracts the clean version (v1.0.0) and both
+# tags are pushed to the registry (same digest, provenance is digest-based).
+#
+# Provenance is generated for the image in the `images:` field,
+# which uses ${_VERSION} (the full tag name). Provenance lookup is
+# digest-based so it works for both tags.
+#
+# Trigger creation (one-time):
+#   gcloud builds triggers create github \
+#     --name="build-launcher" \
+#     --repository="projects/tee-compute-global/locations/us-central1/connections/layr-labs/repositories/go-tpm-tools" \
+#     --tag-pattern="launcher-v.*" \
+#     --build-config="builder/cloudbuild-launcher.yaml" \
+#     --region="us-central1" \
+#     --service-account="projects/tee-compute-global/serviceAccounts/verifiable-builds@tee-compute-global.iam.gserviceaccount.com" \
+#     --substitutions="_VERSION=\$TAG_NAME,_REGION=us-central1" \
+#     --project="tee-compute-global"
+
+substitutions:
+  '_VERSION': '${TAG_NAME}'
+  '_REGION': 'us-central1'
+
+steps:
+  # Step 0: Parse the clean version from the tag name
+  # Strips "launcher-" prefix from _VERSION. For manual runs, pass _VERSION directly.
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: ParseVersion
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        VERSION=$$(echo "${_VERSION}" | sed 's/^launcher-//')
+        if [[ ! "$$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$$ ]]; then
+          echo "ERROR: Invalid version: $$VERSION (expected v<major>.<minor>.<patch>)"
+          exit 1
+        fi
+        echo "$$VERSION" > /workspace/version.txt
+        echo "Parsed version: $$VERSION (from _VERSION: ${_VERSION})"
+
+  # Step 1: Build the launcher binary
+  - name: golang:1.23
+    id: BuildLauncher
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        cd launcher
+        CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOWORK=off go build \
+          -o /workspace/launcher-bin \
+          -ldflags="-X 'main.BuildCommit=$COMMIT_SHA'" \
+          ./launcher
+        echo "Built launcher binary:"
+        ls -la /workspace/launcher-bin
+        sha256sum /workspace/launcher-bin
+
+  # Step 2: Create a minimal Dockerfile for the launcher
+  - name: 'gcr.io/cloud-builders/docker'
+    id: CreateDockerfile
+    entrypoint: /bin/bash
+    args:
+      - -c
+      - |
+        cat > /workspace/Dockerfile.launcher << 'EOF'
+        FROM scratch
+        COPY launcher-bin /launcher
+        # This is a binary-only image for provenance tracking
+        # The launcher is extracted by the builder, not run as a container
+        ENTRYPOINT ["/launcher"]
+        EOF
+        cat /workspace/Dockerfile.launcher
+
+  # Step 3: Build container image with both tags
+  - name: 'gcr.io/cloud-builders/docker'
+    id: Build
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        VERSION=$$(cat /workspace/version.txt)
+        docker build \
+          -t "${_REGION}-docker.pkg.dev/tee-compute-global/cs-build/launcher:${_VERSION}" \
+          -t "${_REGION}-docker.pkg.dev/tee-compute-global/cs-build/launcher:$$VERSION" \
+          -f /workspace/Dockerfile.launcher \
+          /workspace
+
+  # Step 4: Push both tags to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: Push
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        docker push --all-tags "${_REGION}-docker.pkg.dev/tee-compute-global/cs-build/launcher"
+
+images:
+  - '${_REGION}-docker.pkg.dev/tee-compute-global/cs-build/launcher:${_VERSION}'
+
+timeout: '600s'
+
+options:
+  requestedVerifyOption: VERIFIED
+  logging: CLOUD_LOGGING_ONLY

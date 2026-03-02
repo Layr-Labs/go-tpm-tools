@@ -1,0 +1,120 @@
+package main
+
+import (
+	"crypto/sha256"
+	"encoding/json"
+	"time"
+)
+
+// PlatformPCRs contains the expected TPM PCR values for a CVM platform.
+type PlatformPCRs struct {
+	PCR4 string `json:"pcr4"`
+	PCR8 string `json:"pcr8"`
+	PCR9 string `json:"pcr9"`
+}
+
+// Manifest represents a build manifest binding provenance to output.
+type Manifest struct {
+	Version       string                  `json:"version"`
+	Timestamp     time.Time               `json:"timestamp"`
+	Source        SourceInfo              `json:"source"`
+	BuilderImages map[string]string       `json:"builder_images"`
+	BaseImage     ImageRef                `json:"base_image"`
+	Output        ImageRef                `json:"output"`
+	CloudBuildID  string                  `json:"cloud_build_id"`
+	PCRs          map[string]PlatformPCRs `json:"pcrs"`
+}
+
+// SourceInfo contains provenance information for build inputs.
+type SourceInfo struct {
+	Launcher   ArtifactInfo `json:"launcher"`
+	Builder    ArtifactInfo `json:"builder"`
+	PCRCapture ArtifactInfo `json:"pcr_capture"`
+}
+
+// ArtifactInfo contains hash and provenance details for an artifact.
+type ArtifactInfo struct {
+	ImageDigest   string               `json:"image_digest,omitempty"`
+	ProvenanceRef string               `json:"provenance_ref"`
+	GitURL        string               `json:"git_url,omitempty"`
+	SourceSHA     string               `json:"source_sha,omitempty"`
+	Signature     *ProvenanceSignature `json:"signature,omitempty"`
+}
+
+// ProvenanceSignature contains a SLSA provenance signature.
+type ProvenanceSignature struct {
+	KeyID     string `json:"keyid,omitempty"`
+	Signature string `json:"sig"`
+}
+
+// ProvenanceResult contains the signature and source info extracted from provenance.
+type ProvenanceResult struct {
+	Signature *ProvenanceSignature
+	GitURL    string // Source repository URL
+	SourceSHA string // Source commit SHA
+}
+
+// ImageRef identifies a GCE image.
+type ImageRef struct {
+	Name    string `json:"name,omitempty"`
+	ID      string `json:"id,omitempty"`
+	Project string `json:"project"`
+}
+
+// BuildAttestation contains the complete attestation for a build.
+type BuildAttestation struct {
+	Manifest       Manifest `json:"manifest"`
+	ManifestDigest string   `json:"manifest_digest"`
+	GCAToken       string   `json:"gca_token"`
+}
+
+func newManifest(config *Config, launcher *BuilderResult, builder *BuilderResult, pcrCapture *BuilderResult, build *BuildResult, pcrs map[string]PlatformPCRs) Manifest {
+	return Manifest{
+		Version:   "1",
+		Timestamp: time.Now().UTC(),
+		Source: SourceInfo{
+			Launcher: ArtifactInfo{
+				ImageDigest:   launcher.ImageDigest,
+				ProvenanceRef: launcher.ProvenanceRef,
+				GitURL:        launcher.GitURL,
+				SourceSHA:     launcher.SourceSHA,
+				Signature:     launcher.Signature,
+			},
+			Builder: ArtifactInfo{
+				ImageDigest:   builder.ImageDigest,
+				ProvenanceRef: builder.ProvenanceRef,
+				GitURL:        builder.GitURL,
+				SourceSHA:     builder.SourceSHA,
+				Signature:     builder.Signature,
+			},
+			PCRCapture: ArtifactInfo{
+				ImageDigest:   pcrCapture.ImageDigest,
+				ProvenanceRef: pcrCapture.ProvenanceRef,
+				GitURL:        pcrCapture.GitURL,
+				SourceSHA:     pcrCapture.SourceSHA,
+				Signature:     pcrCapture.Signature,
+			},
+		},
+		BuilderImages: build.BuilderImages,
+		BaseImage: ImageRef{
+			Name:    config.BaseImage,
+			Project: config.BaseImageProject,
+		},
+		Output: ImageRef{
+			Name:    config.OutputImageName,
+			ID:      build.ImageID,
+			Project: config.ProjectID,
+		},
+		CloudBuildID: build.BuildID,
+		PCRs:         pcrs,
+	}
+}
+
+func hashJSON(v any) ([]byte, error) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	h := sha256.Sum256(data)
+	return h[:], nil
+}

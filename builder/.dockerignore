@@ -1,0 +1,25 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+builder
+
+# IDE
+.idea/
+.vscode/
+
+# Documentation (not needed in container)
+README.md
+*.md
+
+# Scripts (not needed in container)
+deploy.sh
+*.sh
+
+# Test files
+*_test.go
+coverage.out
+
+# OS
+.DS_Store

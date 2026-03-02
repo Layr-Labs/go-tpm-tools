@@ -1,5 +1,5 @@
 # From current directory:
-# gcloud builds submit --tag us-west1-docker.pkg.dev/confidential-space-images-dev/cs-integ-test-images/mounts_workload:latest
+# gcloud builds submit --tag us-central1-docker.pkg.dev/tee-compute-global/cs-test/mounts_workload:latest
 FROM alpine
 
 COPY print_mounts.sh /

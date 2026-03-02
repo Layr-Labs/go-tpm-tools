@@ -1,0 +1,182 @@
+substitutions:
+  '_IMAGE_NAME': ''
+  '_IMAGE_PROJECT': ''
+
+steps:
+# Common tests (both debug and hardened)
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: HttpServerTests
+  env:
+  - 'IMAGE_NAME=${_IMAGE_NAME}'
+  - 'IMAGE_PROJECT=${_IMAGE_PROJECT}'
+  script: |
+    #!/usr/bin/env bash
+    echo "running http server tests on ${IMAGE_NAME}"
+    gcloud builds submit --config=test_http_server.yaml --region us-central1 \
+      --substitutions _IMAGE_NAME=${IMAGE_NAME},_IMAGE_PROJECT=${IMAGE_PROJECT}
+
+# Skipped: NetworkIngressTests requires a private Cloud Build pool in the same VPC
+# as the test VM to reach internal IPs. Re-enable once a private pool is configured.
+# - name: 'gcr.io/cloud-builders/gcloud'
+#   id: NetworkIngressTests
+#   env:
+#   - 'IMAGE_NAME=${_IMAGE_NAME}'
+#   - 'IMAGE_PROJECT=${_IMAGE_PROJECT}'
+#   script: |
+#     #!/usr/bin/env bash
+#     echo "running ingress network tests on ${IMAGE_NAME}"
+#     gcloud builds submit --config=test_ingress_network.yaml --region us-central1 \
+#       --substitutions _IMAGE_NAME=${IMAGE_NAME},_IMAGE_PROJECT=${IMAGE_PROJECT}
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: DiscoverSignaturesTests
+  env:
+  - 'IMAGE_NAME=${_IMAGE_NAME}'
+  - 'IMAGE_PROJECT=${_IMAGE_PROJECT}'
+  script: |
+    #!/usr/bin/env bash
+    echo "running container signature tests on ${IMAGE_NAME}"
+    gcloud builds submit --config=test_discover_signatures.yaml --region us-central1 \
+      --substitutions _IMAGE_NAME=${IMAGE_NAME},_IMAGE_PROJECT=${IMAGE_PROJECT}
+
+# Debug-specific tests
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: DebugImageTests
+  env:
+  - 'IMAGE_NAME=${_IMAGE_NAME}'
+  - 'IMAGE_PROJECT=${_IMAGE_PROJECT}'
+  script: |
+    #!/usr/bin/env bash
+    if [[ "${IMAGE_NAME}" != *"debug"* ]]; then
+      echo "Skipping debug tests (not a debug image)"
+      exit 0
+    fi
+    echo "running debug image tests on ${IMAGE_NAME}"
+    gcloud builds submit --config=test_debug_cloudbuild.yaml --region us-central1 \
+      --substitutions _IMAGE_NAME=${IMAGE_NAME},_IMAGE_PROJECT=${IMAGE_PROJECT}
+
+# Hardened-specific tests
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: HardenedImageTests
+  env:
+  - 'IMAGE_NAME=${_IMAGE_NAME}'
+  - 'IMAGE_PROJECT=${_IMAGE_PROJECT}'
+  script: |
+    #!/usr/bin/env bash
+    if [[ "${IMAGE_NAME}" != *"hardened"* ]]; then
+      echo "Skipping hardened tests (not a hardened image)"
+      exit 0
+    fi
+    echo "running hardened image tests on ${IMAGE_NAME}"
+    gcloud builds submit --config=test_hardened_cloudbuild.yaml --region us-central1 \
+      --substitutions _IMAGE_NAME=${IMAGE_NAME},_IMAGE_PROJECT=${IMAGE_PROJECT}
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: LaunchPolicyTests
+  env:
+  - 'IMAGE_NAME=${_IMAGE_NAME}'
+  - 'IMAGE_PROJECT=${_IMAGE_PROJECT}'
+  script: |
+    #!/usr/bin/env bash
+    if [[ "${IMAGE_NAME}" != *"hardened"* ]]; then
+      echo "Skipping launch policy tests (not a hardened image)"
+      exit 0
+    fi
+    echo "running launch policy tests on ${IMAGE_NAME}"
+    gcloud builds submit --config=test_launchpolicy_cloudbuild.yaml --region us-central1 \
+      --substitutions _HARDENED_IMAGE_NAME=${IMAGE_NAME},_IMAGE_PROJECT=${IMAGE_PROJECT}
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: LogRedirectionTests
+  env:
+  - 'IMAGE_NAME=${_IMAGE_NAME}'
+  - 'IMAGE_PROJECT=${_IMAGE_PROJECT}'
+  script: |
+    #!/usr/bin/env bash
+    if [[ "${IMAGE_NAME}" != *"hardened"* ]]; then
+      echo "Skipping log redirection tests (not a hardened image)"
+      exit 0
+    fi
+    echo "running log redirection tests on ${IMAGE_NAME}"
+    gcloud builds submit --config=test_log_redirection.yaml --region us-central1 \
+      --substitutions _HARDENED_IMAGE_NAME=${IMAGE_NAME},_IMAGE_PROJECT=${IMAGE_PROJECT}
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: MemoryMonitoringTests
+  env:
+  - 'IMAGE_NAME=${_IMAGE_NAME}'
+  - 'IMAGE_PROJECT=${_IMAGE_PROJECT}'
+  script: |
+    #!/usr/bin/env bash
+    if [[ "${IMAGE_NAME}" != *"hardened"* ]]; then
+      echo "Skipping memory monitoring tests (not a hardened image)"
+      exit 0
+    fi
+    echo "running memory monitoring tests on ${IMAGE_NAME}"
+    gcloud builds submit --config=test_memory_monitoring.yaml --region us-central1 \
+      --substitutions _IMAGE_NAME=${IMAGE_NAME},_IMAGE_PROJECT=${IMAGE_PROJECT}
+
+# Skipped: HealthMonitoringTests requires EnableHealthMonitoring experiment flag
+# which is not enabled by default. Re-enable when the experiment is graduated.
+# - name: 'gcr.io/cloud-builders/gcloud'
+#   id: HealthMonitoringTests
+#   env:
+#   - 'IMAGE_NAME=${_IMAGE_NAME}'
+#   - 'IMAGE_PROJECT=${_IMAGE_PROJECT}'
+#   script: |
+#     #!/usr/bin/env bash
+#     if [[ "${IMAGE_NAME}" != *"hardened"* ]]; then
+#       echo "Skipping health monitoring tests (not a hardened image)"
+#       exit 0
+#     fi
+#     echo "running health monitoring tests on ${IMAGE_NAME}"
+#     gcloud builds submit --config=test_health_monitoring.yaml --region us-central1 \
+#       --substitutions _IMAGE_NAME=${IMAGE_NAME},_IMAGE_PROJECT=${IMAGE_PROJECT}
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: ODAWithSignedContainerTests
+  env:
+  - 'IMAGE_NAME=${_IMAGE_NAME}'
+  - 'IMAGE_PROJECT=${_IMAGE_PROJECT}'
+  script: |
+    #!/usr/bin/env bash
+    if [[ "${IMAGE_NAME}" != *"hardened"* ]]; then
+      echo "Skipping ODA tests (not a hardened image)"
+      exit 0
+    fi
+    echo "running ODA and signed container tests on ${IMAGE_NAME}"
+    gcloud builds submit --config=test_oda_with_signed_container.yaml --region us-central1 \
+      --substitutions _IMAGE_NAME=${IMAGE_NAME},_IMAGE_PROJECT=${IMAGE_PROJECT}
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: MountTests
+  env:
+  - 'IMAGE_NAME=${_IMAGE_NAME}'
+  - 'IMAGE_PROJECT=${_IMAGE_PROJECT}'
+  script: |
+    #!/usr/bin/env bash
+    if [[ "${IMAGE_NAME}" != *"hardened"* ]]; then
+      echo "Skipping mount tests (not a hardened image)"
+      exit 0
+    fi
+    echo "running mount tests on ${IMAGE_NAME}"
+    gcloud builds submit --config=test_mounts.yaml --region us-central1 \
+      --substitutions _IMAGE_NAME=${IMAGE_NAME},_IMAGE_PROJECT=${IMAGE_PROJECT}
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: PrivilegedTests
+  env:
+  - 'IMAGE_NAME=${_IMAGE_NAME}'
+  - 'IMAGE_PROJECT=${_IMAGE_PROJECT}'
+  script: |
+    #!/usr/bin/env bash
+    if [[ "${IMAGE_NAME}" != *"hardened"* ]]; then
+      echo "Skipping privileged tests (not a hardened image)"
+      exit 0
+    fi
+    echo "running privileged tests on ${IMAGE_NAME}"
+    gcloud builds submit --config=test_privileged.yaml --region us-central1 \
+      --substitutions _IMAGE_NAME=${IMAGE_NAME},_IMAGE_PROJECT=${IMAGE_PROJECT}
+
+options:
+  dynamic_substitutions: true

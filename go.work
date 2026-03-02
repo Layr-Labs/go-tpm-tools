@@ -4,6 +4,8 @@ toolchain go1.24.4
 
 use (
 	.
+	./builder
+	./builder/pcr_capture
 	./cmd
 	./launcher
 	./sdk/attest

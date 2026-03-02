@@ -1,6 +1,6 @@
 # From current directory:
 # GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o main ../basic
-# gcloud builds submit --tag us-west1-docker.pkg.dev/confidential-space-images-dev/cs-integ-test-images/memorymonitoringdebug:latest --project confidential-space-images-dev
+# gcloud builds submit --tag us-central1-docker.pkg.dev/tee-compute-global/cs-test/memorymonitoringdebug:latest --project tee-compute-global
 FROM alpine
 
 COPY main /

@@ -1,0 +1,310 @@
+name: Deploy Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_version:
+        description: 'Image version (e.g., v0.1.0)'
+        required: true
+        type: string
+      builder_version:
+        description: 'Builder version (e.g., v0.1.0)'
+        required: true
+        type: string
+      launcher_version:
+        description: 'Launcher version (e.g., v0.1.0)'
+        required: true
+        type: string
+      pcr_capture_version:
+        description: 'PCR capture version (e.g., v0.1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}
+  STAGING_BUCKET: ${{ secrets.GCP_STAGING_BUCKET }}
+  PROVENANCE_BUCKET: ${{ secrets.GCP_PROVENANCE_BUCKET }}
+  REGION: us-central1
+  ZONE: us-central1-c
+  AR_REPO_BUILDER: cs-build
+  BASE_IMAGE: cos-tdx-113-18244-582-2
+  BASE_IMAGE_PROJECT: confidential-vm-images
+  MACHINE_TYPE: c3-standard-4
+
+jobs:
+  validate:
+    name: Validate Inputs
+    runs-on: ubuntu-latest
+    outputs:
+      image_version: ${{ steps.versions.outputs.image_version }}
+      builder_version: ${{ steps.versions.outputs.builder_version }}
+      launcher_version: ${{ steps.versions.outputs.launcher_version }}
+      pcr_capture_version: ${{ steps.versions.outputs.pcr_capture_version }}
+    steps:
+      - name: Validate Versions
+        id: versions
+        run: |
+          REGEX="^v[0-9]+\.[0-9]+\.[0-9]+.*$"
+
+          IMAGE_VERSION="${{ inputs.image_version }}"
+          BUILDER_VERSION="${{ inputs.builder_version }}"
+          LAUNCHER_VERSION="${{ inputs.launcher_version }}"
+          PCR_CAPTURE_VERSION="${{ inputs.pcr_capture_version }}"
+
+          if [[ ! "$IMAGE_VERSION" =~ $REGEX ]]; then
+            echo "::error::Image version '$IMAGE_VERSION' invalid. Expected vX.Y.Z"
+            exit 1
+          fi
+          if [[ ! "$BUILDER_VERSION" =~ $REGEX ]]; then
+            echo "::error::Builder version '$BUILDER_VERSION' invalid. Expected vX.Y.Z"
+            exit 1
+          fi
+          if [[ ! "$LAUNCHER_VERSION" =~ $REGEX ]]; then
+            echo "::error::Launcher version '$LAUNCHER_VERSION' invalid. Expected vX.Y.Z"
+            exit 1
+          fi
+          if [[ ! "$PCR_CAPTURE_VERSION" =~ $REGEX ]]; then
+            echo "::error::PCR capture version '$PCR_CAPTURE_VERSION' invalid. Expected vX.Y.Z"
+            exit 1
+          fi
+
+          echo "image_version=$IMAGE_VERSION" >> $GITHUB_OUTPUT
+          echo "builder_version=$BUILDER_VERSION" >> $GITHUB_OUTPUT
+          echo "launcher_version=$LAUNCHER_VERSION" >> $GITHUB_OUTPUT
+          echo "pcr_capture_version=$PCR_CAPTURE_VERSION" >> $GITHUB_OUTPUT
+
+          echo "Image: $IMAGE_VERSION"
+          echo "Builder: $BUILDER_VERSION"
+          echo "Launcher: $LAUNCHER_VERSION"
+          echo "PCR Capture: $PCR_CAPTURE_VERSION"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Verify Images Exist
+        run: |
+          LAUNCHER_IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO_BUILDER }}/launcher:${{ steps.versions.outputs.launcher_version }}"
+          BUILDER_IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO_BUILDER }}/builder:${{ steps.versions.outputs.builder_version }}"
+
+          echo "Checking launcher image: $LAUNCHER_IMAGE"
+          if ! gcloud artifacts docker images describe "$LAUNCHER_IMAGE" --project="${{ env.PROJECT_ID }}"; then
+            echo "::error::Launcher image not found: $LAUNCHER_IMAGE"
+            echo "Run the build-launcher workflow first with tag launcher-${{ steps.versions.outputs.launcher_version }}"
+            exit 1
+          fi
+          echo "✓ Launcher image exists"
+
+          echo "Checking builder image: $BUILDER_IMAGE"
+          if ! gcloud artifacts docker images describe "$BUILDER_IMAGE" --project="${{ env.PROJECT_ID }}"; then
+            echo "::error::Builder image not found: $BUILDER_IMAGE"
+            echo "Run the build-builder workflow first with tag builder-${{ steps.versions.outputs.builder_version }}"
+            exit 1
+          fi
+          echo "✓ Builder image exists"
+
+          PCR_CAPTURE_IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO_BUILDER }}/pcr-capture:${{ steps.versions.outputs.pcr_capture_version }}"
+          echo "Checking PCR capture image: $PCR_CAPTURE_IMAGE"
+          if ! gcloud artifacts docker images describe "$PCR_CAPTURE_IMAGE" --project="${{ env.PROJECT_ID }}"; then
+            echo "::error::PCR capture image not found: $PCR_CAPTURE_IMAGE"
+            echo "Run the build-pcr-capture trigger first with tag pcr-capture-${{ steps.versions.outputs.pcr_capture_version }}"
+            exit 1
+          fi
+          echo "✓ PCR capture image exists"
+
+  deploy:
+    name: Deploy ${{ matrix.image_env }}
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production
+    strategy:
+      matrix:
+        image_env: [debug, hardened]
+
+    steps:
+      - name: Configure Deployment
+        id: config
+        run: |
+          # Convert dots to dashes and remove 'v' prefix (v0.12.0 -> 0-12-0)
+          IMAGE_VERSION=$(echo "${{ needs.validate.outputs.image_version }}" | tr '.' '-' | sed 's/^v//')
+
+          IMAGE_NAME="cs-image-${IMAGE_VERSION}-${{ matrix.image_env }}"
+          INSTANCE_NAME="cs-builder-${IMAGE_VERSION}-${{ matrix.image_env }}"
+          IMAGE_FAMILY="cs-image-${{ matrix.image_env }}-candidate"
+
+          echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
+          echo "instance_name=$INSTANCE_NAME" >> $GITHUB_OUTPUT
+          echo "image_family=$IMAGE_FAMILY" >> $GITHUB_OUTPUT
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Verify Image Not Already Built
+        run: |
+          if gcloud compute images describe "${{ steps.config.outputs.image_name }}" \
+              --project="${{ env.PROJECT_ID }}" 2>/dev/null; then
+            echo "::error::Image ${{ steps.config.outputs.image_name }} already exists. Use a new version."
+            exit 1
+          fi
+          echo "✓ Image does not exist, proceeding"
+
+      - name: Clean Stale Instance
+        run: |
+          # Clean up any stale instance from a previous failed run
+          if gcloud compute instances describe "${{ steps.config.outputs.instance_name }}" \
+              --zone="${{ env.ZONE }}" --project="${{ env.PROJECT_ID }}" 2>/dev/null; then
+            echo "Found stale instance, deleting..."
+            gcloud compute instances delete "${{ steps.config.outputs.instance_name }}" \
+              --zone="${{ env.ZONE }}" --project="${{ env.PROJECT_ID }}" --quiet
+          fi
+
+      - name: Deploy Builder VM
+        run: |
+          AR_IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO_BUILDER }}/builder:${{ needs.validate.outputs.builder_version }}"
+          # docker:// format: docker://REGION/PROJECT/REPO/IMAGE/VERSION
+          LAUNCHER_ARTIFACT="docker://${{ env.REGION }}/${{ env.PROJECT_ID }}/${{ env.AR_REPO_BUILDER }}/launcher/${{ needs.validate.outputs.launcher_version }}"
+
+          PCR_CAPTURE_IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO_BUILDER }}/pcr-capture:${{ needs.validate.outputs.pcr_capture_version }}"
+
+          # Build metadata
+          METADATA_PAIRS=(
+            "tee-image-reference=${AR_IMAGE}"
+            "tee-restart-policy=Never"
+            "tee-container-log-redirect=true"
+            "tee-env-PROJECT_ID=${{ env.PROJECT_ID }}"
+            "tee-env-PROJECT_NUMBER=${{ env.PROJECT_NUMBER }}"
+            "tee-env-LAUNCHER_ARTIFACT=${LAUNCHER_ARTIFACT}"
+            "tee-env-BASE_IMAGE=${{ env.BASE_IMAGE }}"
+            "tee-env-BASE_IMAGE_PROJECT=${{ env.BASE_IMAGE_PROJECT }}"
+            "tee-env-OUTPUT_IMAGE_NAME=${{ steps.config.outputs.image_name }}"
+            "tee-env-OUTPUT_IMAGE_FAMILY=${{ steps.config.outputs.image_family }}"
+            "tee-env-STAGING_BUCKET=${{ env.STAGING_BUCKET }}"
+            "tee-env-PROVENANCE_BUCKET=${{ env.PROVENANCE_BUCKET }}"
+            "tee-env-GCA_ENDPOINT=https://confidentialcomputing.googleapis.com"
+            "tee-env-IMAGE_ENV=${{ matrix.image_env }}"
+            "tee-env-ZONE=${{ env.ZONE }}"
+            "tee-env-PCR_CAPTURE_IMAGE=${PCR_CAPTURE_IMAGE}"
+          )
+          
+          IFS="~"
+          METADATA_STRING="${METADATA_PAIRS[*]}"
+
+          echo "Deploying ${{ steps.config.outputs.instance_name }}..."
+          
+          gcloud compute instances create "${{ steps.config.outputs.instance_name }}" \
+            --zone="${{ env.ZONE }}" \
+            --machine-type="${{ env.MACHINE_TYPE }}" \
+            --confidential-compute-type=TDX \
+            --shielded-secure-boot \
+            --maintenance-policy=TERMINATE \
+            --image-family=confidential-space \
+            --image-project=confidential-space-images \
+            --scopes=cloud-platform \
+            --project="${{ env.PROJECT_ID }}" \
+            --metadata="^~^${METADATA_STRING}"
+
+      - name: Wait for Build
+        run: |
+          INSTANCE="${{ steps.config.outputs.instance_name }}"
+          IMAGE_NAME="${{ steps.config.outputs.image_name }}"
+          ATTESTATION_PATH="gs://${{ env.PROVENANCE_BUCKET }}/${IMAGE_NAME}/attestation.json"
+          TIMEOUT=3600  # 1 hour
+          INTERVAL=30
+          ELAPSED=0
+
+          echo "Waiting for build to complete (timeout: ${TIMEOUT}s)..."
+          while [ $ELAPSED -lt $TIMEOUT ]; do
+            # Check if attestation exists (build succeeded)
+            if gsutil -q stat "$ATTESTATION_PATH" 2>/dev/null; then
+              echo "Build succeeded!"
+              exit 0
+            fi
+
+            # Check VM status
+            STATUS=$(gcloud compute instances describe "$INSTANCE" \
+              --zone="${{ env.ZONE }}" --project="${{ env.PROJECT_ID }}" \
+              --format='value(status)' 2>/dev/null || echo "NOT_FOUND")
+
+            # If VM terminated without attestation, it failed
+            if [ "$STATUS" = "TERMINATED" ] || [ "$STATUS" = "NOT_FOUND" ]; then
+              break
+            fi
+
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+            echo "  Status: $STATUS (${ELAPSED}s / ${TIMEOUT}s)"
+          done
+
+          # Check for timeout
+          if [ $ELAPSED -ge $TIMEOUT ]; then
+            echo "::error::Build timed out after ${TIMEOUT}s"
+            exit 1
+          fi
+
+          # VM terminated but no attestation found
+          echo "::error::Build failed (no attestation found)"
+          echo ""
+          echo "Serial output (last 100 lines):"
+          gcloud compute instances get-serial-port-output "$INSTANCE" \
+            --zone="${{ env.ZONE }}" --project="${{ env.PROJECT_ID }}" 2>/dev/null | tail -100
+          exit 1
+
+      - name: Cleanup Builder VM
+        if: always()
+        run: |
+          gcloud compute instances delete "${{ steps.config.outputs.instance_name }}" \
+            --zone="${{ env.ZONE }}" --project="${{ env.PROJECT_ID }}" --quiet 2>/dev/null || true
+
+      - name: Run Tests
+        run: |
+          echo "Running test suite against ${{ steps.config.outputs.image_name }}"
+          gcloud builds submit \
+            --config=launcher/image/test/test_suite.yaml \
+            --substitutions="_IMAGE_NAME=${{ steps.config.outputs.image_name }},_IMAGE_PROJECT=${{ env.PROJECT_ID }}" \
+            --project="${{ env.PROJECT_ID }}" \
+            --gcs-source-staging-dir="gs://${{ env.PROJECT_ID }}_cloudbuild/source" \
+            --gcs-log-dir="gs://${{ env.PROJECT_ID }}_cloudbuild/logs" \
+            launcher/image/test/
+
+      - name: Summary
+        if: success()
+        run: |
+          cat <<EOF >> $GITHUB_STEP_SUMMARY
+          ### ${{ matrix.image_env }} Candidate Built
+
+          | Property | Value |
+          |:--- |:--- |
+          | **Image Version** | \`${{ needs.validate.outputs.image_version }}\` |
+          | **Builder** | \`${{ needs.validate.outputs.builder_version }}\` |
+          | **Launcher** | \`${{ needs.validate.outputs.launcher_version }}\` |
+          | **PCR Capture** | \`${{ needs.validate.outputs.pcr_capture_version }}\` |
+          | **Image** | \`${{ steps.config.outputs.image_name }}\` |
+          | **Family** | \`${{ steps.config.outputs.image_family }}\` |
+          | **Status** | Candidate (project-private) |
+
+          **Next:** Promote via **Actions → Promote Image** (candidate → dev → prod)
+
+          **View attestation:**
+          \`\`\`bash
+          gsutil cat gs://${{ env.PROVENANCE_BUCKET }}/${{ steps.config.outputs.image_name }}/attestation.json | jq .
+          \`\`\`
+          EOF

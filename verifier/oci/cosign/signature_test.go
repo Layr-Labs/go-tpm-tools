@@ -20,14 +20,14 @@ func TestPayload(t *testing.T) {
 	}{
 		{
 			name:        "cosign signature Payload() success",
-			blob:        []byte(`{"critical":{"identity":{"docker-reference":"us-docker.pkg.dev/confidential-space-images-dev/cs-cosign-tests/base"},"image":{"docker-manifest-digest":"sha256:9494e567c7c44e8b9f8808c1658a47c9b7979ef3cceef10f48754fc2706802ba"},"type":"cosign container image signature"},"optional":null}`),
-			wantDigest:  "sha256:d1e44a76902409836227b982beb920189949927c2011f196594bd34c5bb8f8b1",
-			wantPayload: []byte(`{"critical":{"identity":{"docker-reference":"us-docker.pkg.dev/confidential-space-images-dev/cs-cosign-tests/base"},"image":{"docker-manifest-digest":"sha256:9494e567c7c44e8b9f8808c1658a47c9b7979ef3cceef10f48754fc2706802ba"},"type":"cosign container image signature"},"optional":null}`),
+			blob:        []byte(`{"critical":{"identity":{"docker-reference":"us-docker.pkg.dev/tee-compute-global/cs-cosign-tests/base"},"image":{"docker-manifest-digest":"sha256:9494e567c7c44e8b9f8808c1658a47c9b7979ef3cceef10f48754fc2706802ba"},"type":"cosign container image signature"},"optional":null}`),
+			wantDigest:  "sha256:9480a2edf671451bde091a478e2eab196dda04b1772044c9e9724d1d03a3cc2b",
+			wantPayload: []byte(`{"critical":{"identity":{"docker-reference":"us-docker.pkg.dev/tee-compute-global/cs-cosign-tests/base"},"image":{"docker-manifest-digest":"sha256:9494e567c7c44e8b9f8808c1658a47c9b7979ef3cceef10f48754fc2706802ba"},"type":"cosign container image signature"},"optional":null}`),
 			wantPass:    true,
 		},
 		{
 			name:        "cosign signature Payload() failed with unmatched digest",
-			blob:        []byte(`{"critical":{"identity":{"docker-reference":"us-docker.pkg.dev/confidential-space-images-dev/cs-cosign-tests/base"},"image":{"docker-manifest-digest":"sha256:9494e567c7c44e8b9f8808c1658a47c9b7979ef3cceef10f48754fc2706802ba"},"type":"cosign container image signature"},"optional":null}`),
+			blob:        []byte(`{"critical":{"identity":{"docker-reference":"us-docker.pkg.dev/tee-compute-global/cs-cosign-tests/base"},"image":{"docker-manifest-digest":"sha256:9494e567c7c44e8b9f8808c1658a47c9b7979ef3cceef10f48754fc2706802ba"},"type":"cosign container image signature"},"optional":null}`),
 			wantDigest:  "sha256:unmatched digest",
 			wantPayload: []byte{},
 			wantPass:    false,
@@ -102,7 +102,7 @@ func TestBase64Encoded(t *testing.T) {
 
 func TestWorkflow(t *testing.T) {
 	wantSig := randomBase64EncodedString(32)
-	blob := []byte(`{"critical":{"identity":{"docker-reference":"us-docker.pkg.dev/confidential-space-images-dev/cs-cosign-tests/base"},"image":{"docker-manifest-digest":"sha256:9494e567c7c44e8b9f8808c1658a47c9b7979ef3cceef10f48754fc2706802ba"},"type":"cosign container image signature"},"optional":null}`)
+	blob := []byte(`{"critical":{"identity":{"docker-reference":"us-docker.pkg.dev/tee-compute-global/cs-cosign-tests/base"},"image":{"docker-manifest-digest":"sha256:9494e567c7c44e8b9f8808c1658a47c9b7979ef3cceef10f48754fc2706802ba"},"type":"cosign container image signature"},"optional":null}`)
 
 	sig := &Sig{
 		Layer: v1.Descriptor{

@@ -46,7 +46,7 @@ steps:
     base_image=$(cat /workspace/base_image.txt)
     echo "building the debug image: ${OUTPUT_IMAGE_PREFIX}-debug-${OUTPUT_IMAGE_SUFFIX} with the base image: ${base_image}"
     gcloud builds submit --config=launcher/image/cloudbuild.yaml \
-    --region us-west1 \
+    --region us-central1 \
     --substitutions _SHORT_SHA=${SHORT_SHA},\
     _BASE_IMAGE=${base_image},\
     _BASE_IMAGE_PROJECT=${BASE_IMAGE_PROJECT},\
@@ -74,7 +74,7 @@ steps:
     base_image=$(cat /workspace/base_image.txt)
     echo "building the hardened image: ${OUTPUT_IMAGE_PREFIX}-hardened-${OUTPUT_IMAGE_SUFFIX} with the base image: ${base_image}"
     gcloud builds submit --config=launcher/image/cloudbuild.yaml \
-    --region us-west1 \
+    --region us-central1 \
     --substitutions _SHORT_SHA=${SHORT_SHA},\
     _BASE_IMAGE=${base_image},\
     _BASE_IMAGE_PROJECT=${BASE_IMAGE_PROJECT},\
@@ -84,5 +84,3 @@ steps:
     _CS_LICENSE=projects/confidential-space-images/global/licenses/confidential-space,\
     _BUCKET_NAME=${BUCKET_NAME}
     exit
-options:
-  dynamic_substitutions: true

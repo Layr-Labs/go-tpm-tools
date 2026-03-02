@@ -1,0 +1,72 @@
+# Cloud Build configuration for building the PCR capture container with SLSA provenance.
+#
+# Designed for trigger-based builds (tag pattern: pcr-capture-v*).
+# The trigger sets _VERSION=$TAG_NAME (e.g., pcr-capture-v0.1.0).
+# A ParseVersion step extracts the clean version (v0.1.0) and both
+# tags are pushed to the registry (same digest, provenance is digest-based).
+#
+# Trigger creation (one-time):
+#   gcloud builds triggers create github \
+#     --name="build-pcr-capture" \
+#     --repository="projects/tee-compute-global/locations/us-central1/connections/layr-labs/repositories/go-tpm-tools" \
+#     --tag-pattern="pcr-capture-v.*" \
+#     --build-config="builder/cloudbuild-pcr-capture.yaml" \
+#     --region="us-central1" \
+#     --service-account="projects/tee-compute-global/serviceAccounts/verifiable-builds@tee-compute-global.iam.gserviceaccount.com" \
+#     --substitutions="_VERSION=\$TAG_NAME,_REGION=us-central1" \
+#     --project="tee-compute-global"
+
+substitutions:
+  '_VERSION': '${TAG_NAME}'
+  '_REGION': 'us-central1'
+
+steps:
+  # Step 0: Parse the clean version from the tag name
+  # Strips "pcr-capture-" prefix from _VERSION. For manual runs, pass _VERSION directly.
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: ParseVersion
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        VERSION=$$(echo "${_VERSION}" | sed 's/^pcr-capture-//')
+        if [[ ! "$$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$$ ]]; then
+          echo "ERROR: Invalid version: $$VERSION (expected v<major>.<minor>.<patch>)"
+          exit 1
+        fi
+        echo "$$VERSION" > /workspace/version.txt
+        echo "Parsed version: $$VERSION (from _VERSION: ${_VERSION})"
+
+  # Build the PCR capture container with both tags
+  - name: 'gcr.io/cloud-builders/docker'
+    id: Build
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        VERSION=$$(cat /workspace/version.txt)
+        docker build \
+          -t "${_REGION}-docker.pkg.dev/tee-compute-global/cs-build/pcr-capture:${_VERSION}" \
+          -t "${_REGION}-docker.pkg.dev/tee-compute-global/cs-build/pcr-capture:$$VERSION" \
+          -f builder/pcr_capture/Dockerfile \
+          .
+
+  # Push both tags to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: Push
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        docker push --all-tags "${_REGION}-docker.pkg.dev/tee-compute-global/cs-build/pcr-capture"
+
+images:
+  - '${_REGION}-docker.pkg.dev/tee-compute-global/cs-build/pcr-capture:${_VERSION}'
+
+options:
+  requestedVerifyOption: VERIFIED
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: '600s'

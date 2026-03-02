@@ -1,0 +1,89 @@
+# Cloud Build configuration for building the CS builder container with SLSA provenance.
+#
+# Designed for trigger-based builds (tag pattern: builder-v*).
+# The trigger sets _VERSION=$TAG_NAME (e.g., builder-v0.5.0).
+# A ParseVersion step extracts the clean version (v0.5.0) and both
+# tags are pushed to the registry (same digest, provenance is digest-based).
+#
+# Trigger creation (one-time):
+#   gcloud builds triggers create github \
+#     --name="build-builder" \
+#     --repository="projects/tee-compute-global/locations/us-central1/connections/layr-labs/repositories/go-tpm-tools" \
+#     --tag-pattern="builder-v.*" \
+#     --build-config="builder/cloudbuild-builder.yaml" \
+#     --region="us-central1" \
+#     --service-account="projects/tee-compute-global/serviceAccounts/verifiable-builds@tee-compute-global.iam.gserviceaccount.com" \
+#     --substitutions="_VERSION=\$TAG_NAME,_REGION=us-central1" \
+#     --project="tee-compute-global"
+
+substitutions:
+  '_VERSION': '${TAG_NAME}'
+  '_REGION': 'us-central1'
+
+steps:
+  # Step 0: Parse the clean version from the tag name
+  # Strips "builder-" prefix from _VERSION. For manual runs, pass _VERSION directly.
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: ParseVersion
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        VERSION=$$(echo "${_VERSION}" | sed 's/^builder-//')
+        if [[ ! "$$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$$ ]]; then
+          echo "ERROR: Invalid version: $$VERSION (expected v<major>.<minor>.<patch>)"
+          exit 1
+        fi
+        echo "$$VERSION" > /workspace/version.txt
+        echo "Parsed version: $$VERSION (from _VERSION: ${_VERSION})"
+
+  # Copy cos-customizer scripts into builder context
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: CopyScripts
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        mkdir -p builder/scripts/nodeproblemdetector
+        cp launcher/image/preload.sh builder/scripts/
+        cp launcher/image/fixup_oem.sh builder/scripts/
+        cp launcher/image/entrypoint.sh builder/scripts/
+        cp launcher/image/container-runner.service builder/scripts/
+        cp launcher/image/exit_script.sh builder/scripts/
+        cp launcher/image/fluent-bit-cs.conf builder/scripts/
+        cp launcher/image/nodeproblemdetector/*.json builder/scripts/nodeproblemdetector/
+
+  # Build the builder container with both tags
+  - name: 'gcr.io/cloud-builders/docker'
+    id: Build
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        VERSION=$$(cat /workspace/version.txt)
+        docker build \
+          -t "${_REGION}-docker.pkg.dev/tee-compute-global/cs-build/builder:${_VERSION}" \
+          -t "${_REGION}-docker.pkg.dev/tee-compute-global/cs-build/builder:$$VERSION" \
+          -f builder/Dockerfile \
+          builder/
+
+  # Push both tags to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: Push
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        docker push --all-tags "${_REGION}-docker.pkg.dev/tee-compute-global/cs-build/builder"
+
+images:
+  - '${_REGION}-docker.pkg.dev/tee-compute-global/cs-build/builder:${_VERSION}'
+
+options:
+  requestedVerifyOption: VERIFIED
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: '600s'
