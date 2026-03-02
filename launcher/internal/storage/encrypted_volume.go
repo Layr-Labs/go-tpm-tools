@@ -19,10 +19,6 @@ const (
 	MountPoint = "/mnt/disks/userdata"
 	// ContainerMountPoint is the destination path inside the container.
 	ContainerMountPoint = "/mnt/disks/userdata"
-
-	// defaultKey is a hardcoded placeholder key for development.
-	// TODO: Replace with remote key retrieval.
-	defaultKey = "test-key-123"
 )
 
 // secondaryDevicePaths lists the possible device paths for the secondary
@@ -51,7 +47,7 @@ func findSecondaryDevice() string {
 // the existing LUKS header and only opens it.
 // If no secondary device is found, it falls back to a directory on the boot disk,
 // and persistent storage is not unsupported if only boot disk is available.
-func SetupSecondaryEncryptedVolume(logger logging.Logger) error {
+func SetupSecondaryEncryptedVolume(logger logging.Logger, encryptionKey string) error {
 	logger.Info("SetupSecondaryEncryptedVolume: starting", "mount_point", MountPoint)
 
 	devicePath := findSecondaryDevice()
@@ -77,13 +73,13 @@ func SetupSecondaryEncryptedVolume(logger logging.Logger) error {
 
 	if !isLuks {
 		logger.Info("SetupSecondaryEncryptedVolume: no LUKS header detected, formatting device", "device", devicePath)
-		if err := luksFormat(devicePath); err != nil {
+		if err := luksFormat(devicePath, encryptionKey); err != nil {
 			logger.Error("SetupSecondaryEncryptedVolume: luksFormat failed", "error", err)
 			return fmt.Errorf("failed to format LUKS device: %w", err)
 		}
 		logger.Info("SetupSecondaryEncryptedVolume: luksFormat succeeded")
 
-		if err := luksOpen(devicePath, luksName); err != nil {
+		if err := luksOpen(devicePath, luksName, encryptionKey); err != nil {
 			logger.Error("SetupSecondaryEncryptedVolume: luksOpen failed after format", "error", err)
 			return fmt.Errorf("failed to open LUKS device: %w", err)
 		}
@@ -96,7 +92,7 @@ func SetupSecondaryEncryptedVolume(logger logging.Logger) error {
 		logger.Info("SetupSecondaryEncryptedVolume: mkfs.ext4 succeeded")
 	} else {
 		logger.Info("SetupSecondaryEncryptedVolume: LUKS header detected, reusing existing volume", "device", devicePath)
-		if err := luksOpen(devicePath, luksName); err != nil {
+		if err := luksOpen(devicePath, luksName, encryptionKey); err != nil {
 			logger.Error("SetupSecondaryEncryptedVolume: luksOpen failed", "error", err)
 			return fmt.Errorf("failed to open LUKS device: %w", err)
 		}
@@ -134,9 +130,9 @@ func isLuksDevice(device string) (bool, error) {
 }
 
 // luksFormat formats the device with LUKS encryption.
-func luksFormat(device string) error {
+func luksFormat(device string, key string) error {
 	cmd := exec.Command("cryptsetup", "luksFormat", "--pbkdf", "pbkdf2", device, "-")
-	cmd.Stdin = strings.NewReader(defaultKey)
+	cmd.Stdin = strings.NewReader(key)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -146,9 +142,9 @@ func luksFormat(device string) error {
 }
 
 // luksOpen opens a LUKS device with the given name.
-func luksOpen(device, name string) error {
+func luksOpen(device, name string, key string) error {
 	cmd := exec.Command("cryptsetup", "luksOpen", device, name, "-")
-	cmd.Stdin = strings.NewReader(defaultKey)
+	cmd.Stdin = strings.NewReader(key)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
