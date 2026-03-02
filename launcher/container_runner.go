@@ -55,7 +55,6 @@ type ContainerRunner struct {
 	attestAgent   agent.AttestationAgent
 	logger        logging.Logger
 	serialConsole *os.File
-	mnemonic      string // BIP39 mnemonic from KMS, used for disk encryption key derivation
 }
 
 const tokenFileTmp = ".token.tmp"
@@ -646,35 +645,30 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 	go teeServer.Serve()
 	defer teeServer.Shutdown(ctx)
 
-	// Fetch mnemonic from KMS if configured. The mnemonic is retrieved using
-	// in-process attestation (no teeserver dependency) and will be used for
-	// disk encryption in a follow-up feature. Failure is fatal — the mnemonic
-	// is required for the workload to operate correctly.
-	if r.launchSpec.KMSServerURL != "" {
-		r.logger.Info("Fetching mnemonic from KMS")
-		mnemonic, err := kmsclient.GetMnemonicFromKMS(ctx, r.launchSpec, r.attestAgent)
-		if err != nil {
-			return fmt.Errorf("failed to fetch mnemonic from KMS: %v", err)
-		}
-		r.mnemonic = mnemonic
-		r.logger.Info("Successfully retrieved mnemonic from KMS")
+	// Fetch mnemonic from KMS and immediately derive the storage encryption key.
+	// The mnemonic is not stored on the struct — it is used only as input to
+	// DeriveStorageKey and then discarded to minimize exposure of sensitive material.
+	if r.launchSpec.KMSServerURL == "" {
+		return fmt.Errorf("KMS server URL is required for storage encryption")
 	}
+	r.logger.Info("Fetching mnemonic from KMS")
+	mnemonic, err := kmsclient.GetMnemonicFromKMS(ctx, r.launchSpec, r.attestAgent)
+	if err != nil {
+		return fmt.Errorf("failed to fetch mnemonic from KMS: %v", err)
+	}
+	r.logger.Info("Successfully retrieved mnemonic from KMS")
 
-	// Avoids breaking existing memory monitoring tests that depend on this log.
-	if r.launchSpec.MonitoringEnabled == spec.None {
-		r.logger.Info("MemoryMonitoring is disabled by the VM operator")
-	}
-
-	// Derive storage encryption key from the KMS mnemonic.
-	if r.mnemonic == "" {
-		return fmt.Errorf("mnemonic is required for storage encryption but not available")
-	}
-	storageKeyBytes, err := storage.DeriveStorageKey(r.mnemonic)
+	storageKeyBytes, err := storage.DeriveStorageKey(mnemonic)
 	if err != nil {
 		return fmt.Errorf("failed to derive storage key from mnemonic: %v", err)
 	}
 	storageKey := hex.EncodeToString(storageKeyBytes)
 	storage.ZeroBytes(storageKeyBytes)
+
+	// Avoids breaking existing memory monitoring tests that depend on this log.
+	if r.launchSpec.MonitoringEnabled == spec.None {
+		r.logger.Info("MemoryMonitoring is disabled by the VM operator")
+	}
 
 	r.logger.Info("Setting up encrypted volume")
 	if err := storage.SetupSecondaryEncryptedVolume(r.logger, storageKey); err != nil {
