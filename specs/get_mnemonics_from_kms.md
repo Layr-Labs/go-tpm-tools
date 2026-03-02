@@ -260,7 +260,28 @@ Native macOS build fails because `launcher/spec/launch_spec.go` imports `contain
 From the repository root:
 
 ```
-docker run --rm -v "$(pwd):/src" -w /src/launcher golang:1.24 go build ./...
-docker run --rm -v "$(pwd):/src" -w /src/launcher golang:1.24 go vet ./...
-docker run --rm -v "$(pwd):/src" -w /src/launcher golang:1.24 go test -v ./kmsclient/...
+docker run --rm -v "$(pwd):/src" -v ~/go/pkg/mod:/go/pkg/mod -w /src/launcher golang:1.24 go build ./...
+docker run --rm -v "$(pwd):/src" -v ~/go/pkg/mod:/go/pkg/mod -w /src/launcher golang:1.24 go vet ./...
+docker run --rm -v "$(pwd):/src" -v ~/go/pkg/mod:/go/pkg/mod -w /src/launcher golang:1.24 go test -v ./kmsclient/...
 ```
+
+The `-v ~/go/pkg/mod:/go/pkg/mod` flag mounts the host's Go module cache into the container, avoiding repeated dependency downloads.
+
+### Deployment Testing (Real GCE VM)
+
+To test the full flow end-to-end in a real Confidential VM, set the KMS metadata attributes when creating the instance:
+
+```
+gcloud compute instances create test-vm \
+    --metadata \
+        tee-image-reference=<workload-image>,\
+        tee-kms-server-url=https://kms.eigenx.io,\
+        tee-kms-signing-public-key=<base64-encoded-pem>,\
+        tee-kms-user-api-url=https://api.eigenx.io
+```
+
+This requires:
+- A running KMS server with the `/env/v3` endpoint
+- The KMS server's signing public key (base64-encoded PEM)
+- An app registered on-chain (Sepolia) with the KMS server so it can derive the mnemonic
+- The VM running in a Confidential Computing environment (SEV-SNP or TDX) so the TPM attestation is valid
