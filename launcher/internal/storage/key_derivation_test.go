@@ -81,3 +81,17 @@ func TestDeriveStorageKey_EmptyMnemonic(t *testing.T) {
 		t.Fatal("expected error for empty mnemonic, got nil")
 	}
 }
+
+func TestDeriveStorageKey_InvalidMnemonic(t *testing.T) {
+	// Wrong words (not in BIP39 wordlist).
+	_, err := DeriveStorageKey("foo bar baz qux quux corge grault garply waldo fred plugh xyzzy")
+	if err == nil {
+		t.Fatal("expected error for invalid mnemonic, got nil")
+	}
+
+	// Valid words but bad checksum.
+	_, err = DeriveStorageKey("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon")
+	if err == nil {
+		t.Fatal("expected error for bad checksum mnemonic, got nil")
+	}
+}

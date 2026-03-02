@@ -6,6 +6,7 @@ import (
 	"crypto/sha512"
 	"fmt"
 
+	"github.com/tyler-smith/go-bip39"
 	"golang.org/x/crypto/pbkdf2"
 )
 
@@ -25,6 +26,11 @@ const storageKeyDST = "EIGENX_STORAGE_KEY_DERIVATION_V1"
 func DeriveStorageKey(mnemonic string) ([]byte, error) {
 	if mnemonic == "" {
 		return nil, fmt.Errorf("mnemonic must not be empty")
+	}
+
+	// Validate BIP39: word count, wordlist membership, and checksum.
+	if !bip39.IsMnemonicValid(mnemonic) {
+		return nil, fmt.Errorf("invalid BIP39 mnemonic")
 	}
 
 	// BIP39: mnemonic → 64-byte seed.
