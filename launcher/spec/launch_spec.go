@@ -94,6 +94,9 @@ const (
 	cgroupNS                   = "tee-cgroup-ns"
 	gcaServiceEnv              = "gca-service-env"
 	selfVerificationKey        = "self-verification"
+	kmsServerURLKey            = "tee-kms-server-url"
+	kmsSigningPublicKeyKey     = "tee-kms-signing-public-key"
+	kmsUserAPIURLKey           = "tee-kms-user-api-url"
 )
 
 const (
@@ -140,6 +143,12 @@ type LaunchSpec struct {
 	DevShmSize        int64
 	AddedCapabilities []string
 	CgroupNamespace   bool
+
+	// KMS configuration for mnemonic retrieval.
+	// If KMSServerURL is empty, the KMS fetch is skipped entirely.
+	KMSServerURL  string // URL of the KMS server (e.g. "https://kms.eigenx.io")
+	KMSSigningPublicKey string // Base64-encoded public key PEM for verifying KMS response signatures
+	KMSUserAPIURL string // User API URL for v3 attestation upload (optional)
 }
 
 // UnmarshalJSON unmarshals an instance attributes list in JSON format from the metadata
@@ -294,6 +303,11 @@ func (s *LaunchSpec) UnmarshalJSON(b []byte) error {
 			return err
 		}
 	}
+
+	// Populate KMS configuration for mnemonic retrieval.
+	s.KMSServerURL = unmarshaledMap[kmsServerURLKey]
+	s.KMSSigningPublicKey = unmarshaledMap[kmsSigningPublicKeyKey]
+	s.KMSUserAPIURL = unmarshaledMap[kmsUserAPIURLKey]
 
 	// Populate cgroup ns.
 	cgroupSetting, ok := unmarshaledMap[cgroupNS]
