@@ -38,7 +38,7 @@ These will be provided via GCE instance metadata, consistent with existing confi
 | Metadata Key | LaunchSpec Field | Description |
 |---|---|---|
 | `tee-kms-server-url` | `KMSServerURL string` | URL of the KMS server (e.g. `https://kms.eigenx.io`) |
-| `tee-kms-signing-key` | `KMSSigningKey string` | Base64-encoded KMS signing public key PEM |
+| `tee-kms-signing-public-key` | `KMSSigningPublicKey string` | Base64-encoded KMS signing public key PEM |
 | `tee-kms-user-api-url` | `KMSUserAPIURL string` | User API URL (optional) |
 
 If `KMSServerURL` is empty, the KMS fetch is skipped entirely (backward-compatible with existing deployments).
@@ -58,8 +58,8 @@ We will implement a custom `AttestationProvider` that wraps the in-process `atte
 
 **File**: `launcher/spec/launch_spec.go`
 
-- Add new metadata key constants: `kmsServerURL`, `kmsSigningKey`, `kmsUserAPIURL`
-- Add new fields to `LaunchSpec` struct: `KMSServerURL`, `KMSSigningKey`, `KMSUserAPIURL`
+- Add new metadata key constants: `kmsServerURL`, `kmsSigningPublicKey`, `kmsUserAPIURL`
+- Add new fields to `LaunchSpec` struct: `KMSServerURL`, `KMSSigningPublicKey`, `KMSUserAPIURL`
 - Parse them in `UnmarshalJSON()`
 
 #### Step 2: Implement in-process AttestationProvider and KMS fetch wrapper
@@ -78,17 +78,27 @@ type InProcessAttestationProvider struct {
 }
 
 func (p *InProcessAttestationProvider) GetAttestation(ctx context.Context, challenge []byte) ([]byte, error) {
+    if len(challenge) == 0 {
+        return nil, fmt.Errorf("challenge must not be empty")
+    }
+
     attestation, err := p.attestAgent.BoundAttestationEvidence(agent.BoundAttestationOpts{
         Challenge: challenge,
     })
     if err != nil {
-        return nil, err
+        return nil, fmt.Errorf("failed to generate bound attestation evidence: %w", err)
     }
-    return proto.Marshal(attestation)
+
+    attestBytes, err := proto.Marshal(attestation)
+    if err != nil {
+        return nil, fmt.Errorf("failed to marshal attestation to protobuf: %w", err)
+    }
+
+    return attestBytes, nil
 }
 ```
 
-Then use `envclient.NewEnvClient(logger, provider, kmsSigningKey, serverURL, userAPIURL)` and call `envClient.GetEnv(ctx)` — all KMS protocol logic (RSA key gen, request building, signature verification, JWE decryption, retries) is handled by the imported envclient.
+Then use `envclient.NewEnvClient(logger, provider, kmsSigningPublicKey, serverURL, userAPIURL)` and call `envClient.GetEnv(ctx)` — all KMS protocol logic (RSA key gen, request building, signature verification, JWE decryption, retries) is handled by the imported envclient.
 
 New dependency in `launcher/go.mod`:
 - `github.com/Layr-Labs/eigenx-kms` (brings in transitive deps including `lestrrat-go/jwx/v3`, `go-ethereum`, `solana-go`, etc.)
@@ -103,12 +113,12 @@ After `go teeServer.Serve()` (line 626) and before container task creation (line
 // Fetch environment variables from KMS (includes mnemonic for disk encryption).
 if r.launchSpec.KMSServerURL != "" {
     r.logger.Info("Fetching environment from KMS")
-    kmsSigningKeyBytes, err := base64.StdEncoding.DecodeString(r.launchSpec.KMSSigningKey)
+    kmsSigningPublicKeyBytes, err := base64.StdEncoding.DecodeString(r.launchSpec.KMSSigningPublicKey)
     if err != nil {
         return fmt.Errorf("failed to decode KMS signing key: %v", err)
     }
     provider := kmsclient.NewInProcessAttestationProvider(r.attestAgent)
-    envClient := envclient.NewEnvClient(r.logger, provider, kmsSigningKeyBytes, r.launchSpec.KMSServerURL, r.launchSpec.KMSUserAPIURL)
+    envClient := envclient.NewEnvClient(r.logger, provider, kmsSigningPublicKeyBytes, r.launchSpec.KMSServerURL, r.launchSpec.KMSUserAPIURL)
     envJSONBytes, err := envClient.GetEnv(ctx)
     if err != nil {
         return fmt.Errorf("failed to fetch env from KMS: %v", err)
@@ -156,3 +166,101 @@ New dependency in `launcher/go.mod`:
 | **Retry policy** | Exponential backoff: 500ms initial, 5s max interval, 2min total elapsed |
 | **Attestation mode** | Self-verification only (bound evidence via `/env/v3`). GCA/ITA will not be supported. |
 | **Import vs. re-implement** | Import `eigenx-kms/pkg/envclient` with custom in-process `AttestationProvider` |
+
+---
+
+## Implementation Details
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `launcher/spec/launch_spec.go` | Added 3 metadata key constants, 3 LaunchSpec fields, parsing in `UnmarshalJSON`, censoring in `LogFriendly` |
+| `launcher/kmsclient/kmsclient.go` | **New** — `InProcessAttestationProvider` and `GetMnemonicFromKMS` wrapper |
+| `launcher/kmsclient/kmsclient_test.go` | **New** — Unit tests for the attestation provider and helper functions |
+| `launcher/container_runner.go` | Added `mnemonic` field to `ContainerRunner`, KMS fetch call in `Run()`, converted struct literal to named fields |
+| `launcher/go.mod` / `launcher/go.sum` | Added `eigenx-kms` dependency from GitHub (commit `401bde3`) |
+
+### LaunchSpec Changes (`launcher/spec/launch_spec.go`)
+
+Three new metadata key constants follow the existing `tee-` prefix convention:
+
+```go
+kmsServerURLKey  = "tee-kms-server-url"
+kmsSigningPublicKeyKey = "tee-kms-signing-public-key"
+kmsUserAPIURLKey = "tee-kms-user-api-url"
+```
+
+Corresponding struct fields on `LaunchSpec`:
+
+```go
+KMSServerURL  string // URL of the KMS server (e.g. "https://kms.eigenx.io")
+KMSSigningPublicKey string // Base64-encoded KMS signing public key PEM (public, but integrity matters)
+KMSUserAPIURL string // User API URL for v3 attestation upload (optional)
+```
+
+Parsed in `UnmarshalJSON` via direct map lookup (no validation — empty `KMSServerURL` means the feature is skipped).
+
+### kmsclient Package (`launcher/kmsclient/kmsclient.go`)
+
+**`InProcessAttestationProvider`** — Implements `envclient.AttestationProvider`. `GetAttestation` rejects empty challenges, calls `attestAgent.BoundAttestationEvidence(challenge)`, and marshals the returned `*pb.Attestation` to protobuf bytes via `proto.Marshal`. This produces the same wire format as the teeserver's `/v1/bound_evidence` endpoint.
+
+**`GetMnemonicFromKMS`** — Convenience function that:
+1. Base64-decodes the signing key from `launchSpec.KMSSigningPublicKey`.
+2. Creates an `InProcessAttestationProvider` wrapping the attestation agent.
+3. Passes `slog.Default()` as the logger (the launcher sets this to write to the serial console in `logging.go`).
+4. Calls `envclient.NewEnvClient(...).GetEnv(ctx)` — the envclient handles RSA key generation, request building, exponential backoff retries, signature verification, and JWE decryption.
+5. Unmarshals the JSON response and extracts the `"MNEMONIC"` key.
+6. Zeros the decoded signing key bytes and raw env JSON bytes via `defer zeroBytes()`.
+
+### ContainerRunner Integration (`launcher/container_runner.go`)
+
+Added `mnemonic string` field to `ContainerRunner`. In `Run()`, after `go teeServer.Serve()` and before container task creation:
+
+```go
+if r.launchSpec.KMSServerURL != "" {
+    r.logger.Info("Fetching mnemonic from KMS")
+    mnemonic, err := kmsclient.GetMnemonicFromKMS(ctx, r.launchSpec, r.attestAgent)
+    if err != nil {
+        return fmt.Errorf("failed to fetch mnemonic from KMS: %v", err)
+    }
+    r.mnemonic = mnemonic
+    r.logger.Info("Successfully retrieved mnemonic from KMS")
+}
+```
+
+KMS fetch failure is fatal and blocks container start. The `ContainerRunner` struct literal in `NewRunner` was converted from positional to named fields to accommodate the new field.
+
+### Safety Measures
+
+- **Mnemonic never logged** — only success/failure messages are emitted.
+- **Sensitive buffers zeroed** — decoded signing key bytes and raw env JSON are zeroed via `defer zeroBytes()` after use.
+- **Empty challenge rejected** — `GetAttestation` returns an error if the challenge is nil or empty, preventing a meaningless attestation request.
+- **Empty/missing MNEMONIC** treated as an error — both missing key and empty value are checked.
+
+---
+
+## Test Details
+
+### Unit Tests (`launcher/kmsclient/kmsclient_test.go`)
+
+Uses a `fakeAttestationAgent` mock (same pattern as `launcher/teeserver/tee_server_test.go`) with injectable `boundAttestationEvidenceFunc`.
+
+| Test | What it verifies |
+|------|------------------|
+| `TestInProcessAttestationProvider` | Challenge bytes are passed through to `BoundAttestationEvidence` unchanged. Returned protobuf bytes can be unmarshaled back to an `Attestation` with matching fields (`AkPub`, `EventLog`, `CanonicalEventLog`, `AkCert`). |
+| `TestInProcessAttestationProvider_EmptyChallenge` | Both `nil` and `[]byte{}` challenges are rejected with an error before calling the attestation agent. |
+| `TestInProcessAttestationProvider_AgentError` | Errors from `BoundAttestationEvidence` (e.g. "TPM device unavailable") propagate through `GetAttestation` with wrapping. |
+| `TestZeroBytes` | `zeroBytes()` overwrites all bytes in a slice to zero. |
+
+### Build and Test Verification
+
+Native macOS build fails because `launcher/spec/launch_spec.go` imports `containerd/v2/pkg/cap` (Linux-only build constraints). This is a pre-existing issue unrelated to the KMS changes. Use Docker to build and run tests:
+
+From the repository root:
+
+```
+docker run --rm -v "$(pwd):/src" -w /src/launcher golang:1.24 go build ./...
+docker run --rm -v "$(pwd):/src" -w /src/launcher golang:1.24 go vet ./...
+docker run --rm -v "$(pwd):/src" -w /src/launcher golang:1.24 go test -v ./kmsclient/...
+```
