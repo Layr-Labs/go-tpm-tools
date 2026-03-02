@@ -20,6 +20,7 @@ import (
 	"github.com/Layr-Labs/go-tpm-tools/client"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/agent"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/healthmonitoring/nodeproblemdetector"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/kmsclient"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/signaturediscovery"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/storage"
@@ -53,6 +54,7 @@ type ContainerRunner struct {
 	attestAgent   agent.AttestationAgent
 	logger        logging.Logger
 	serialConsole *os.File
+	mnemonic      string // BIP39 mnemonic from KMS, used for disk encryption key derivation
 }
 
 const tokenFileTmp = ".token.tmp"
@@ -266,11 +268,11 @@ func NewRunner(ctx context.Context, cdClient *containerd.Client, token oauth2.To
 		return nil, err
 	}
 	return &ContainerRunner{
-		container,
-		launchSpec,
-		attestAgent,
-		logger,
-		serialConsole,
+		container:     container,
+		launchSpec:    launchSpec,
+		attestAgent:   attestAgent,
+		logger:        logger,
+		serialConsole: serialConsole,
 	}, nil
 }
 
@@ -642,6 +644,20 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 	}
 	go teeServer.Serve()
 	defer teeServer.Shutdown(ctx)
+
+	// Fetch mnemonic from KMS if configured. The mnemonic is retrieved using
+	// in-process attestation (no teeserver dependency) and will be used for
+	// disk encryption in a follow-up feature. Failure is fatal — the mnemonic
+	// is required for the workload to operate correctly.
+	if r.launchSpec.KMSServerURL != "" {
+		r.logger.Info("Fetching mnemonic from KMS")
+		mnemonic, err := kmsclient.GetMnemonicFromKMS(ctx, r.launchSpec, r.attestAgent)
+		if err != nil {
+			return fmt.Errorf("failed to fetch mnemonic from KMS: %v", err)
+		}
+		r.mnemonic = mnemonic
+		r.logger.Info("Successfully retrieved mnemonic from KMS")
+	}
 
 	// Avoids breaking existing memory monitoring tests that depend on this log.
 	if r.launchSpec.MonitoringEnabled == spec.None {
