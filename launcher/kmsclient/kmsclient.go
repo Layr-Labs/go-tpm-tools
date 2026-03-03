@@ -36,7 +36,7 @@ func NewInProcessAttestationProvider(attestAgent agent.AttestationAgent) *InProc
 // GetAttestation generates bound attestation evidence using the in-process
 // attestation agent and returns it as protobuf-encoded bytes — the same format
 // that the teeserver's /v1/bound_evidence endpoint returns.
-func (p *InProcessAttestationProvider) GetAttestation(ctx context.Context, challenge []byte) ([]byte, error) {
+func (p *InProcessAttestationProvider) GetAttestation(_ context.Context, challenge []byte) ([]byte, error) {
 	if len(challenge) == 0 {
 		return nil, fmt.Errorf("challenge must not be empty")
 	}
