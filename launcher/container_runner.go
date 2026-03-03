@@ -3,7 +3,6 @@ package launcher
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -645,33 +644,28 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 	go teeServer.Serve()
 	defer teeServer.Shutdown(ctx)
 
-	// Fetch mnemonic from KMS and immediately derive the storage encryption key.
-	// The mnemonic is not stored on the struct — it is used only as input to
-	// DeriveStorageKey and then discarded to minimize exposure of sensitive material.
-	if r.launchSpec.KMSServerURL == "" {
-		return fmt.Errorf("KMS server URL is required for storage encryption")
-	}
-	r.logger.Info("Fetching mnemonic from KMS")
-	mnemonic, err := kmsclient.GetMnemonicFromKMS(ctx, r.launchSpec, r.attestAgent)
-	if err != nil {
-		return fmt.Errorf("failed to fetch mnemonic from KMS: %v", err)
-	}
-	r.logger.Info("Successfully retrieved mnemonic from KMS")
-
-	storageKeyBytes, err := storage.DeriveStorageKey(mnemonic)
-	if err != nil {
-		return fmt.Errorf("failed to derive storage key from mnemonic: %v", err)
-	}
-	storageKey := hex.EncodeToString(storageKeyBytes)
-	storage.ZeroBytes(storageKeyBytes)
-
 	// Avoids breaking existing memory monitoring tests that depend on this log.
 	if r.launchSpec.MonitoringEnabled == spec.None {
 		r.logger.Info("MemoryMonitoring is disabled by the VM operator")
 	}
 
+	// Set up encrypted volume. The mnemonic provider closure is only called
+	// if a secondary storage device is found — avoiding unnecessary KMS calls.
+	mnemonicProvider := func() (string, error) {
+		if r.launchSpec.KMSServerURL == "" {
+			return "", fmt.Errorf("KMS server URL is required for storage encryption")
+		}
+		r.logger.Info("Fetching mnemonic from KMS")
+		mnemonic, err := kmsclient.GetMnemonicFromKMS(ctx, r.launchSpec, r.attestAgent)
+		if err != nil {
+			return "", fmt.Errorf("failed to fetch mnemonic from KMS: %v", err)
+		}
+		r.logger.Info("Successfully retrieved mnemonic from KMS")
+		return mnemonic, nil
+	}
+
 	r.logger.Info("Setting up encrypted volume")
-	if err := storage.SetupSecondaryEncryptedVolume(r.logger, storageKey); err != nil {
+	if err := storage.SetupSecondaryEncryptedVolume(r.logger, mnemonicProvider); err != nil {
 		return fmt.Errorf("failed to set up encrypted volume: %v", err)
 	}
 	r.logger.Info("Encrypted volume setup complete")
