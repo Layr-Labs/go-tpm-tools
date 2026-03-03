@@ -250,7 +250,8 @@ pad_bytes32() {
   # Strip 0x prefix if present.
   hex="${hex#0x}"
   # Pad to 64 hex chars (32 bytes).
-  printf "0x%064s" "$hex" | tr ' ' '0'
+  printf -v padded "%-64s" "$hex"
+  echo "0x${padded// /0}"
 }
 
 # Encode addImages calldata for a single platform.
@@ -277,7 +278,7 @@ encode_add_images() {
   cast calldata \
     "addImages(uint8,((uint8,bytes32)[],string,string)[])" \
     "$platform_id" \
-    "[((4,${pcr4_padded}),(8,${pcr8_padded}),(9,${pcr9_padded}),\"${version}\",\"${description}\")]"
+    "[([(4,${pcr4_padded}),(8,${pcr8_padded}),(9,${pcr9_padded})],\"${version}\",\"${description}\")]"
 }
 
 # Read PCR values from the merged JSON.
@@ -395,7 +396,8 @@ print(json.dumps(payload))
 
 SAFE_API_URL="https://safe-transaction-sepolia.safe.global/api/v1/safes/${SAFE_ADDRESS}/multisig-transactions/"
 
-HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+RESPONSE_BODY=$(mktemp)
+HTTP_STATUS=$(curl -s -o "$RESPONSE_BODY" -w "%{http_code}" \
   -X POST "$SAFE_API_URL" \
   -H "Content-Type: application/json" \
   -d "$PAYLOAD")
@@ -404,12 +406,10 @@ if [[ "$HTTP_STATUS" -ge 200 && "$HTTP_STATUS" -lt 300 ]]; then
   echo "transaction proposed successfully (HTTP ${HTTP_STATUS})"
 else
   echo "warning: Safe API returned HTTP ${HTTP_STATUS}" >&2
-  # Show full response for debugging.
-  curl -s -X POST "$SAFE_API_URL" \
-    -H "Content-Type: application/json" \
-    -d "$PAYLOAD" >&2
+  cat "$RESPONSE_BODY" >&2
   echo "" >&2
 fi
+rm -f "$RESPONSE_BODY"
 
 # =============================================================================
 # Summary
