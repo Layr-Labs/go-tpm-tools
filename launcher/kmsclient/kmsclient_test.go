@@ -18,9 +18,9 @@ type fakeAttestationAgent struct {
 	boundAttestationEvidenceFunc func(opts agent.BoundAttestationOpts) (*attestpb.Attestation, error)
 }
 
-func (f *fakeAttestationAgent) MeasureEvent(_ cel.Content) error        { return nil }
-func (f *fakeAttestationAgent) Refresh(_ context.Context) error         { return nil }
-func (f *fakeAttestationAgent) Close() error                            { return nil }
+func (f *fakeAttestationAgent) MeasureEvent(_ cel.Content) error { return nil }
+func (f *fakeAttestationAgent) Refresh(_ context.Context) error  { return nil }
+func (f *fakeAttestationAgent) Close() error                     { return nil }
 func (f *fakeAttestationAgent) Attest(_ context.Context, _ agent.AttestAgentOpts) ([]byte, error) {
 	return nil, fmt.Errorf("unimplemented")
 }

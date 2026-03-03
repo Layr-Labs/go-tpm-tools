@@ -146,9 +146,9 @@ type LaunchSpec struct {
 
 	// KMS configuration for mnemonic retrieval.
 	// If KMSServerURL is empty, the KMS fetch is skipped entirely.
-	KMSServerURL  string // URL of the KMS server (e.g. "https://kms.eigenx.io")
+	KMSServerURL        string // URL of the KMS server (e.g. "https://kms.eigenx.io")
 	KMSSigningPublicKey string // Base64-encoded public key PEM for verifying KMS response signatures
-	KMSUserAPIURL string // User API URL for v3 attestation upload (optional)
+	KMSUserAPIURL       string // User API URL for v3 attestation upload (optional)
 }
 
 // UnmarshalJSON unmarshals an instance attributes list in JSON format from the metadata
