@@ -3,6 +3,7 @@ package storage
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
@@ -41,13 +42,19 @@ func findSecondaryDevice() string {
 	return ""
 }
 
+// MnemonicProvider is a function that fetches the BIP39 mnemonic from KMS.
+// It is only called when a secondary storage device is found and encryption
+// is needed — avoiding unnecessary KMS calls when no disk is attached.
+type MnemonicProvider func() (string, error)
+
 // SetupSecondaryEncryptedVolume sets up persistent storage for user data.
-// If a secondary storage device exists, it sets up an encrypted LUKS volume on it.
+// If a secondary storage device exists, it fetches the mnemonic via mnemonicProvider,
+// derives an encryption key, and sets up an encrypted LUKS volume.
 // On first boot it formats and opens the device; on subsequent boots it detects
 // the existing LUKS header and only opens it.
 // If no secondary device is found, it falls back to a directory on the boot disk,
-// and persistent storage is not unsupported if only boot disk is available.
-func SetupSecondaryEncryptedVolume(logger logging.Logger, encryptionKey string) error {
+// and the mnemonicProvider is not called.
+func SetupSecondaryEncryptedVolume(logger logging.Logger, mnemonicProvider MnemonicProvider) error {
 	logger.Info("SetupSecondaryEncryptedVolume: starting", "mount_point", MountPoint)
 
 	devicePath := findSecondaryDevice()
@@ -64,6 +71,23 @@ func SetupSecondaryEncryptedVolume(logger logging.Logger, encryptionKey string) 
 		return nil
 	}
 	logger.Info("SetupSecondaryEncryptedVolume: secondary storage device found, setting up encrypted volume", "device", devicePath)
+
+	// Fetch mnemonic and derive encryption key only when a secondary device
+	// is present. This avoids calling the KMS unnecessarily and sidesteps the
+	// chicken-and-egg problem (KMS needs PCR allowlisting, which requires
+	// running a workload first).
+	logger.Info("SetupSecondaryEncryptedVolume: fetching mnemonic from KMS")
+	mnemonic, err := mnemonicProvider()
+	if err != nil {
+		return fmt.Errorf("failed to fetch mnemonic for disk encryption: %w", err)
+	}
+
+	storageKeyBytes, err := DeriveStorageKey(mnemonic)
+	if err != nil {
+		return fmt.Errorf("failed to derive storage key from mnemonic: %w", err)
+	}
+	encryptionKey := hex.EncodeToString(storageKeyBytes)
+	ZeroBytes(storageKeyBytes)
 
 	isLuks, err := isLuksDevice(devicePath)
 	if err != nil {

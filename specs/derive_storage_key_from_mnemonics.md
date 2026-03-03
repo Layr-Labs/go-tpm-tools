@@ -9,8 +9,8 @@ Because the mnemonic is deterministic per app (derived via `HMAC(appID)` on the 
 ### Key references
 
 - Current storage setup: `launcher/internal/storage/encrypted_volume.go`
-- Mnemonic source: `launcher/container_runner.go` → `ContainerRunner.mnemonic` (fetched from KMS)
-- Integration point: `container_runner.go` line 668, where `SetupSecondaryEncryptedVolume` is called
+- Mnemonic source: `launcher/kmsclient/kmsclient.go` → `GetMnemonicFromKMS()` (fetched from KMS on demand)
+- Integration point: `container_runner.go`, where `SetupSecondaryEncryptedVolume` is called with a `MnemonicProvider`
 
 ---
 
@@ -56,59 +56,68 @@ func DeriveStorageKey(mnemonic string) ([]byte, error) {
 
 Zero the seed after use. The HMAC output does not need zeroing here because it is returned to the caller (who is responsible for zeroing it).
 
-#### Step 2: Modify storage functions to accept a key parameter
+#### Step 2: Modify SetupSecondaryEncryptedVolume to accept a MnemonicProvider
 
 **File**: `launcher/internal/storage/encrypted_volume.go`
 
-Change `SetupSecondaryEncryptedVolume`, `luksFormat`, and `luksOpen` to accept a key parameter instead of using `defaultKey`:
+Instead of accepting a pre-derived key, the function takes a `MnemonicProvider` callback that is only called when a secondary device is found. This avoids unnecessary KMS calls when no disk is attached and sidesteps the chicken-and-egg problem (KMS needs PCR allowlisting, which requires running a workload first).
 
 ```go
-func SetupSecondaryEncryptedVolume(logger logging.Logger, encryptionKey string) error {
-    // ... same logic, but pass encryptionKey to luksFormat/luksOpen
-}
+type MnemonicProvider func() (string, error)
 
-func luksFormat(device string, key string) error {
-    cmd := exec.Command("cryptsetup", "luksFormat", "--pbkdf", "pbkdf2", device, "-")
-    cmd.Stdin = strings.NewReader(key)
-    // ...
-}
+func SetupSecondaryEncryptedVolume(logger logging.Logger, mnemonicProvider MnemonicProvider) error {
+    devicePath := findSecondaryDevice()
+    if devicePath == "" {
+        // No secondary device — fall back to boot disk, no KMS call needed.
+        // ...
+        return nil
+    }
 
-func luksOpen(device, name string, key string) error {
-    cmd := exec.Command("cryptsetup", "luksOpen", device, name, "-")
-    cmd.Stdin = strings.NewReader(key)
-    // ...
+    // Secondary device found — now fetch mnemonic and derive key.
+    mnemonic, err := mnemonicProvider()
+    if err != nil {
+        return fmt.Errorf("failed to fetch mnemonic for disk encryption: %w", err)
+    }
+    storageKeyBytes, err := DeriveStorageKey(mnemonic)
+    if err != nil {
+        return fmt.Errorf("failed to derive storage key from mnemonic: %w", err)
+    }
+    encryptionKey := hex.EncodeToString(storageKeyBytes)
+    ZeroBytes(storageKeyBytes)
+
+    // ... luksFormat/luksOpen with encryptionKey
 }
 ```
 
-Remove the `defaultKey` constant entirely — no fallback to the placeholder key.
+Remove the `defaultKey` constant entirely. `luksFormat` and `luksOpen` accept a key parameter.
 
 #### Step 3: Integrate into ContainerRunner.Run()
 
 **File**: `launcher/container_runner.go`
 
-At line 668, where `SetupSecondaryEncryptedVolume` is already called, derive the key from the mnemonic and pass it in:
+Pass a closure that captures the KMS config and attestation agent. The storage package doesn't know about KMS — it just calls the function when it needs a mnemonic:
 
 ```go
-// Derive storage encryption key from the KMS mnemonic.
-var storageKey string
-if r.mnemonic != "" {
-    keyBytes, err := storage.DeriveStorageKey(r.mnemonic)
-    if err != nil {
-        return fmt.Errorf("failed to derive storage key from mnemonic: %v", err)
+mnemonicProvider := func() (string, error) {
+    if r.launchSpec.KMSServerURL == "" {
+        return "", fmt.Errorf("KMS server URL is required for storage encryption")
     }
-    storageKey = hex.EncodeToString(keyBytes)
-    storage.ZeroBytes(keyBytes)
-} else {
-    return fmt.Errorf("mnemonic is required for storage encryption but not available")
+    r.logger.Info("Fetching mnemonic from KMS")
+    mnemonic, err := kmsclient.GetMnemonicFromKMS(ctx, r.launchSpec, r.attestAgent)
+    if err != nil {
+        return "", fmt.Errorf("failed to fetch mnemonic from KMS: %v", err)
+    }
+    r.logger.Info("Successfully retrieved mnemonic from KMS")
+    return mnemonic, nil
 }
 
 r.logger.Info("Setting up encrypted volume")
-if err := storage.SetupSecondaryEncryptedVolume(r.logger, storageKey); err != nil {
+if err := storage.SetupSecondaryEncryptedVolume(r.logger, mnemonicProvider); err != nil {
     return fmt.Errorf("failed to set up encrypted volume: %v", err)
 }
 ```
 
-The hex-encoded 32-byte key (64 hex characters) is passed as the LUKS passphrase.
+This keeps the `storage` and `kmsclient` packages decoupled — the storage package only knows "call this to get a mnemonic", not how it's obtained.
 
 #### Step 4: Write tests
 
@@ -129,6 +138,8 @@ Use a known BIP39 test mnemonic (e.g. `"abandon abandon abandon abandon abandon 
 - **Sensitive buffers zeroed** — the BIP39 seed is zeroed after use; the caller zeros the returned key bytes after passing them to LUKS
 - **Key never logged** — only success/failure messages are emitted; the key value is never included in logs
 - **No fallback to placeholder** — the hardcoded `defaultKey` is removed; if no mnemonic is available, the launcher fails explicitly
+- **Lazy KMS fetch** — the mnemonic is only fetched from KMS when a secondary device is detected, avoiding unnecessary KMS calls and the chicken-and-egg problem (KMS needs PCR allowlisting, which requires running a workload first)
+- **Mnemonic not stored on struct** — the mnemonic is a local variable inside the provider closure, not persisted on `ContainerRunner`
 
 ### Build and Test Verification
 
@@ -146,10 +157,10 @@ docker run --rm -v "$(pwd):/src" -v ~/go/pkg/mod:/go/pkg/mod -w /src/launcher go
 
 | File | Change |
 |------|--------|
-| `launcher/internal/storage/key_derivation.go` | **New** — `DeriveStorageKey()` and exported `ZeroBytes()` |
-| `launcher/internal/storage/key_derivation_test.go` | **New** — 5 unit tests for key derivation |
-| `launcher/internal/storage/encrypted_volume.go` | Removed `defaultKey` constant; `SetupSecondaryEncryptedVolume`, `luksFormat`, `luksOpen` now accept a key parameter |
-| `launcher/container_runner.go` | Derives storage key from `r.mnemonic` before calling `SetupSecondaryEncryptedVolume` |
+| `launcher/internal/storage/key_derivation.go` | **New** — `DeriveStorageKey()`, `ZeroBytes()`, BIP39 validation |
+| `launcher/internal/storage/key_derivation_test.go` | **New** — 6 unit tests for key derivation |
+| `launcher/internal/storage/encrypted_volume.go` | Removed `defaultKey`; `SetupSecondaryEncryptedVolume` takes a `MnemonicProvider` callback; key derivation happens inside, only when secondary device found |
+| `launcher/container_runner.go` | Passes a `MnemonicProvider` closure (wrapping KMS fetch) to `SetupSecondaryEncryptedVolume` |
 
 ### Key Derivation (`launcher/internal/storage/key_derivation.go`)
 
@@ -164,23 +175,28 @@ The seed is zeroed via `defer ZeroBytes(seed)` after the HMAC is computed. The r
 
 ### Encrypted Volume (`launcher/internal/storage/encrypted_volume.go`)
 
-Removed `defaultKey = "test-key-123"` constant. The three functions that used it now accept a key parameter:
+Removed `defaultKey = "test-key-123"` constant. `SetupSecondaryEncryptedVolume` now takes a `MnemonicProvider func() (string, error)` instead of a pre-derived key string. The function:
 
-- `SetupSecondaryEncryptedVolume(logger, encryptionKey string)` — passes key down to `luksFormat` and `luksOpen`
-- `luksFormat(device, key string)` — feeds key via stdin to `cryptsetup luksFormat`
-- `luksOpen(device, name, key string)` — feeds key via stdin to `cryptsetup luksOpen`
+1. Detects if a secondary device exists
+2. If no device — creates a plain directory on boot disk, returns without calling the provider
+3. If device found — calls `mnemonicProvider()` to fetch the mnemonic, derives the key via `DeriveStorageKey`, hex-encodes it, and passes it to `luksFormat`/`luksOpen`
 
-The boot disk fallback path (no secondary device) is unchanged — it creates a plain directory and does not use LUKS.
+This ensures the KMS is only contacted when encryption is actually needed.
+
+`luksFormat(device, key string)` and `luksOpen(device, name, key string)` accept a key parameter and feed it via stdin to `cryptsetup`.
 
 ### ContainerRunner Integration (`launcher/container_runner.go`)
 
-Before calling `SetupSecondaryEncryptedVolume`, the runner now:
+The runner passes a closure to `SetupSecondaryEncryptedVolume` that captures the KMS config and attestation agent:
 
-1. Checks that `r.mnemonic` is not empty (fails if missing)
-2. Calls `storage.DeriveStorageKey(r.mnemonic)` to get the 32-byte key
-3. Hex-encodes it (64 characters) as the LUKS passphrase
-4. Zeros the raw key bytes
-5. Passes the hex string to `SetupSecondaryEncryptedVolume`
+```go
+mnemonicProvider := func() (string, error) {
+    return kmsclient.GetMnemonicFromKMS(ctx, r.launchSpec, r.attestAgent)
+}
+storage.SetupSecondaryEncryptedVolume(r.logger, mnemonicProvider)
+```
+
+This keeps the `storage` and `kmsclient` packages decoupled — the storage package doesn't import or know about KMS, attestation, or launch specs. The mnemonic is never stored on the `ContainerRunner` struct.
 
 ### Test Details (`launcher/internal/storage/key_derivation_test.go`)
 
@@ -191,6 +207,7 @@ Before calling `SetupSecondaryEncryptedVolume`, the runner now:
 | `TestDeriveStorageKey_DifferentMnemonics` | Different mnemonics produce different keys |
 | `TestDeriveStorageKey_KeyLength` | Output is exactly 32 bytes |
 | `TestDeriveStorageKey_EmptyMnemonic` | Empty string is rejected with an error |
+| `TestDeriveStorageKey_InvalidMnemonic` | Invalid BIP39 mnemonics (bad words, bad checksum) are rejected |
 
 All tests pass:
 
