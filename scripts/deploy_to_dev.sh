@@ -14,7 +14,7 @@
 #   - python3 and jq for JSON manipulation
 #
 # Usage:
-#   IMAGE_NAME=eigen-compute-hardened-cavan-test-1234 \
+#   IMAGE_NAME=eigen-compute-hardened-test-1234 \
 #   PROPOSER_PRIVATE_KEY=0x... \
 #   ./scripts/deploy_to_dev.sh
 set -euo pipefail
@@ -394,10 +394,11 @@ payload = {
 print(json.dumps(payload))
 " "$MULTISEND_ADDRESS" "$MULTISEND_CALLDATA" "$SAFE_NONCE" "$SAFE_TX_HASH" "$PROPOSER_ADDRESS" "$SIGNATURE")
 
-SAFE_API_URL="https://safe-transaction-sepolia.safe.global/api/v1/safes/${SAFE_ADDRESS}/multisig-transactions/"
+SAFE_API_URL="https://api.safe.global/tx-service/sep/api/v1/safes/${SAFE_ADDRESS}/multisig-transactions/"
 
 RESPONSE_BODY=$(mktemp)
-HTTP_STATUS=$(curl -s -o "$RESPONSE_BODY" -w "%{http_code}" \
+HTTP_STATUS=$(curl -s \
+  -o "$RESPONSE_BODY" -w "%{http_code}" \
   -X POST "$SAFE_API_URL" \
   -H "Content-Type: application/json" \
   -d "$PAYLOAD")
