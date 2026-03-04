@@ -12,8 +12,9 @@
 
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::fmt::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 // ---------------------------------------------------------------------------
 // JSON types matching verify-attestation output
@@ -123,73 +124,70 @@ fn verify_attestation(
     challenge_hex: &str,
     extra_data_hex: &str,
 ) -> Result<VerifyOutput, String> {
+    let tmp_path = std::env::temp_dir()
+        .join(format!("verify-attest-{}.json", std::process::id()));
+
     let mut cmd = Command::new(binary);
-    cmd.arg(attestation_b64).arg(challenge_hex);
+    cmd.arg("-output").arg(&tmp_path)
+        .arg(attestation_b64).arg(challenge_hex);
     if !extra_data_hex.is_empty() {
         cmd.arg(extra_data_hex);
     }
+    // Discard stdout entirely — JSON goes to the output file.
+    // Capture stderr so we can surface it on failure.
+    cmd.stdout(Stdio::null()).stderr(Stdio::piped());
 
     let output = cmd.output().map_err(|e| format!("failed to run verify-attestation: {e}"))?;
 
     if !output.status.success() {
+        let _ = std::fs::remove_file(&tmp_path);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!(
-            "verify-attestation exited {}: {}",
-            output.status,
-            stderr.trim()
-        ));
+        return Err(format!("verify-attestation exited {}: {}", output.status, stderr.trim()));
     }
 
-    let stdout = String::from_utf8(output.stdout)
-        .map_err(|e| format!("invalid utf-8 in stdout: {e}"))?;
+    // Read before deleting; delete unconditionally so a read error doesn't leak the file.
+    let json_result = std::fs::read_to_string(&tmp_path)
+        .map_err(|e| format!("read output file: {e}"));
+    let _ = std::fs::remove_file(&tmp_path);
+    let json = json_result?;
 
-    // The Go TDX verification library may write warnings directly to fd 1,
-    // bypassing Go's os.Stdout. Strip any non-JSON prefix by finding the
-    // first '{' character.
-    let json_start = stdout
-        .find('{')
-        .ok_or_else(|| format!("no JSON object in stdout (got: {:?})", &stdout[..stdout.len().min(200)]))?;
-
-    serde_json::from_str(&stdout[json_start..])
-        .map_err(|e| format!("failed to parse JSON output: {e}"))
+    serde_json::from_str(&json).map_err(|e| format!("failed to parse JSON output: {e}"))
 }
 
-fn print_claims(name: &str, result: &VerifyOutput) {
-    println!("  TPM claims:");
+fn format_claims(name: &str, result: &VerifyOutput) -> String {
+    let mut out = String::new();
+    writeln!(out, "  TPM claims:").unwrap();
     if let Some(tpm) = &result.tpm_claims {
-        println!("    platform: {}", tpm.platform);
-        println!("    hardened: {}", tpm.hardened);
-        println!("    pcrs:     {} entries", tpm.pcrs.len());
+        writeln!(out, "    platform: {}", tpm.platform).unwrap();
+        writeln!(out, "    hardened: {}", tpm.hardened).unwrap();
+        writeln!(out, "    pcrs:     {} entries", tpm.pcrs.len()).unwrap();
         if let Some(gce) = &tpm.gce {
-            println!("    gce:      project={} zone={} instance={}", gce.project_id, gce.zone, gce.instance_name);
+            writeln!(out, "    gce:      project={} zone={} instance={}",
+                gce.project_id, gce.zone, gce.instance_name).unwrap();
         }
     }
-
-    println!("  TEE claims:");
+    writeln!(out, "  TEE claims:").unwrap();
     if let Some(tee) = &result.tee_claims {
-        println!("    platform: {}", tee.platform);
+        writeln!(out, "    platform: {}", tee.platform).unwrap();
         if let Some(tdx) = &tee.tdx {
-            println!("    TDX mrtd:  {}...", &tdx.mrtd[..16]);
-            println!("    debug:     {}", tdx.attributes.debug);
+            writeln!(out, "    TDX mrtd:  {}...", &tdx.mrtd[..16]).unwrap();
+            writeln!(out, "    debug:     {}", tdx.attributes.debug).unwrap();
         }
         if let Some(snp) = &tee.sevsnp {
-            println!("    SEV-SNP measurement: {}...", &snp.measurement[..16]);
-            println!("    debug:               {}", snp.policy.debug);
+            writeln!(out, "    SEV-SNP measurement: {}...", &snp.measurement[..16]).unwrap();
+            writeln!(out, "    debug:               {}", snp.policy.debug).unwrap();
         }
     } else {
-        println!("    (none — Shielded VM)");
+        writeln!(out, "    (none — Shielded VM)").unwrap();
     }
-
-    println!("  Container claims:");
+    writeln!(out, "  Container claims:").unwrap();
     if let Some(c) = &result.container_claims {
-        println!("    image: {}", c.image_reference);
-        println!("    digest: {}", c.image_digest);
-        println!("    args: {:?}", c.args);
+        writeln!(out, "    image: {}", c.image_reference).unwrap();
+        writeln!(out, "    digest: {}", c.image_digest).unwrap();
+        writeln!(out, "    args: {:?}", c.args).unwrap();
     } else {
-        println!("    (none)");
+        writeln!(out, "    (none)").unwrap();
     }
-
-    // Example check: reject debug attestations.
     let is_debug = result
         .tee_claims
         .as_ref()
@@ -198,18 +196,15 @@ fn print_claims(name: &str, result: &VerifyOutput) {
                 || tee.sevsnp.as_ref().map_or(false, |s| s.policy.debug)
         })
         .unwrap_or(false);
-    let is_hardened = result
-        .tpm_claims
-        .as_ref()
-        .map_or(false, |t| t.hardened);
-
+    let is_hardened = result.tpm_claims.as_ref().map_or(false, |t| t.hardened);
     if is_debug {
-        println!("  CHECK: REJECTED — debug TEE attestation for {name}");
+        writeln!(out, "  CHECK: REJECTED — debug TEE attestation for {name}").unwrap();
     } else if !is_hardened {
-        println!("  CHECK: WARNING — not hardened for {name}");
+        writeln!(out, "  CHECK: WARNING — not hardened for {name}").unwrap();
     } else {
-        println!("  CHECK: OK — hardened, non-debug attestation for {name}");
+        writeln!(out, "  CHECK: OK — hardened, non-debug attestation for {name}").unwrap();
     }
+    out
 }
 
 // ---------------------------------------------------------------------------
@@ -229,21 +224,15 @@ fn main() {
         // Single attestation: <attestation_b64> <challenge_hex> [extra_data_hex]
         let extra = args.get(3).map(|s| s.as_str()).unwrap_or("");
         match verify_attestation(&binary, &args[1], &args[2], extra) {
-            Ok(result) => {
-                print_claims("input", &result);
-            }
+            Ok(result) => print!("{}", format_claims("input", &result)),
             Err(e) => {
                 eprintln!("error: {e}");
                 std::process::exit(1);
             }
         }
     } else {
-        eprintln!(
-            "usage: verify-attestation-rs <attestation_b64> <challenge_hex> [extra_data_hex]"
-        );
-        eprintln!(
-            "       verify-attestation-rs --test-vectors <attestations.json>"
-        );
+        eprintln!("usage: verify-attestation-rs <attestation_b64> <challenge_hex> [extra_data_hex]\n\
+                          verify-attestation-rs --test-vectors <attestations.json>");
         std::process::exit(1);
     }
 }
@@ -280,33 +269,35 @@ fn run_test_vectors(binary: &Path, path: &str) {
         std::process::exit(1);
     });
 
-    let mut passed = 0;
-    let mut failed = 0;
+    let total = vectors.len();
+    let mut passed = 0usize;
+    let mut failed = 0usize;
 
     for v in &vectors {
         println!("--- {} ---", v.name);
         match verify_attestation(binary, &v.attestation, &v.challenge, &v.extra_data) {
             Ok(result) => {
-                print_claims(&v.name, &result);
-                // Sanity checks.
+                print!("{}", format_claims(&v.name, &result));
                 let tpm = result.tpm_claims.as_ref().expect("tpm_claims should exist");
-                assert_eq!(
-                    tpm.platform.to_ascii_uppercase(),
-                    v.platform.to_ascii_uppercase(),
-                    "platform mismatch"
-                );
-                assert_eq!(tpm.hardened, v.hardened, "hardened mismatch");
-                passed += 1;
+                if tpm.platform.to_ascii_uppercase() != v.platform.to_ascii_uppercase() {
+                    println!("  FAIL: platform mismatch: got {}, want {}", tpm.platform, v.platform);
+                    failed += 1;
+                } else if tpm.hardened != v.hardened {
+                    println!("  FAIL: hardened mismatch: got {}, want {}", tpm.hardened, v.hardened);
+                    failed += 1;
+                } else {
+                    passed += 1;
+                }
             }
             Err(e) => {
-                eprintln!("  FAIL: {e}");
+                println!("  FAIL: {e}");
                 failed += 1;
             }
         }
         println!();
     }
 
-    println!("=== {passed} passed, {failed} failed out of {} vectors ===", vectors.len());
+    println!("=== {passed} passed, {failed} failed out of {total} vectors ===");
     if failed > 0 {
         std::process::exit(1);
     }

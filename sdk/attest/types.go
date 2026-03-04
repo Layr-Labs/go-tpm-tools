@@ -43,6 +43,10 @@ type ExtractOptions struct {
 
 // Attestation is a parsed attestation ready for verification.
 // Use Parse to create, then call VerifyTPM and/or VerifyBoundTEE.
+//
+// Thread-safety: after Parse returns, the Attestation is read-only.
+// VerifyTPM and VerifyBoundTEE may be called concurrently on the same
+// Attestation. The collateral cache (golang-lru/v2) is mutex-protected.
 type Attestation struct {
 	platform    Platform
 	attestation *attestpb.Attestation

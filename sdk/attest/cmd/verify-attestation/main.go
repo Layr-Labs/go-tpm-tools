@@ -9,10 +9,13 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
+	"sync"
 
 	"github.com/Layr-Labs/go-tpm-tools/sdk/attest"
 )
@@ -41,19 +44,19 @@ type gceJSON struct {
 }
 
 type teeJSON struct {
-	Platform string        `json:"platform"`
-	TDX      *tdxJSON      `json:"tdx,omitempty"`
-	SevSnp   *sevSnpJSON   `json:"sevsnp,omitempty"`
+	Platform string      `json:"platform"`
+	TDX      *tdxJSON    `json:"tdx,omitempty"`
+	SevSnp   *sevSnpJSON `json:"sevsnp,omitempty"`
 }
 
 type tdxJSON struct {
-	MRTD       string       `json:"mrtd"`
-	RTMR0      string       `json:"rtmr0"`
-	RTMR1      string       `json:"rtmr1"`
-	RTMR2      string       `json:"rtmr2"`
-	RTMR3      string       `json:"rtmr3"`
-	TeeTcbSvn  string       `json:"tee_tcb_svn"`
-	Attributes tdAttrsJSON  `json:"attributes"`
+	MRTD       string      `json:"mrtd"`
+	RTMR0      string      `json:"rtmr0"`
+	RTMR1      string      `json:"rtmr1"`
+	RTMR2      string      `json:"rtmr2"`
+	RTMR3      string      `json:"rtmr3"`
+	TeeTcbSvn  string      `json:"tee_tcb_svn"`
+	Attributes tdAttrsJSON `json:"attributes"`
 }
 
 type tdAttrsJSON struct {
@@ -65,13 +68,13 @@ type tdAttrsJSON struct {
 }
 
 type sevSnpJSON struct {
-	Measurement  string            `json:"measurement"`
-	HostData     string            `json:"host_data"`
-	CurrentTcb   string            `json:"current_tcb"`
-	ReportedTcb  string            `json:"reported_tcb"`
-	CommittedTcb string            `json:"committed_tcb"`
-	GuestSvn     uint32            `json:"guest_svn"`
-	Policy       sevSnpPolicyJSON  `json:"policy"`
+	Measurement  string           `json:"measurement"`
+	HostData     string           `json:"host_data"`
+	CurrentTcb   string           `json:"current_tcb"`
+	ReportedTcb  string           `json:"reported_tcb"`
+	CommittedTcb string           `json:"committed_tcb"`
+	GuestSvn     uint32           `json:"guest_svn"`
+	Policy       sevSnpPolicyJSON `json:"policy"`
 }
 
 type sevSnpPolicyJSON struct {
@@ -100,6 +103,14 @@ func main() {
 	// (e.g. go-tdx-guest) don't pollute JSON on stdout.
 	log.SetOutput(os.Stderr)
 
+	// Disk cache replaces the in-memory LRU so collateral
+	// (Intel PCS / AMD KDS) survives across subprocess invocations.
+	if cacheDir, err := os.UserCacheDir(); err == nil {
+		attest.SetCollateralCache(newDiskCache(
+			filepath.Join(cacheDir, "go-tpm-tools", "collateral"),
+		))
+	}
+
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
@@ -107,31 +118,29 @@ func main() {
 }
 
 func run() error {
-	if len(os.Args) < 3 || len(os.Args) > 4 {
-		return fmt.Errorf("usage: verify-attestation <attestation_b64> <challenge_hex> [extra_data_hex]")
+	outputPath := flag.String("output", "", "write JSON result to this file instead of stdout")
+	flag.Parse()
+
+	args := flag.Args()
+	if len(args) < 2 || len(args) > 3 {
+		return fmt.Errorf("usage: verify-attestation [-output FILE] <attestation_b64> <challenge_hex> [extra_data_hex]")
 	}
 
-	attestBytes, err := base64.StdEncoding.DecodeString(os.Args[1])
+	attestBytes, err := base64.StdEncoding.DecodeString(args[0])
 	if err != nil {
 		return fmt.Errorf("decode attestation base64: %w", err)
 	}
-	challenge, err := hex.DecodeString(os.Args[2])
+	challenge, err := hex.DecodeString(args[1])
 	if err != nil {
 		return fmt.Errorf("decode challenge hex: %w", err)
 	}
 	var extraData []byte
-	if len(os.Args) == 4 && os.Args[3] != "" {
-		extraData, err = hex.DecodeString(os.Args[3])
+	if len(args) == 3 && args[2] != "" {
+		extraData, err = hex.DecodeString(args[2])
 		if err != nil {
 			return fmt.Errorf("decode extra_data hex: %w", err)
 		}
 	}
-
-	// Redirect stdout → stderr while running verification so that any log
-	// output from dependencies (e.g. go-tdx-guest WARN lines) doesn't
-	// pollute the JSON we write to stdout afterwards.
-	origStdout := os.Stdout
-	os.Stdout = os.Stderr
 
 	// Parse attestation proto.
 	att, err := attest.Parse(attestBytes)
@@ -139,25 +148,46 @@ func run() error {
 		return fmt.Errorf("parse: %w", err)
 	}
 
+	// Run VerifyTPM and VerifyBoundTEE concurrently.
+	// Both read from the same immutable *Attestation; safe to call concurrently.
+	// The in-memory LRU collateral cache (golang-lru/v2) uses a mutex internally.
+	var wg sync.WaitGroup
+	var tpmResult *attest.VerifiedTPMAttestation
+	var teeResult *attest.VerifiedTEEAttestation
+	var tpmErr, teeErr error
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		tpmResult, tpmErr = att.VerifyTPM(challenge, extraData)
+	}()
+
+	if att.Platform() != attest.PlatformGCPShieldedVM {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			teeResult, teeErr = att.VerifyBoundTEE(challenge, extraData)
+		}()
+	}
+
+	wg.Wait()
+
+	if tpmErr != nil {
+		return fmt.Errorf("VerifyTPM: %w", tpmErr)
+	}
+	if teeErr != nil {
+		return fmt.Errorf("VerifyBoundTEE: %w", teeErr)
+	}
+
 	out := output{}
 
-	// Verify TPM layer and extract claims.
-	tpmResult, err := att.VerifyTPM(challenge, extraData)
-	if err != nil {
-		return fmt.Errorf("VerifyTPM: %w", err)
-	}
 	tpmClaims, err := tpmResult.ExtractTPMClaims(attest.ExtractOptions{PCRIndices: pcrIndices})
 	if err != nil {
 		return fmt.Errorf("ExtractTPMClaims: %w", err)
 	}
 	out.TPMClaims = convertTPMClaims(tpmClaims)
 
-	// Verify TEE layer (skip for Shielded VM).
-	if att.Platform() != attest.PlatformGCPShieldedVM {
-		teeResult, err := att.VerifyBoundTEE(challenge, extraData)
-		if err != nil {
-			return fmt.Errorf("VerifyBoundTEE: %w", err)
-		}
+	if teeResult != nil {
 		teeClaims, err := teeResult.ExtractTEEClaims()
 		if err != nil {
 			return fmt.Errorf("ExtractTEEClaims: %w", err)
@@ -171,14 +201,18 @@ func run() error {
 		out.ContainerClaims = convertContainerClaims(containerInfo)
 	}
 
-	// Restore stdout for JSON output.
-	os.Stdout = origStdout
-
 	jsonBytes, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal output: %w", err)
 	}
-	fmt.Println(string(jsonBytes))
+
+	if *outputPath != "" {
+		if err := os.WriteFile(*outputPath, append(jsonBytes, '\n'), 0600); err != nil {
+			return fmt.Errorf("write output file: %w", err)
+		}
+	} else {
+		fmt.Println(string(jsonBytes))
+	}
 	return nil
 }
 
