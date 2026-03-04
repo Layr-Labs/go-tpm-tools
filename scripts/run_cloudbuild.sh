@@ -11,18 +11,18 @@ fi
 # Append a timestamp, as there is a check in finish-image-build that checks if
 # the image already exists.
 IMAGE_SUFFIX="$USER-test-image-`date +%s`"
-PROJECT="${PROJECT:-tee-compute-sepolia-dev}"
+BUILD_PROJECT="${BUILD_PROJECT:-data-axiom-440223-j1}"
 
 DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-echo "Running Cloud Build on directory $DIR (project: $PROJECT, build_type: $BUILD_TYPE)"
+echo "Running Cloud Build on directory $DIR (project: $BUILD_PROJECT, build_type: $BUILD_TYPE)"
 
 # If you get the error:
 # googleapi: Error 403: Required 'compute.images.get' permission for 'foo', forbidden
 #
 # Ensure you grant Cloud Build access to Compute Images:
-# https://pantheon.corp.google.com/compute/images?referrer=search&tab=exports&project=$PROJECT_ID
+# https://pantheon.corp.google.com/compute/images?referrer=search&tab=exports&project=$BUILD_PROJECT_ID
 gcloud beta builds submit --config=${DIR}/launcher/cloudbuild.yaml \
-  --project="$PROJECT" \
+  --project="$BUILD_PROJECT" \
   --substitutions=_OUTPUT_IMAGE_SUFFIX="${IMAGE_SUFFIX}",_BUILD_TYPE="${BUILD_TYPE}"
 
 echo "Image creation successful."
