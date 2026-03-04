@@ -162,10 +162,10 @@ jobs:
       - name: Grant Dev Project Access
         run: |
           gcloud compute images add-iam-policy-binding "${{ needs.validate.outputs.dev_image_name }}" \
-            --member="serviceAccount:${{ secrets.GCP_COMPUTE_SEPOLIA_DEV_PROJECT_NUMBER }}-compute@developer.gserviceaccount.com" \
+            --member="serviceAccount:instance-creator-sepolia-dev@tee-compute-sepolia-dev.iam.gserviceaccount.com" \
             --role=roles/compute.imageUser \
             --project="${{ env.PROJECT_ID }}"
-          echo "✓ Granted dev project compute SA access to ${{ needs.validate.outputs.dev_image_name }}"
+          echo "✓ Granted instance-creator SA access to ${{ needs.validate.outputs.dev_image_name }}"
 
       - name: Summary
         run: |

@@ -38,7 +38,12 @@ command -v python3 >/dev/null || fail "python3 not found"
 command -v jq      >/dev/null || fail "jq not found"
 
 # Derived defaults
-PROJECT="${PROJECT:-tee-compute-sepolia-dev}"
+# BUILD_PROJECT: scratch project for building images and capturing PCRs
+BUILD_PROJECT="${BUILD_PROJECT:-data-axiom-440223-j1}"
+# GLOBAL_IMAGE_PROJECT: central registry where promoted images are published
+GLOBAL_IMAGE_PROJECT="${GLOBAL_IMAGE_PROJECT:-tee-compute-global}"
+# DEV_PROJECT: the dev environment that gets IAM access to promoted images
+DEV_PROJECT="${DEV_PROJECT:-tee-compute-sepolia-dev}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -53,7 +58,9 @@ IMAGE_DESCRIPTION="${IMAGE_DESCRIPTION:-${IMAGE_NAME}}"
 TDX_ZONE="${TDX_ZONE:-us-central1-a}"
 SEV_ZONE="${SEV_ZONE:-us-central1-a}"
 SVM_ZONE="${SVM_ZONE:-us-central1-a}"
-GCS_BUCKET="${GCS_BUCKET:-${PROJECT}_cloudbuild}"
+GCS_BUCKET="${GCS_BUCKET:-${BUILD_PROJECT}_cloudbuild}"
+# The instance-creator SA in the dev project is what actually calls the GCE API to create TEE VMs.
+INSTANCE_CREATOR_SA="${INSTANCE_CREATOR_SA:-instance-creator-sepolia-dev@tee-compute-sepolia-dev.iam.gserviceaccount.com}"
 IMAGE_ALLOWLIST_ADDRESS="${IMAGE_ALLOWLIST_ADDRESS:-0x6B6Ce40D81Ae3C261B217D001A07a5b268FFE86e}"
 MULTISEND_ADDRESS="${MULTISEND_ADDRESS:-0x40A2aCCbd92BCA938b02010E17A5b8929b49130D}"
 SEPOLIA_RPC_URL="${SEPOLIA_RPC_URL:-https://ethereum-sepolia-rpc.publicnode.com}"
@@ -63,10 +70,12 @@ GCS_PREFIX="gs://${GCS_BUCKET}/pcr-capture"
 PCR_OUTPUT="${SCRIPT_DIR}/pcrs.json"
 
 echo "=== Deploy to Dev ==="
-echo "  Image:    ${IMAGE_NAME} (hardened)"
-echo "  Project:  ${PROJECT}"
-echo "  Version:  ${IMAGE_VERSION}"
-echo "  Proposer: ${PROPOSER_ADDRESS}"
+echo "  Image:        ${IMAGE_NAME} (hardened)"
+echo "  Build project: ${BUILD_PROJECT}"
+echo "  Image project: ${GLOBAL_IMAGE_PROJECT}"
+echo "  Dev project:   ${DEV_PROJECT}"
+echo "  Version:       ${IMAGE_VERSION}"
+echo "  Proposer:      ${PROPOSER_ADDRESS}"
 echo ""
 
 # =============================================================================
@@ -82,7 +91,7 @@ cleanup() {
     for vm_spec in "${CREATED_VMS[@]}"; do
       IFS='|' read -r name zone <<< "$vm_spec"
       echo "deleting ${name} in ${zone}..."
-      gcloud compute instances delete "$name" --zone="$zone" --project="$PROJECT" --quiet 2>/dev/null || true
+      gcloud compute instances delete "$name" --zone="$zone" --project="$BUILD_PROJECT" --quiet 2>/dev/null || true
     done
   fi
 }
@@ -103,12 +112,12 @@ create_capture_vm() {
   echo "creating VM: ${name} (${machine_type} in ${zone}), GCS output: ${gcs_path}"
 
   gcloud compute instances create "$name" \
-    --project="$PROJECT" \
+    --project="$BUILD_PROJECT" \
     --zone="$zone" \
     --machine-type="$machine_type" \
     --scopes=cloud-platform \
     --image="$IMAGE_NAME" \
-    --image-project="$PROJECT" \
+    --image-project="$BUILD_PROJECT" \
     --metadata="tee-image-reference=${PCR_CAPTURE_IMAGE},tee-restart-policy=Never,tee-container-log-redirect=true,tee-env-GCS_OUTPUT=${gcs_path},self-verification=true" \
     --boot-disk-size=30GB \
     --shielded-secure-boot \
@@ -142,7 +151,7 @@ poll_gcs() {
     # Check if VM stopped unexpectedly.
     local status
     status=$(gcloud compute instances describe "$name" --zone="$zone" \
-      --project="$PROJECT" --format="value(status)" 2>/dev/null || echo "UNKNOWN")
+      --project="$BUILD_PROJECT" --format="value(status)" 2>/dev/null || echo "UNKNOWN")
     if [[ "$status" == "TERMINATED" || "$status" == "STOPPED" ]]; then
       echo "error: VM ${name} stopped before producing PCR output" >&2
       return 1
@@ -227,15 +236,22 @@ echo "=== Phase 2: Image Promotion ==="
 DEV_IMAGE_NAME="${IMAGE_NAME}-preview"
 DEV_FAMILY="cs-image-hardened-dev"
 
-echo "creating dev copy: ${DEV_IMAGE_NAME} in family ${DEV_FAMILY}"
+echo "creating dev copy: ${DEV_IMAGE_NAME} in family ${DEV_FAMILY} (project: ${GLOBAL_IMAGE_PROJECT})"
 
 gcloud compute images create "$DEV_IMAGE_NAME" \
   --source-image="$IMAGE_NAME" \
-  --source-image-project="$PROJECT" \
+  --source-image-project="$BUILD_PROJECT" \
   --family="$DEV_FAMILY" \
-  --project="$PROJECT"
+  --project="$GLOBAL_IMAGE_PROJECT"
 
-echo "image promoted to preview"
+# Grant the instance-creator SA access to use the dev image.
+echo "granting ${INSTANCE_CREATOR_SA} access to ${DEV_IMAGE_NAME}..."
+gcloud compute images add-iam-policy-binding "$DEV_IMAGE_NAME" \
+  --member="serviceAccount:${INSTANCE_CREATOR_SA}" \
+  --role=roles/compute.imageUser \
+  --project="$GLOBAL_IMAGE_PROJECT"
+
+echo "image promoted to dev"
 echo ""
 
 # =============================================================================
