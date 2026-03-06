@@ -22,22 +22,13 @@ const (
 	ContainerMountPoint = "/mnt/disks/userdata"
 )
 
-// secondaryDevicePaths lists the possible device paths for the secondary
-// persistent storage disk, in order of preference. The actual path depends
-// on the machine type: NVMe-based machines use /dev/nvme0n2, while
-// SCSI-based machines use /dev/sdb.
-var secondaryDevicePaths = []string{
-	"/dev/nvme0n2",
-	"/dev/sdb",
-}
+const secondaryDevicePath = "/dev/disk/by-id/google-persistent_storage_1"
 
-// findSecondaryDevice returns the path of the first secondary storage device
-// found, or empty string if none exists.
+// findSecondaryDevice returns the device path if the secondary storage device
+// exists, or empty string if it doesn't.
 func findSecondaryDevice() string {
-	for _, path := range secondaryDevicePaths {
-		if _, err := os.Stat(path); err == nil {
-			return path
-		}
+	if _, err := os.Stat(secondaryDevicePath); err == nil {
+		return secondaryDevicePath
 	}
 	return ""
 }
@@ -63,7 +54,7 @@ func SetupSecondaryEncryptedVolume(logger logging.Logger, mnemonicProvider Mnemo
 		// No secondary device: create the mount point as a plain directory on the
 		// boot disk. The boot disk is already encrypted, so no LUKS setup is needed.
 		// We reuse the same MountPoint path so that the container bind mount and
-		// USER_DATA_PATH env var work identically regardless of the storage backend.
+		// USER_PERSISTENT_DATA_PATH env var work identically regardless of the storage backend.
 		if err := os.MkdirAll(MountPoint, 0755); err != nil {
 			return fmt.Errorf("failed to create mount point %s on boot disk: %w", MountPoint, err)
 		}

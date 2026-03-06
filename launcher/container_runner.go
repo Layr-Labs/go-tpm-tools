@@ -109,7 +109,7 @@ func NewRunner(ctx context.Context, cdClient *containerd.Client, token oauth2.To
 	if err != nil {
 		return nil, err
 	}
-	envs = append(envs, fmt.Sprintf("USER_DATA_PATH=%s", storage.MountPoint))
+	envs = append(envs, fmt.Sprintf("USER_PERSISTENT_DATA_PATH=%s", storage.MountPoint))
 	// Check if there is already a container
 	container, err := cdClient.LoadContainer(ctx, containerID)
 	if err == nil {
