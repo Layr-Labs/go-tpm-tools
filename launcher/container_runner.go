@@ -22,6 +22,8 @@ import (
 	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/healthmonitoring/nodeproblemdetector"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/signaturediscovery"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/storage"
+	"github.com/Layr-Labs/go-tpm-tools/launcher/kmsclient"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/launcherfile"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/registryauth"
 	"github.com/Layr-Labs/go-tpm-tools/launcher/spec"
@@ -38,6 +40,7 @@ import (
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/oci"
 	"github.com/containerd/containerd/remotes"
+	"github.com/containerd/typeurl/v2"
 	"github.com/golang-jwt/jwt/v4"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -106,6 +109,7 @@ func NewRunner(ctx context.Context, cdClient *containerd.Client, token oauth2.To
 	if err != nil {
 		return nil, err
 	}
+	envs = append(envs, fmt.Sprintf("USER_DATA_PATH=%s", storage.MountPoint))
 	// Check if there is already a container
 	container, err := cdClient.LoadContainer(ctx, containerID)
 	if err == nil {
@@ -243,6 +247,9 @@ func NewRunner(ctx context.Context, cdClient *containerd.Client, token oauth2.To
 	var verifierClient verifier.Client
 	if launchSpec.FakeVerifierEnabled {
 		verifierClient = fake.NewClient(nil)
+	} else if launchSpec.SelfVerificationEnabled {
+		// Self-verification mode: no remote verifier needed.
+		logger.Info("Self-verification mode enabled: skipping remote verifier client creation")
 	} else if launchSpec.ITAConfig.ITARegion == "" {
 		gcaClient, err := util.NewRESTClient(ctx, asAddr, launchSpec.ProjectID, launchSpec.Region)
 		if err != nil {
@@ -260,11 +267,11 @@ func NewRunner(ctx context.Context, cdClient *containerd.Client, token oauth2.To
 		return nil, err
 	}
 	return &ContainerRunner{
-		container,
-		launchSpec,
-		attestAgent,
-		logger,
-		serialConsole,
+		container:     container,
+		launchSpec:    launchSpec,
+		attestAgent:   attestAgent,
+		logger:        logger,
+		serialConsole: serialConsole,
 	}, nil
 }
 
@@ -333,6 +340,17 @@ func appendTokenMounts(mounts []specs.Mount) []specs.Mount {
 	m.Source = launcherfile.HostTmpPath
 	m.Options = []string{"rbind", "ro"}
 
+	return append(mounts, m)
+}
+
+// appendUserDataMount appends a bind mount for the encrypted user data volume.
+func appendUserDataMount(mounts []specs.Mount) []specs.Mount {
+	m := specs.Mount{
+		Destination: storage.ContainerMountPoint,
+		Type:        "bind",
+		Source:      storage.MountPoint,
+		Options:     []string{"rbind", "rw"},
+	}
 	return append(mounts, m)
 }
 
@@ -630,6 +648,49 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 	if r.launchSpec.MonitoringEnabled == spec.None {
 		r.logger.Info("MemoryMonitoring is disabled by the VM operator")
 	}
+
+	// Set up encrypted volume. The mnemonic provider closure is only called
+	// if a secondary storage device is found — avoiding unnecessary KMS calls.
+	mnemonicProvider := func() (string, error) {
+		if r.launchSpec.KMSServerURL == "" {
+			return "", fmt.Errorf("KMS server URL is required for storage encryption")
+		}
+		r.logger.Info("Fetching mnemonic from KMS")
+		mnemonic, err := kmsclient.GetMnemonicFromKMS(ctx, r.launchSpec, r.attestAgent)
+		if err != nil {
+			return "", fmt.Errorf("failed to fetch mnemonic from KMS: %v", err)
+		}
+		r.logger.Info("Successfully retrieved mnemonic from KMS")
+		return mnemonic, nil
+	}
+
+	r.logger.Info("Setting up encrypted volume")
+	if err := storage.SetupSecondaryEncryptedVolume(r.logger, mnemonicProvider); err != nil {
+		return fmt.Errorf("failed to set up encrypted volume: %v", err)
+	}
+	r.logger.Info("Encrypted volume setup complete")
+
+	// Add the user-data bind mount now that the encrypted volume is ready.
+	// NOTE: This updates the container spec after CEL measurement (measureCELEvents).
+	// Currently mounts are not included in the CEL, so this does not affect attestation.
+	// If mounts are ever added to the measurement, this ordering must be revisited.
+	r.logger.Info("Updating container spec with user data mount", "source", storage.MountPoint, "destination", storage.ContainerMountPoint)
+	if err := r.container.Update(ctx, func(ctx context.Context, _ *containerd.Client, c *containers.Container) error {
+		containerSpec, err := r.container.Spec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get container spec: %w", err)
+		}
+		containerSpec.Mounts = appendUserDataMount(containerSpec.Mounts)
+		newSpec, err := typeurl.MarshalAny(containerSpec)
+		if err != nil {
+			return fmt.Errorf("failed to marshal updated spec: %w", err)
+		}
+		c.Spec = newSpec
+		return nil
+	}); err != nil {
+		return fmt.Errorf("failed to update container with user data mount: %v", err)
+	}
+	r.logger.Info("Container spec updated with user data mount")
 
 	var streamOpt cio.Opt
 	switch r.launchSpec.LogRedirect {
