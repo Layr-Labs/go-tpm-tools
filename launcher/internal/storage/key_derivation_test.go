@@ -3,6 +3,7 @@ package storage
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"testing"
 )
 
@@ -12,13 +13,15 @@ const testMnemonic = "abandon abandon abandon abandon abandon abandon abandon ab
 // expectedKeyHex is the expected storage key for testMnemonic.
 // This is pinned to detect accidental changes to the derivation logic.
 // Derived via: BIP39 seed(testMnemonic) → HMAC-SHA256("EIGENX_STORAGE_KEY_DERIVATION_V1", seed)
-var expectedKeyHex = func() string {
-	key, err := DeriveStorageKey(testMnemonic)
-	if err != nil {
-		panic(err)
-	}
-	return hex.EncodeToString(key)
-}()
+//
+//		var expectedKeyHex = func() string {
+//		    key, err := DeriveStorageKey(testMnemonic)
+//		    if err != nil {
+//	       panic(err)
+//		    }
+//	     return hex.EncodeToString(key)
+//	}()
+const expectedKeyHex string = "336d8ebede32d5ebea916c9ea112fecffb6156ffc12a8ac0f497130d5655ce5f"
 
 func TestDeriveStorageKey_Deterministic(t *testing.T) {
 	// Derive twice from the same mnemonic and verify identical output.
@@ -43,6 +46,7 @@ func TestDeriveStorageKey_Stable(t *testing.T) {
 		t.Fatalf("derivation failed: %v", err)
 	}
 	got := hex.EncodeToString(key)
+	fmt.Println("expectedKeyHex", expectedKeyHex)
 	if got != expectedKeyHex {
 		t.Errorf("key changed: got %s, want %s", got, expectedKeyHex)
 	}
