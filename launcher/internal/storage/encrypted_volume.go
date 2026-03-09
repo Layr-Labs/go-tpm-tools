@@ -133,12 +133,6 @@ func SetupSecondaryEncryptedVolume(logger logging.Logger, mnemonicProvider Mnemo
 func isLuksDevice(device string) (bool, error) {
 	cmd := exec.Command("cryptsetup", "isLuks", device)
 	if err := cmd.Run(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			// Non-zero exit code means it's not a LUKS device.
-			if exitErr.ExitCode() != 0 {
-				return false, nil
-			}
-		}
 		return false, err
 	}
 	return true, nil
