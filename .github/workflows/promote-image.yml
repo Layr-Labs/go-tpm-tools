@@ -27,6 +27,7 @@ jobs:
   validate:
     name: Validate Promotion
     runs-on: ubuntu-latest
+    environment: production
     outputs:
       image_name: ${{ inputs.image_name }}
       image_env: ${{ steps.detect.outputs.image_env }}
