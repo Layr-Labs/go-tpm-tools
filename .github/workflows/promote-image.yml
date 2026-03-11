@@ -21,12 +21,13 @@ permissions:
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  PROVENANCE_BUCKET: ${{ secrets.GCP_PROVENANCE_BUCKET }}
+  PROVENANCE_BUCKET: ${{ vars.GCP_PROVENANCE_BUCKET }}
 
 jobs:
   validate:
     name: Validate Promotion
     runs-on: ubuntu-latest
+    environment: production
     outputs:
       image_name: ${{ inputs.image_name }}
       image_env: ${{ steps.detect.outputs.image_env }}

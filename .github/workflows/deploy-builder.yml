@@ -28,7 +28,7 @@ env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}
   STAGING_BUCKET: ${{ secrets.GCP_STAGING_BUCKET }}
-  PROVENANCE_BUCKET: ${{ secrets.GCP_PROVENANCE_BUCKET }}
+  PROVENANCE_BUCKET: ${{ vars.GCP_PROVENANCE_BUCKET }}
   REGION: us-central1
   ZONE: us-central1-c
   AR_REPO_BUILDER: cs-build
