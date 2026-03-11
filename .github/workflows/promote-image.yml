@@ -21,7 +21,7 @@ permissions:
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  PROVENANCE_BUCKET: ${{ secrets.GCP_PROVENANCE_BUCKET }}
+  PROVENANCE_BUCKET: ${{ vars.GCP_PROVENANCE_BUCKET }}
 
 jobs:
   validate:
