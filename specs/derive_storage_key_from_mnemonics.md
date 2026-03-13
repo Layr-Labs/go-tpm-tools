@@ -1,6 +1,6 @@
 ## Overview
 
-The launcher currently encrypts the secondary persistent storage disk using LUKS with a hardcoded placeholder key (`"test-key-123"` in `launcher/internal/storage/encrypted_volume.go`). This feature replaces the placeholder with a real key derived from the BIP39 mnemonic retrieved from KMS.
+The launcher encrypts the secondary persistent storage disk using LUKS with a key derived from the BIP39 mnemonic retrieved from KMS.
 
 The derivation uses BIP39 to convert the mnemonic to a seed, then applies HMAC-SHA256 with a domain separation tag (DST) to produce a purpose-specific 256-bit key. The DST ensures the storage key can never collide with keys derived for other purposes (EVM addresses, Solana addresses) from the same mnemonic, even if those systems use different derivation schemes.
 
@@ -137,7 +137,7 @@ Use a known BIP39 test mnemonic (e.g. `"abandon abandon abandon abandon abandon 
 - **Deterministic across reboots** — the same mnemonic always produces the same key, so the VM can reopen the LUKS volume after reboot without storing the key on disk
 - **Sensitive buffers zeroed** — the BIP39 seed is zeroed after use; the caller zeros the returned key bytes after passing them to LUKS
 - **Key never logged** — only success/failure messages are emitted; the key value is never included in logs
-- **No fallback to placeholder** — the hardcoded `defaultKey` is removed; if no mnemonic is available, the launcher fails explicitly
+- **No fallback key** — if no mnemonic is available, the launcher fails explicitly
 - **Lazy KMS fetch** — the mnemonic is only fetched from KMS when a secondary device is detected, avoiding unnecessary KMS calls and the chicken-and-egg problem (KMS needs PCR allowlisting, which requires running a workload first)
 - **Mnemonic not stored on struct** — the mnemonic is a local variable inside the provider closure, not persisted on `ContainerRunner`
 
@@ -159,7 +159,7 @@ docker run --rm -v "$(pwd):/src" -v ~/go/pkg/mod:/go/pkg/mod -w /src/launcher go
 |------|--------|
 | `launcher/internal/storage/key_derivation.go` | **New** — `DeriveStorageKey()`, `ZeroBytes()`, BIP39 validation |
 | `launcher/internal/storage/key_derivation_test.go` | **New** — 6 unit tests for key derivation |
-| `launcher/internal/storage/encrypted_volume.go` | Removed `defaultKey`; `SetupSecondaryEncryptedVolume` takes a `MnemonicProvider` callback; key derivation happens inside, only when secondary device found |
+| `launcher/internal/storage/encrypted_volume.go` | `SetupSecondaryEncryptedVolume` takes a `MnemonicProvider` callback; key derivation happens inside, only when secondary device found |
 | `launcher/container_runner.go` | Passes a `MnemonicProvider` closure (wrapping KMS fetch) to `SetupSecondaryEncryptedVolume` |
 
 ### Key Derivation (`launcher/internal/storage/key_derivation.go`)
@@ -175,7 +175,7 @@ The seed is zeroed via `defer ZeroBytes(seed)` after the HMAC is computed. The r
 
 ### Encrypted Volume (`launcher/internal/storage/encrypted_volume.go`)
 
-Removed `defaultKey = "test-key-123"` constant. `SetupSecondaryEncryptedVolume` now takes a `MnemonicProvider func() (string, error)` instead of a pre-derived key string. The function:
+`SetupSecondaryEncryptedVolume` takes a `MnemonicProvider func() (string, error)` instead of a pre-derived key string. The function:
 
 1. Detects if a secondary device exists
 2. If no device — creates a plain directory on boot disk, returns without calling the provider
