@@ -91,7 +91,11 @@ Start workload container
 
 **Decision**: The LUKS-encrypted volume uses encryption only (`cryptsetup luksFormat` with default cipher) and does not enforce integrity verification.
 
-**Rationale**: Enabling integrity checking (e.g. `--integrity hmac-sha256` with `dm-integrity`) requires an initial integrity wipe that iterates over every sector of the disk. For large persistent disks this can take minutes to tens of minutes on first boot, which is unacceptable for workload startup latency. The current implementation prioritizes fast provisioning. See `launcher/internal/storage/encrypted_volume.go` for the LUKS format parameters.
+**What integrity checking provides**: With integrity checking enabled, every write to disk is accompanied by an HMAC computed with a key only the OS holds. On read, the OS recomputes the HMAC and verifies it against the stored value. This means a malicious cloud provider (or any adversary with physical disk access) cannot modify the data and produce a matching HMAC -- the OS will detect the tampering and reject the read. Without integrity checking, the encrypted volume protects confidentiality (data cannot be read) but not authenticity -- a malicious provider could mutate the ciphertext on disk and the container would consume the modified data without detecting the corruption.
+
+**Limitation**: Even with integrity checking enabled, `dm-integrity` does not protect against replay attacks -- an adversary who previously captured a valid sector and its HMAC tag can overwrite the current sector with that old snapshot, and the OS will accept it because the data and tag are internally consistent. This is a narrow attack that requires the adversary to have previously captured the old sector contents and tags, but it is not detectable by HMAC-based integrity alone. Full protection against replay would require additional mechanisms such as a Merkle tree over the disk (e.g. `dm-verity`) or a monotonic counter tied to the volume state.
+
+**Rationale for deferring**: Enabling integrity checking (e.g. `--integrity hmac-sha256` with `dm-integrity`) requires an initial integrity wipe that iterates over every sector of the disk to initialize the HMAC tags. For large persistent disks this can take minutes to tens of minutes on first boot, which is unacceptable for workload startup latency. The current implementation prioritizes fast provisioning. See `launcher/internal/storage/encrypted_volume.go` for the LUKS format parameters.
 
 ---
 
