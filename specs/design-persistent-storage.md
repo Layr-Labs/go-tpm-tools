@@ -55,7 +55,13 @@ Start workload container
 
 ## 3. Design Decisions
 
-### 3.1 Device Detection by Google Device Name
+### 3.1 Separation of User Data and System Data
+
+**Decision**: Use a dedicated secondary persistent disk for user data, separate from the boot disk that holds the OS and launcher.
+
+**Rationale**: If user data and system data live on the same disk, the OS image cannot be upgraded without losing user data -- the boot disk is replaced wholesale during image updates. By placing user data on an independent persistent disk, the system disk can be swapped for a new OS version while the user data disk is simply reattached to the new VM. This separation ensures workload state survives OS upgrades, not just reboots.
+
+### 3.2 Device Detection by Google Device Name
 
 **Decision**: Detect the secondary storage device at the fixed path `/dev/disk/by-id/google-persistent_storage_1`.
 
@@ -63,25 +69,25 @@ Start workload container
 
 **Rationale**: GCE provides stable symlinks under `/dev/disk/by-id/google-<device-name>` based on the persistent disk's operator-assigned device name. By pinning the expected device name to `persistent_storage_1`, we get a stable path regardless of the underlying driver. The operator sets this device name when attaching the disk. See `launcher/internal/storage/encrypted_volume.go` for the implementation.
 
-### 3.2 LUKS with First-Boot Detection
+### 3.3 LUKS with First-Boot Detection
 
 **Decision**: Use `cryptsetup isLuks` to detect whether the device has already been formatted, then branch into first-boot (format + open + mkfs) vs. reboot (open only) paths.
 
 **Rationale**: This lets the same code handle both initial provisioning and subsequent reboots without requiring external state or flags. The LUKS header on the device itself is the source of truth.
 
-### 3.3 Post-CEL Container Spec Update
+### 3.4 Post-CEL Container Spec Update
 
 **Decision**: Add the user-data bind mount to the container spec *after* CEL measurement, using `container.Update()` with `typeurl.MarshalAny`.
 
 **Rationale**: The encrypted volume must be set up before it can be bind-mounted, but CEL measurement must happen before the TEE server starts (to lock PCR values). Since mounts are not currently included in CEL measurements, adding the mount post-measurement is safe. A comment in the code flags this ordering dependency for future reviewers.
 
-### 3.4 Shared Mount Point for Both Modes
+### 3.5 Shared Mount Point for Both Modes
 
 **Decision**: Use the identical path `/mnt/disks/userdata` for both the host-side mount and the container-side bind mount destination, regardless of whether storage is backed by a LUKS volume or a boot-disk directory.
 
 **Rationale**: Both `MountPoint` and `ContainerMountPoint` are set to the same value. The workload container always sees the same `USER_PERSISTENT_DATA_PATH` and the same bind mount destination. Application code does not need to know which backend is in use, and host-side debugging is simplified because the paths match.
 
-### 3.5 No Integrity Check on Encrypted Volume
+### 3.6 No Integrity Check on Encrypted Volume
 
 **Decision**: The LUKS-encrypted volume uses encryption only (`cryptsetup luksFormat` with default cipher) and does not enforce integrity verification.
 
