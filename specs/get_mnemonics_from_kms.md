@@ -1,6 +1,6 @@
 ## Overview
 
-The launcher needs to retrieve a BIP39 mnemonic from the EigenX KMS before starting the container workload. This mnemonic will be used to derive a disk encryption key for the application (disk encryption is a follow-up feature).
+The launcher needs to retrieve a BIP39 mnemonic from the EigenX KMS before starting the container workload. This mnemonic is used to derive a disk encryption key for the secondary persistent storage disk (see `derive_storage_key_from_mnemonics.md`).
 
 The flow works as follows: after the TEE server starts, the launcher sends an attestation to the KMS via the `/env/v3` protocol. The KMS verifies the attestation, derives a deterministic mnemonic for the app (via `HMAC(appID)`), and returns it along with any other environment variables — all encrypted with an ephemeral RSA key. The launcher decrypts the response and stores the mnemonic for later use.
 
@@ -136,7 +136,7 @@ if r.launchSpec.KMSServerURL != "" {
 }
 ```
 
-**Decided**: Store the mnemonic on the `ContainerRunner` struct (`r.mnemonic string`) for later use by the disk encryption feature (follow-up work).
+**Decided**: Store the mnemonic on the `ContainerRunner` struct (`r.mnemonic string`) for use by the disk encryption feature (see `derive_storage_key_from_mnemonics.md`).
 
 #### Step 4: Write tests
 
