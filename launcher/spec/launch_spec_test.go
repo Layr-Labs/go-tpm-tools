@@ -30,7 +30,8 @@ func TestLaunchSpecUnmarshalJSONHappyCases(t *testing.T) {
 		Experiments: experiments.Experiments{
 			EnableItaVerifier: true,
 		},
-		GcaAddress: "https://confidentialcomputing.googleapis.com",
+		GcaAddress:     "https://confidentialcomputing.googleapis.com",
+		DeploymentMode: "normal",
 	}
 
 	var testCases = []struct {
@@ -265,6 +266,7 @@ func TestLaunchSpecUnmarshalJSONWithDefaultValue(t *testing.T) {
 		LogRedirect:       Nowhere,
 		MonitoringEnabled: None,
 		GcaAddress:        "",
+		DeploymentMode:    "normal",
 	}
 
 	if !cmp.Equal(spec, want) {
