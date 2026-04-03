@@ -589,6 +589,33 @@ func pullImageBackoffPolicy() backoff.BackOff {
 	return backoff.WithMaxRetries(b, 3)
 }
 
+// waitForActivation polls the GCE metadata server for the deployment mode to change
+// from "standby" to any non-standby value. Used during blue-green upgrades: the coordinator
+// transfers the persistent disk and then updates metadata to signal activation.
+// Accepts both "active" and "normal" as activation signals.
+func (r *ContainerRunner) waitForActivation(ctx context.Context) error {
+	mdsClient := metadata.NewClient(nil)
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			val, err := mdsClient.InstanceAttributeValueWithContext(ctx, spec.DeploymentModeKey())
+			if err != nil {
+				r.logger.Error("Failed to read deployment mode from metadata", "error", err)
+				continue
+			}
+			if val != "standby" {
+				r.logger.Info("Deployment mode changed", "new_mode", val)
+				return nil
+			}
+		}
+	}
+}
+
 // Run the container
 // Container output will always be redirected to logger writer for now
 func (r *ContainerRunner) Run(ctx context.Context) error {
@@ -664,8 +691,21 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 		return mnemonic, nil
 	}
 
-	r.logger.Info("Setting up encrypted volume")
-	if err := storage.SetupSecondaryEncryptedVolume(r.logger, mnemonicProvider); err != nil {
+	// Blue-green standby gate: if in standby mode, wait for the coordinator
+	// to transfer the persistent disk and signal activation via metadata update.
+	if r.launchSpec.DeploymentMode == "standby" {
+		r.logger.Info("STANDBY mode: waiting for activation signal via metadata update")
+		if err := r.waitForActivation(ctx); err != nil {
+			return fmt.Errorf("standby activation failed: %v", err)
+		}
+		r.logger.Info("STANDBY mode: activated, proceeding with disk setup and workload start")
+	}
+
+	// In standby mode the disk was hot-attached by the coordinator — it must be present.
+	// In normal mode the disk may or may not exist (boot-disk fallback is fine).
+	diskRequired := r.launchSpec.DeploymentMode == "standby"
+	r.logger.Info("Setting up encrypted volume", "disk_required", diskRequired)
+	if err := storage.SetupSecondaryEncryptedVolume(r.logger, mnemonicProvider, diskRequired); err != nil {
 		return fmt.Errorf("failed to set up encrypted volume: %v", err)
 	}
 	r.logger.Info("Encrypted volume setup complete")

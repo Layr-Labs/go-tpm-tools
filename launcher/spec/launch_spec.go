@@ -97,7 +97,14 @@ const (
 	kmsServerURLKey            = "tee-kms-server-url"
 	kmsSigningPublicKeyKey     = "tee-kms-signing-public-key"
 	kmsUserAPIURLKey           = "tee-kms-user-api-url"
+	deploymentModeKey          = "tee-deployment-mode"
 )
+
+// DeploymentModeKey returns the metadata key for deployment mode.
+// Exported for use by the container runner's metadata polling.
+func DeploymentModeKey() string {
+	return deploymentModeKey
+}
 
 const (
 	instanceAttributesQuery = "instance/attributes/?recursive=true"
@@ -149,6 +156,11 @@ type LaunchSpec struct {
 	KMSServerURL        string // URL of the KMS server (e.g. "https://kms.eigenx.io")
 	KMSSigningPublicKey string // Base64-encoded public key PEM for verifying KMS response signatures
 	KMSUserAPIURL       string // User API URL for v3 attestation upload (optional)
+
+	// DeploymentMode controls blue-green standby behavior.
+	// "normal" (default): full boot with disk setup and container start.
+	// "standby": boot and wait for activation signal via metadata update before starting workload.
+	DeploymentMode string
 }
 
 // UnmarshalJSON unmarshals an instance attributes list in JSON format from the metadata
@@ -308,6 +320,12 @@ func (s *LaunchSpec) UnmarshalJSON(b []byte) error {
 	s.KMSServerURL = unmarshaledMap[kmsServerURLKey]
 	s.KMSSigningPublicKey = unmarshaledMap[kmsSigningPublicKeyKey]
 	s.KMSUserAPIURL = unmarshaledMap[kmsUserAPIURLKey]
+
+	// Populate deployment mode (defaults to "normal" for backward compatibility).
+	s.DeploymentMode = unmarshaledMap[deploymentModeKey]
+	if s.DeploymentMode == "" {
+		s.DeploymentMode = "normal"
+	}
 
 	// Populate cgroup ns.
 	cgroupSetting, ok := unmarshaledMap[cgroupNS]
