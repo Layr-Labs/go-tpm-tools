@@ -590,8 +590,9 @@ func pullImageBackoffPolicy() backoff.BackOff {
 }
 
 // waitForActivation polls the GCE metadata server for the deployment mode to change
-// from "standby" to "active". Used during blue-green upgrades: the coordinator transfers
-// the persistent disk and then updates metadata to signal activation.
+// from "standby" to any non-standby value. Used during blue-green upgrades: the coordinator
+// transfers the persistent disk and then updates metadata to signal activation.
+// Accepts both "active" and "normal" as activation signals.
 func (r *ContainerRunner) waitForActivation(ctx context.Context) error {
 	mdsClient := metadata.NewClient(nil)
 	ticker := time.NewTicker(2 * time.Second)
@@ -607,7 +608,8 @@ func (r *ContainerRunner) waitForActivation(ctx context.Context) error {
 				r.logger.Error("Failed to read deployment mode from metadata", "error", err)
 				continue
 			}
-			if val == "active" {
+			if val != "standby" {
+				r.logger.Info("Deployment mode changed", "new_mode", val)
 				return nil
 			}
 		}
@@ -699,8 +701,11 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 		r.logger.Info("STANDBY mode: activated, proceeding with disk setup and workload start")
 	}
 
-	r.logger.Info("Setting up encrypted volume")
-	if err := storage.SetupSecondaryEncryptedVolume(r.logger, mnemonicProvider); err != nil {
+	// In standby mode the disk was hot-attached by the coordinator — it must be present.
+	// In normal mode the disk may or may not exist (boot-disk fallback is fine).
+	diskRequired := r.launchSpec.DeploymentMode == "standby"
+	r.logger.Info("Setting up encrypted volume", "disk_required", diskRequired)
+	if err := storage.SetupSecondaryEncryptedVolume(r.logger, mnemonicProvider, diskRequired); err != nil {
 		return fmt.Errorf("failed to set up encrypted volume: %v", err)
 	}
 	r.logger.Info("Encrypted volume setup complete")

@@ -46,23 +46,37 @@ type MnemonicProvider func() (string, error)
 // the existing LUKS header and only opens it.
 // If no secondary device is found, it falls back to a directory on the boot disk,
 // and the mnemonicProvider is not called.
-func SetupSecondaryEncryptedVolume(logger logging.Logger, mnemonicProvider MnemonicProvider) error {
-	logger.Info("SetupSecondaryEncryptedVolume: starting", "mount_point", MountPoint)
+//
+// When diskRequired is true (blue-green standby mode), the function retries disk
+// detection for up to 30 seconds and returns an error if the disk is not found.
+// When diskRequired is false (normal mode), the function checks once and falls back
+// to the boot disk immediately.
+func SetupSecondaryEncryptedVolume(logger logging.Logger, mnemonicProvider MnemonicProvider, diskRequired bool) error {
+	logger.Info("SetupSecondaryEncryptedVolume: starting", "mount_point", MountPoint, "disk_required", diskRequired)
 
-	// Retry disk detection to handle blue-green upgrades where the disk is
-	// hot-attached after the instance boots. The GCE attach-disk API returns
-	// before the guest OS enumerates the device, so we poll briefly.
 	var devicePath string
-	for attempt := 0; attempt < 15; attempt++ {
+	if diskRequired {
+		// Blue-green standby: the disk was hot-attached by the coordinator.
+		// Retry detection because the GCE attach-disk API can return before
+		// the guest OS enumerates the device.
+		for attempt := 0; attempt < 15; attempt++ {
+			devicePath = findSecondaryDevice()
+			if devicePath != "" {
+				break
+			}
+			if attempt == 0 {
+				logger.Info("SetupSecondaryEncryptedVolume: waiting for required secondary device to appear")
+			}
+			time.Sleep(2 * time.Second)
+		}
+		if devicePath == "" {
+			return fmt.Errorf("secondary storage device not found at %s after 30s (required for blue-green activation)", secondaryDevicePath)
+		}
+	} else {
+		// Normal mode: check once, fall back to boot disk if absent.
 		devicePath = findSecondaryDevice()
-		if devicePath != "" {
-			break
-		}
-		if attempt == 0 {
-			logger.Info("SetupSecondaryEncryptedVolume: secondary device not found, will retry")
-		}
-		time.Sleep(2 * time.Second)
 	}
+
 	if devicePath == "" {
 		logger.Info("SetupSecondaryEncryptedVolume: no secondary storage device found, using boot disk for persistent storage")
 		// No secondary device: create the mount point as a plain directory on the
