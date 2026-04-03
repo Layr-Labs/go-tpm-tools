@@ -603,7 +603,7 @@ func (r *ContainerRunner) waitForActivation(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			val, err := mdsClient.InstanceAttributeValue(spec.DeploymentModeKey())
+			val, err := mdsClient.InstanceAttributeValueWithContext(ctx, spec.DeploymentModeKey())
 			if err != nil {
 				r.logger.Error("Failed to read deployment mode from metadata", "error", err)
 				continue
