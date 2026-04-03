@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
 )
@@ -48,7 +49,20 @@ type MnemonicProvider func() (string, error)
 func SetupSecondaryEncryptedVolume(logger logging.Logger, mnemonicProvider MnemonicProvider) error {
 	logger.Info("SetupSecondaryEncryptedVolume: starting", "mount_point", MountPoint)
 
-	devicePath := findSecondaryDevice()
+	// Retry disk detection to handle blue-green upgrades where the disk is
+	// hot-attached after the instance boots. The GCE attach-disk API returns
+	// before the guest OS enumerates the device, so we poll briefly.
+	var devicePath string
+	for attempt := 0; attempt < 15; attempt++ {
+		devicePath = findSecondaryDevice()
+		if devicePath != "" {
+			break
+		}
+		if attempt == 0 {
+			logger.Info("SetupSecondaryEncryptedVolume: secondary device not found, will retry")
+		}
+		time.Sleep(2 * time.Second)
+	}
 	if devicePath == "" {
 		logger.Info("SetupSecondaryEncryptedVolume: no secondary storage device found, using boot disk for persistent storage")
 		// No secondary device: create the mount point as a plain directory on the

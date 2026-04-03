@@ -589,6 +589,31 @@ func pullImageBackoffPolicy() backoff.BackOff {
 	return backoff.WithMaxRetries(b, 3)
 }
 
+// waitForActivation polls the GCE metadata server for the deployment mode to change
+// from "standby" to "active". Used during blue-green upgrades: the coordinator transfers
+// the persistent disk and then updates metadata to signal activation.
+func (r *ContainerRunner) waitForActivation(ctx context.Context) error {
+	mdsClient := metadata.NewClient(nil)
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			val, err := mdsClient.InstanceAttributeValue(spec.DeploymentModeKey())
+			if err != nil {
+				r.logger.Error("Failed to read deployment mode from metadata", "error", err)
+				continue
+			}
+			if val == "active" {
+				return nil
+			}
+		}
+	}
+}
+
 // Run the container
 // Container output will always be redirected to logger writer for now
 func (r *ContainerRunner) Run(ctx context.Context) error {
@@ -662,6 +687,16 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 		}
 		r.logger.Info("Successfully retrieved mnemonic from KMS")
 		return mnemonic, nil
+	}
+
+	// Blue-green standby gate: if in standby mode, wait for the coordinator
+	// to transfer the persistent disk and signal activation via metadata update.
+	if r.launchSpec.DeploymentMode == "standby" {
+		r.logger.Info("STANDBY mode: waiting for activation signal via metadata update")
+		if err := r.waitForActivation(ctx); err != nil {
+			return fmt.Errorf("standby activation failed: %v", err)
+		}
+		r.logger.Info("STANDBY mode: activated, proceeding with disk setup and workload start")
 	}
 
 	r.logger.Info("Setting up encrypted volume")
