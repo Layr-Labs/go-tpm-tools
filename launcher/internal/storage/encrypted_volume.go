@@ -112,6 +112,18 @@ func SetupSecondaryEncryptedVolume(logger logging.Logger, mnemonicProvider Mnemo
 			return fmt.Errorf("failed to open LUKS device: %w", err)
 		}
 		logger.Info("SetupSecondaryEncryptedVolume: luksOpen succeeded", "mapper", mapperPath)
+
+		if err := luksResize(luksName); err != nil {
+			logger.Error("SetupSecondaryEncryptedVolume: cryptsetup resize failed", "error", err)
+			return fmt.Errorf("failed to resize LUKS device: %w", err)
+		}
+		logger.Info("SetupSecondaryEncryptedVolume: LUKS device resized to fill underlying block device")
+
+		if err := resizeExt4(mapperPath); err != nil {
+			logger.Error("SetupSecondaryEncryptedVolume: resize2fs failed", "error", err)
+			return fmt.Errorf("failed to resize ext4 filesystem: %w", err)
+		}
+		logger.Info("SetupSecondaryEncryptedVolume: ext4 filesystem resized to fill LUKS container")
 	}
 
 	if err := os.MkdirAll(MountPoint, 0755); err != nil {
@@ -158,6 +170,30 @@ func luksFormat(device string, key string) error {
 func luksOpen(device, name string, key string) error {
 	cmd := exec.Command("cryptsetup", "luksOpen", device, name, "-")
 	cmd.Stdin = strings.NewReader(key)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%w: %s", err, stderr.String())
+	}
+	return nil
+}
+
+// luksResize expands the LUKS container to use all available space on the
+// underlying block device. This is a no-op if the device has not been resized.
+func luksResize(name string) error {
+	cmd := exec.Command("cryptsetup", "resize", name)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%w: %s", err, stderr.String())
+	}
+	return nil
+}
+
+// resizeExt4 grows an ext4 filesystem to fill its underlying device.
+// This is a no-op if the filesystem already occupies the full device.
+func resizeExt4(device string) error {
+	cmd := exec.Command("resize2fs", device)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
