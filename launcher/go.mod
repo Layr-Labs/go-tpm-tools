@@ -23,6 +23,8 @@ require (
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.0
 	github.com/opencontainers/runtime-spec v1.2.0
+	github.com/stretchr/testify v1.10.0
+	go.uber.org/goleak v1.3.0
 	golang.org/x/crypto v0.43.0
 	golang.org/x/oauth2 v0.33.0
 	google.golang.org/api v0.256.0
