@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -76,4 +78,28 @@ func runBlockdevGetsize64(ctx context.Context, r commandRunner, path string) (ui
 		return 0, fmt.Errorf("parse blockdev output %q: %w", s, err)
 	}
 	return n, nil
+}
+
+// kernelRescanPD asks the kernel to re-read the SCSI capacity of the backing
+// PD. On cos-tdx this maps to /sys/block/<devname>/device/rescan.
+func kernelRescanPD(device string) error {
+	if err := checkDevice(device); err != nil {
+		return err
+	}
+	target, err := filepath.EvalSymlinks(device)
+	if err != nil {
+		return fmt.Errorf("resolve %s: %w", device, err)
+	}
+	// Example: /dev/sdb -> /sys/block/sdb/device/rescan
+	devName := filepath.Base(target)
+	rescanPath := filepath.Join("/sys/block", devName, "device", "rescan")
+	return writeRescan(rescanPath)
+}
+
+// writeRescan writes "1" to the given sysfs path. Separated for testability.
+func writeRescan(path string) error {
+	if err := os.WriteFile(path, []byte("1"), 0o200); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
 }

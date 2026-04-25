@@ -3,6 +3,8 @@ package storage
 import (
 	"context"
 	"errors"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -110,5 +112,28 @@ func TestMapperSizeBytes(t *testing.T) {
 		_, err := mapperSizeBytes(context.Background(), r, "/dev/mapper/protected_stateful_partition")
 		assert.ErrorIs(t, err, ErrDeviceNotAllowed)
 		assert.Empty(t, r.Calls())
+	})
+}
+
+func TestKernelRescanPD(t *testing.T) {
+	t.Parallel()
+
+	t.Run("writes 1 to rescan sysfs node", func(t *testing.T) {
+		t.Parallel()
+		// Use a temp file as a stand-in for /sys/block/<dev>/device/rescan.
+		tmp := t.TempDir() + "/rescan"
+		require.NoError(t, os.WriteFile(tmp, []byte(""), 0o644))
+
+		require.NoError(t, writeRescan(tmp))
+
+		b, err := os.ReadFile(tmp)
+		require.NoError(t, err)
+		assert.Equal(t, "1", strings.TrimSpace(string(b)))
+	})
+
+	t.Run("rejects non-allowlisted device", func(t *testing.T) {
+		t.Parallel()
+		err := kernelRescanPD("/dev/sda")
+		assert.ErrorIs(t, err, ErrDeviceNotAllowed)
 	})
 }
