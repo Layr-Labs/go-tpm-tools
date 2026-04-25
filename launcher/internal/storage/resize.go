@@ -258,3 +258,48 @@ func GrowOnce(ctx context.Context, logger logging.Logger) error {
 	}
 	return growOnce(ctx, defaultRunner, logger)
 }
+
+// growOnceBoot is the boot-time variant of growOnce. The filesystem is NOT
+// yet mounted — the secondary PD was just opened via luksOpen and mkfs may
+// or may not have just run. resize2fs on an unmounted ext4 grows the FS to
+// match the mapper; on a freshly-formatted FS it's a cheap no-op. We skip
+// the findmnt-based mount sanity check because the mount will be made
+// right after this returns.
+//
+// Concurrency: serialized by construction (called once per SetupSecondary
+// EncryptedVolume invocation, before the poller starts).
+func growOnceBoot(ctx context.Context, r commandRunner, logger logging.Logger) error {
+	pdSize, err := pdSizeBytes(ctx, r, allowedBackingDevice)
+	if err != nil {
+		return fmt.Errorf("read pd size: %w", err)
+	}
+	mapperSize, err := mapperSizeBytes(ctx, r, allowedMapper)
+	if err != nil {
+		return fmt.Errorf("read mapper size: %w", err)
+	}
+	if pdSize <= mapperSize {
+		logger.Info("grow (boot): no-op",
+			"pd_size_bytes", pdSize, "mapper_size_bytes", mapperSize)
+		return nil
+	}
+	logger.Info("grow (boot): pd larger than mapper, resizing",
+		"pd_size_bytes", pdSize, "mapper_size_bytes", mapperSize)
+	if err := luksResize(ctx, r, luksMapperName); err != nil {
+		return err
+	}
+	if err := resizeExt4(ctx, r, allowedMapper); err != nil {
+		return err
+	}
+	logger.Info("grow (boot): resize complete")
+	return nil
+}
+
+// GrowOnceBoot is the package-visible entry for the boot-time variant.
+// See growOnceBoot for semantics. Uses the default runner and first kicks
+// the kernel rescan (best-effort).
+func GrowOnceBoot(ctx context.Context, logger logging.Logger) error {
+	if err := rescanFn(allowedBackingDevice); err != nil {
+		logger.Warn("kernel rescan failed at boot (continuing)", "error", err)
+	}
+	return growOnceBoot(ctx, defaultRunner, logger)
+}

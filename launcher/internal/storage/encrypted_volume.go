@@ -3,6 +3,7 @@ package storage
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -45,7 +46,7 @@ type MnemonicProvider func() (string, error)
 // the existing LUKS header and only opens it.
 // If no secondary device is found, it falls back to a directory on the boot disk,
 // and the mnemonicProvider is not called.
-func SetupSecondaryEncryptedVolume(logger logging.Logger, mnemonicProvider MnemonicProvider) error {
+func SetupSecondaryEncryptedVolume(ctx context.Context, logger logging.Logger, mnemonicProvider MnemonicProvider) error {
 	logger.Info("SetupSecondaryEncryptedVolume: starting", "mount_point", MountPoint)
 
 	devicePath := findSecondaryDevice()
@@ -112,6 +113,13 @@ func SetupSecondaryEncryptedVolume(logger logging.Logger, mnemonicProvider Mnemo
 			return fmt.Errorf("failed to open LUKS device: %w", err)
 		}
 		logger.Info("SetupSecondaryEncryptedVolume: luksOpen succeeded", "mapper", mapperPath)
+	}
+
+	// Best-effort online grow on boot: if the PD was enlarged while the VM
+	// was off, bring the LUKS mapper and ext4 up to size before mount.
+	// Failure here is non-fatal; the runtime poller will retry.
+	if err := GrowOnceBoot(ctx, logger); err != nil {
+		logger.Error("SetupSecondaryEncryptedVolume: boot-time grow failed, continuing; poller will retry", "error", err)
 	}
 
 	if err := os.MkdirAll(MountPoint, 0755); err != nil {

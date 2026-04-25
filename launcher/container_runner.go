@@ -665,7 +665,7 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 	}
 
 	r.logger.Info("Setting up encrypted volume")
-	if err := storage.SetupSecondaryEncryptedVolume(r.logger, mnemonicProvider); err != nil {
+	if err := storage.SetupSecondaryEncryptedVolume(ctx, r.logger, mnemonicProvider); err != nil {
 		return fmt.Errorf("failed to set up encrypted volume: %v", err)
 	}
 	r.logger.Info("Encrypted volume setup complete")

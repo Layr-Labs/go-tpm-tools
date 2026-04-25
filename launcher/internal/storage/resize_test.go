@@ -368,3 +368,79 @@ func TestGrowOnceExported_SwallowsRescanError(t *testing.T) {
 	require.True(t, rescanCalled, "rescan hook must be invoked")
 	assert.Len(t, r.Calls(), 2, "only size reads; no resize subprocess")
 }
+
+func TestGrowOnceBoot(t *testing.T) {
+	t.Parallel()
+
+	t.Run("grows without mount check", func(t *testing.T) {
+		t.Parallel()
+		r := newFakeRunner()
+		r.Expect("blockdev", []string{"--getsize64", allowedBackingDevice}, []byte("200\n"), nil)
+		r.Expect("blockdev", []string{"--getsize64", allowedMapper}, []byte("100\n"), nil)
+		r.Expect("cryptsetup", []string{"resize", luksMapperName}, nil, nil)
+		r.Expect("resize2fs", []string{allowedMapper}, nil, nil)
+
+		require.NoError(t, growOnceBoot(context.Background(), r, testLogger(t)))
+		for _, c := range r.Calls() {
+			assert.NotEqual(t, "findmnt", c.name, "boot-time variant must not invoke findmnt")
+		}
+	})
+
+	t.Run("noop when equal", func(t *testing.T) {
+		t.Parallel()
+		r := newFakeRunner()
+		r.Expect("blockdev", []string{"--getsize64", allowedBackingDevice}, []byte("100\n"), nil)
+		r.Expect("blockdev", []string{"--getsize64", allowedMapper}, []byte("100\n"), nil)
+
+		require.NoError(t, growOnceBoot(context.Background(), r, testLogger(t)))
+		assert.Len(t, r.Calls(), 2)
+	})
+
+	t.Run("noop when pd smaller", func(t *testing.T) {
+		t.Parallel()
+		r := newFakeRunner()
+		r.Expect("blockdev", []string{"--getsize64", allowedBackingDevice}, []byte("50\n"), nil)
+		r.Expect("blockdev", []string{"--getsize64", allowedMapper}, []byte("100\n"), nil)
+
+		require.NoError(t, growOnceBoot(context.Background(), r, testLogger(t)))
+		assert.Len(t, r.Calls(), 2)
+	})
+
+	t.Run("cryptsetup error propagates", func(t *testing.T) {
+		t.Parallel()
+		r := newFakeRunner()
+		r.Expect("blockdev", []string{"--getsize64", allowedBackingDevice}, []byte("200\n"), nil)
+		r.Expect("blockdev", []string{"--getsize64", allowedMapper}, []byte("100\n"), nil)
+		r.Expect("cryptsetup", nil, nil, errors.New("boom-boot"))
+
+		err := growOnceBoot(context.Background(), r, testLogger(t))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "boom-boot")
+	})
+}
+
+func TestGrowOnceBootExported_SwallowsRescanError(t *testing.T) {
+	// Not t.Parallel(): mutates package-level rescanFn and defaultRunner.
+	originalRescan := rescanFn
+	originalRunner := defaultRunner
+	t.Cleanup(func() {
+		rescanFn = originalRescan
+		defaultRunner = originalRunner
+	})
+
+	rescanCalled := false
+	rescanFn = func(device string) error {
+		rescanCalled = true
+		assert.Equal(t, allowedBackingDevice, device)
+		return errors.New("simulated boot rescan failure")
+	}
+
+	r := newFakeRunner()
+	r.Expect("blockdev", []string{"--getsize64", allowedBackingDevice}, []byte("100\n"), nil)
+	r.Expect("blockdev", []string{"--getsize64", allowedMapper}, []byte("100\n"), nil)
+	defaultRunner = r
+
+	require.NoError(t, GrowOnceBoot(context.Background(), testLogger(t)))
+	assert.True(t, rescanCalled)
+	assert.Len(t, r.Calls(), 2)
+}
