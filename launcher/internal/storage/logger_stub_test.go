@@ -2,6 +2,7 @@ package storage
 
 import (
 	"os"
+	"sync"
 
 	clogging "cloud.google.com/go/logging"
 
@@ -21,3 +22,31 @@ func (discardLogger) Warn(string, ...any)                   {}
 func (discardLogger) Error(string, ...any)                  {}
 func (discardLogger) SerialConsoleFile() *os.File           { return nil }
 func (discardLogger) Close()                                {}
+
+// capturingLogger records Info calls for poller tests that assert on log shape.
+// Other levels go to the discard receiver. Concurrent-safe via a mutex
+// because the poller goroutine writes and the test goroutine reads.
+type capturingLogger struct {
+	discardLogger
+	mu   sync.Mutex
+	info []capturedMsg
+}
+
+type capturedMsg struct {
+	msg  string
+	args []any
+}
+
+func (c *capturingLogger) Info(msg string, args ...any) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.info = append(c.info, capturedMsg{msg: msg, args: append([]any(nil), args...)})
+}
+
+func (c *capturingLogger) Infos() []capturedMsg {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]capturedMsg, len(c.info))
+	copy(out, c.info)
+	return out
+}
