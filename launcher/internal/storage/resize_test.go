@@ -137,3 +137,50 @@ func TestKernelRescanPD(t *testing.T) {
 		assert.ErrorIs(t, err, ErrDeviceNotAllowed)
 	})
 }
+
+func TestLuksResize(t *testing.T) {
+	t.Parallel()
+
+	t.Run("invokes cryptsetup resize", func(t *testing.T) {
+		t.Parallel()
+		r := newFakeRunner()
+		r.Expect("cryptsetup", []string{"resize", "userdata"}, nil, nil)
+		require.NoError(t, luksResize(context.Background(), r, "userdata"))
+	})
+
+	t.Run("rejects wrong mapper name", func(t *testing.T) {
+		t.Parallel()
+		r := newFakeRunner()
+		err := luksResize(context.Background(), r, "protected_stateful_partition")
+		assert.ErrorIs(t, err, ErrDeviceNotAllowed)
+		assert.Empty(t, r.Calls())
+	})
+
+	t.Run("wraps cryptsetup error", func(t *testing.T) {
+		t.Parallel()
+		r := newFakeRunner()
+		r.Expect("cryptsetup", nil, nil, errors.New("device not active"))
+		err := luksResize(context.Background(), r, "userdata")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "device not active")
+	})
+}
+
+func TestResizeExt4(t *testing.T) {
+	t.Parallel()
+
+	t.Run("invokes resize2fs on allowed mapper", func(t *testing.T) {
+		t.Parallel()
+		r := newFakeRunner()
+		r.Expect("resize2fs", []string{allowedMapper}, nil, nil)
+		require.NoError(t, resizeExt4(context.Background(), r, allowedMapper))
+	})
+
+	t.Run("rejects non-allowlisted device", func(t *testing.T) {
+		t.Parallel()
+		r := newFakeRunner()
+		err := resizeExt4(context.Background(), r, "/dev/mapper/protected_stateful_partition")
+		assert.ErrorIs(t, err, ErrDeviceNotAllowed)
+		assert.Empty(t, r.Calls())
+	})
+}

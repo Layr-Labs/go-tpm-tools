@@ -119,3 +119,32 @@ func writeRescan(path string) error {
 	}
 	return nil
 }
+
+// luksMapperName is the short LUKS volume name used with cryptsetup. It is
+// deliberately distinct from allowedMapper (which is the /dev/mapper path):
+// cryptsetup takes the short name, file operations take the path.
+const luksMapperName = "userdata"
+
+// luksResize runs `cryptsetup resize <name>`. Online-safe. The mapper must
+// already be opened (present under /dev/mapper). name is constrained to
+// the package's single LUKS volume.
+func luksResize(ctx context.Context, r commandRunner, name string) error {
+	if name != luksMapperName {
+		return fmt.Errorf("%w: luks name=%q", ErrDeviceNotAllowed, name)
+	}
+	if _, err := r.Run(ctx, "cryptsetup", "resize", name); err != nil {
+		return fmt.Errorf("cryptsetup resize %s: %w", name, err)
+	}
+	return nil
+}
+
+// resizeExt4 runs `resize2fs <mapper>`. Online-safe on mounted ext4.
+func resizeExt4(ctx context.Context, r commandRunner, mapper string) error {
+	if err := checkMapper(mapper); err != nil {
+		return err
+	}
+	if _, err := r.Run(ctx, "resize2fs", mapper); err != nil {
+		return fmt.Errorf("resize2fs %s: %w", mapper, err)
+	}
+	return nil
+}
