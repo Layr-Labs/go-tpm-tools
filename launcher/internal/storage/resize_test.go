@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -55,5 +57,58 @@ func TestCheckMount(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrDeviceNotAllowed)
 		assert.Contains(t, err.Error(), "mount=")
+	})
+}
+
+func TestPdSizeBytes(t *testing.T) {
+	t.Parallel()
+
+	t.Run("parses blockdev output", func(t *testing.T) {
+		t.Parallel()
+		r := newFakeRunner()
+		r.Expect("blockdev", []string{"--getsize64", allowedBackingDevice}, []byte("107374182400\n"), nil)
+
+		n, err := pdSizeBytes(context.Background(), r, allowedBackingDevice)
+		require.NoError(t, err)
+		assert.Equal(t, uint64(107374182400), n)
+	})
+
+	t.Run("rejects non-allowlisted device", func(t *testing.T) {
+		t.Parallel()
+		r := newFakeRunner()
+		_, err := pdSizeBytes(context.Background(), r, "/dev/sda")
+		assert.ErrorIs(t, err, ErrDeviceNotAllowed)
+		assert.Empty(t, r.Calls(), "must not exec when allowlist rejects")
+	})
+
+	t.Run("wraps blockdev error", func(t *testing.T) {
+		t.Parallel()
+		r := newFakeRunner()
+		r.Expect("blockdev", nil, nil, errors.New("boom"))
+		_, err := pdSizeBytes(context.Background(), r, allowedBackingDevice)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "boom")
+	})
+}
+
+func TestMapperSizeBytes(t *testing.T) {
+	t.Parallel()
+
+	t.Run("parses blockdev output", func(t *testing.T) {
+		t.Parallel()
+		r := newFakeRunner()
+		r.Expect("blockdev", []string{"--getsize64", allowedMapper}, []byte("214748364800\n"), nil)
+
+		n, err := mapperSizeBytes(context.Background(), r, allowedMapper)
+		require.NoError(t, err)
+		assert.Equal(t, uint64(214748364800), n)
+	})
+
+	t.Run("rejects non-allowlisted mapper", func(t *testing.T) {
+		t.Parallel()
+		r := newFakeRunner()
+		_, err := mapperSizeBytes(context.Background(), r, "/dev/mapper/protected_stateful_partition")
+		assert.ErrorIs(t, err, ErrDeviceNotAllowed)
+		assert.Empty(t, r.Calls())
 	})
 }
