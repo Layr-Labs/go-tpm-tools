@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
 )
 
 // Allowlist aliases — single source of truth lives in encrypted_volume.go.
@@ -186,4 +188,63 @@ func verifyMountedFromMapper(ctx context.Context, r commandRunner, mountPoint, m
 		return fmt.Errorf("%w: mount %s backed by %q, want %q", ErrMountNotPresent, mountPoint, got, mapper)
 	}
 	return nil
+}
+
+// growOnce performs one full online-grow cycle. Idempotent:
+//   - noop when pdSize == mapperSize
+//   - noop when pdSize <  mapperSize (shrink is not supported; see design spec)
+//   - otherwise: verify mount, cryptsetup resize, resize2fs
+//
+// Errors are returned; callers decide whether to log-and-continue (poller)
+// or abort (not applicable today — both callers treat errors as non-fatal).
+// This is the runtime variant: it assumes the FS is mounted, and calls
+// verifyMountedFromMapper before issuing resize2fs.
+func growOnce(ctx context.Context, r commandRunner, logger logging.Logger) error {
+	pdSize, err := pdSizeBytes(ctx, r, allowedBackingDevice)
+	if err != nil {
+		return fmt.Errorf("read pd size: %w", err)
+	}
+	mapperSize, err := mapperSizeBytes(ctx, r, allowedMapper)
+	if err != nil {
+		return fmt.Errorf("read mapper size: %w", err)
+	}
+
+	switch {
+	case pdSize == mapperSize:
+		logger.Info("grow: no-op, sizes equal",
+			"pd_size_bytes", pdSize, "mapper_size_bytes", mapperSize)
+		return nil
+	case pdSize < mapperSize:
+		logger.Info("grow: no-op, pd smaller than mapper (shrink not supported)",
+			"pd_size_bytes", pdSize, "mapper_size_bytes", mapperSize)
+		return nil
+	}
+
+	logger.Info("grow: pd is larger than mapper, resizing",
+		"pd_size_bytes", pdSize, "mapper_size_bytes", mapperSize)
+
+	if err := verifyMountedFromMapper(ctx, r, allowedMountPoint, allowedMapper); err != nil {
+		return fmt.Errorf("mount precheck: %w", err)
+	}
+	if err := luksResize(ctx, r, luksMapperName); err != nil {
+		return err
+	}
+	if err := resizeExt4(ctx, r, allowedMapper); err != nil {
+		return err
+	}
+	logger.Info("grow: resize complete")
+	return nil
+}
+
+// GrowOnce is the package-visible entry point for runtime online grow.
+//
+// It triggers a kernel rescan of the backing PD (best-effort: a rescan
+// error is logged but does not abort the grow — growOnce will still read
+// sizes and no-op if the kernel hasn't picked up the new capacity). Then
+// it delegates to growOnce with the default runner.
+func GrowOnce(ctx context.Context, logger logging.Logger) error {
+	if err := kernelRescanPD(allowedBackingDevice); err != nil {
+		logger.Warn("kernel rescan failed (continuing)", "error", err)
+	}
+	return growOnce(ctx, defaultRunner, logger)
 }
