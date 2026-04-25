@@ -7,56 +7,53 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCheckAllowed(t *testing.T) {
+func TestCheckDevice(t *testing.T) {
 	t.Parallel()
 
-	cases := []struct {
-		name       string
-		device     string
-		mapper     string
-		mountPoint string
-		wantErr    error
-	}{
-		{
-			name:       "all match",
-			device:     allowedBackingDevice,
-			mapper:     allowedMapper,
-			mountPoint: allowedMountPoint,
-			wantErr:    nil,
-		},
-		{
-			name:       "wrong device",
-			device:     "/dev/sda",
-			mapper:     allowedMapper,
-			mountPoint: allowedMountPoint,
-			wantErr:    ErrDeviceNotAllowed,
-		},
-		{
-			name:       "wrong mapper",
-			device:     allowedBackingDevice,
-			mapper:     "/dev/mapper/protected_stateful_partition",
-			mountPoint: allowedMountPoint,
-			wantErr:    ErrDeviceNotAllowed,
-		},
-		{
-			name:       "wrong mount",
-			device:     allowedBackingDevice,
-			mapper:     allowedMapper,
-			mountPoint: "/",
-			wantErr:    ErrDeviceNotAllowed,
-		},
-	}
+	t.Run("accepts allowlisted device", func(t *testing.T) {
+		t.Parallel()
+		require.NoError(t, checkDevice(allowedBackingDevice))
+	})
 
-	for _, tc := range cases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			err := checkAllowed(tc.device, tc.mapper, tc.mountPoint)
-			if tc.wantErr == nil {
-				require.NoError(t, err)
-				return
-			}
-			assert.ErrorIs(t, err, tc.wantErr)
-		})
-	}
+	t.Run("rejects other device", func(t *testing.T) {
+		t.Parallel()
+		err := checkDevice("/dev/sda")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrDeviceNotAllowed)
+		assert.Contains(t, err.Error(), "device=")
+	})
+}
+
+func TestCheckMapper(t *testing.T) {
+	t.Parallel()
+
+	t.Run("accepts allowlisted mapper", func(t *testing.T) {
+		t.Parallel()
+		require.NoError(t, checkMapper(allowedMapper))
+	})
+
+	t.Run("rejects other mapper", func(t *testing.T) {
+		t.Parallel()
+		err := checkMapper("/dev/mapper/protected_stateful_partition")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrDeviceNotAllowed)
+		assert.Contains(t, err.Error(), "mapper=")
+	})
+}
+
+func TestCheckMount(t *testing.T) {
+	t.Parallel()
+
+	t.Run("accepts allowlisted mount", func(t *testing.T) {
+		t.Parallel()
+		require.NoError(t, checkMount(allowedMountPoint))
+	})
+
+	t.Run("rejects other mount", func(t *testing.T) {
+		t.Parallel()
+		err := checkMount("/")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrDeviceNotAllowed)
+		assert.Contains(t, err.Error(), "mount=")
+	})
 }

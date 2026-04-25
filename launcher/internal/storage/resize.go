@@ -43,13 +43,3 @@ func checkMount(mountPoint string) error {
 	}
 	return nil
 }
-
-func checkAllowed(device, mapper, mountPoint string) error {
-	if err := checkDevice(device); err != nil {
-		return err
-	}
-	if err := checkMapper(mapper); err != nil {
-		return err
-	}
-	return checkMount(mountPoint)
-}
