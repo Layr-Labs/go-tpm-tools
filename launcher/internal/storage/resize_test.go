@@ -146,6 +146,10 @@ func TestLuksResize(t *testing.T) {
 		r := newFakeRunner()
 		r.Expect("cryptsetup", []string{"resize", "userdata"}, nil, nil)
 		require.NoError(t, luksResize(context.Background(), r, "userdata"))
+		calls := r.Calls()
+		require.Len(t, calls, 1)
+		assert.Equal(t, "cryptsetup", calls[0].name)
+		assert.Equal(t, []string{"resize", "userdata"}, calls[0].args)
 	})
 
 	t.Run("rejects wrong mapper name", func(t *testing.T) {
@@ -174,6 +178,10 @@ func TestResizeExt4(t *testing.T) {
 		r := newFakeRunner()
 		r.Expect("resize2fs", []string{allowedMapper}, nil, nil)
 		require.NoError(t, resizeExt4(context.Background(), r, allowedMapper))
+		calls := r.Calls()
+		require.Len(t, calls, 1)
+		assert.Equal(t, "resize2fs", calls[0].name)
+		assert.Equal(t, []string{allowedMapper}, calls[0].args)
 	})
 
 	t.Run("rejects non-allowlisted device", func(t *testing.T) {

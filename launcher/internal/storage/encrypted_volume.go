@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	luksName   = "userdata"
-	mapperPath = "/dev/mapper/userdata"
+	luksName   = luksMapperName
+	mapperPath = "/dev/mapper/" + luksMapperName
 
 	// MountPoint is where the encrypted volume is mounted on the host.
 	MountPoint = "/mnt/disks/userdata"

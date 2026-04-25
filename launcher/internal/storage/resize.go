@@ -120,14 +120,22 @@ func writeRescan(path string) error {
 	return nil
 }
 
-// luksMapperName is the short LUKS volume name used with cryptsetup. It is
-// deliberately distinct from allowedMapper (which is the /dev/mapper path):
-// cryptsetup takes the short name, file operations take the path.
+// luksMapperName is the canonical short LUKS volume name used with cryptsetup.
+// It is deliberately distinct from allowedMapper (which is the /dev/mapper path):
+// cryptsetup takes the short name, file operations take the path. mapperPath and
+// allowedMapper are now derived from this constant.
 const luksMapperName = "userdata"
 
-// luksResize runs `cryptsetup resize <name>`. Online-safe. The mapper must
-// already be opened (present under /dev/mapper). name is constrained to
-// the package's single LUKS volume.
+// luksResize runs `cryptsetup resize <name>`. Online-safe.
+//
+// Preconditions:
+//   - The mapper must already be open (present under /dev/mapper/<name>),
+//     so this operates on an active dm entry.
+//   - The LUKS passphrase is NOT required: cryptsetup resize only talks
+//     to the kernel's active device-mapper entry. This matters for the
+//     runtime poller, which does not keep the key in memory.
+//
+// name is constrained to the package's single LUKS volume (luksMapperName).
 func luksResize(ctx context.Context, r commandRunner, name string) error {
 	if name != luksMapperName {
 		return fmt.Errorf("%w: luks name=%q", ErrDeviceNotAllowed, name)
@@ -139,6 +147,10 @@ func luksResize(ctx context.Context, r commandRunner, name string) error {
 }
 
 // resizeExt4 runs `resize2fs <mapper>`. Online-safe on mounted ext4.
+//
+// Grows the filesystem to fill the underlying block device — no target
+// size is passed. Shrinking is out of scope for this package (requires an
+// unmount and would break the zero-downtime contract).
 func resizeExt4(ctx context.Context, r commandRunner, mapper string) error {
 	if err := checkMapper(mapper); err != nil {
 		return err
