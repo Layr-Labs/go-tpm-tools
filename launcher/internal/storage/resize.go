@@ -160,3 +160,30 @@ func resizeExt4(ctx context.Context, r commandRunner, mapper string) error {
 	}
 	return nil
 }
+
+// verifyMountedFromMapper confirms the mount point is served by the given
+// LUKS mapper. Used before resize2fs so we never grow a filesystem this
+// package does not own.
+//
+// Allowlist order matters: mount and mapper are both validated before any
+// subprocess is spawned. If findmnt itself fails (mount missing, binary
+// absent, permission denied, etc.), we return ErrMountNotPresent so callers
+// can treat "we can't prove this is our mount" and "it is not our mount"
+// uniformly as grounds to skip resize.
+func verifyMountedFromMapper(ctx context.Context, r commandRunner, mountPoint, mapper string) error {
+	if err := checkMount(mountPoint); err != nil {
+		return err
+	}
+	if err := checkMapper(mapper); err != nil {
+		return err
+	}
+	out, err := r.Run(ctx, "findmnt", "-n", "-o", "SOURCE", mountPoint)
+	if err != nil {
+		return fmt.Errorf("%w: findmnt %s: %v", ErrMountNotPresent, mountPoint, err)
+	}
+	got := strings.TrimSpace(string(out))
+	if got != mapper {
+		return fmt.Errorf("%w: mount %s backed by %q, want %q", ErrMountNotPresent, mountPoint, got, mapper)
+	}
+	return nil
+}

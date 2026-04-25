@@ -192,3 +192,47 @@ func TestResizeExt4(t *testing.T) {
 		assert.Empty(t, r.Calls())
 	})
 }
+
+func TestVerifyMountedFromMapper(t *testing.T) {
+	t.Parallel()
+
+	t.Run("accepts matching findmnt output", func(t *testing.T) {
+		t.Parallel()
+		r := newFakeRunner()
+		r.Expect("findmnt", []string{"-n", "-o", "SOURCE", allowedMountPoint},
+			[]byte(allowedMapper+"\n"), nil)
+		require.NoError(t, verifyMountedFromMapper(context.Background(), r, allowedMountPoint, allowedMapper))
+	})
+
+	t.Run("rejects wrong source", func(t *testing.T) {
+		t.Parallel()
+		r := newFakeRunner()
+		r.Expect("findmnt", nil, []byte("/dev/sda1\n"), nil)
+		err := verifyMountedFromMapper(context.Background(), r, allowedMountPoint, allowedMapper)
+		assert.ErrorIs(t, err, ErrMountNotPresent)
+	})
+
+	t.Run("rejects when findmnt fails", func(t *testing.T) {
+		t.Parallel()
+		r := newFakeRunner()
+		r.Expect("findmnt", nil, nil, errors.New("not mounted"))
+		err := verifyMountedFromMapper(context.Background(), r, allowedMountPoint, allowedMapper)
+		assert.ErrorIs(t, err, ErrMountNotPresent)
+	})
+
+	t.Run("rejects non-allowlisted mount point", func(t *testing.T) {
+		t.Parallel()
+		r := newFakeRunner()
+		err := verifyMountedFromMapper(context.Background(), r, "/", allowedMapper)
+		assert.ErrorIs(t, err, ErrDeviceNotAllowed)
+		assert.Empty(t, r.Calls())
+	})
+
+	t.Run("rejects non-allowlisted mapper", func(t *testing.T) {
+		t.Parallel()
+		r := newFakeRunner()
+		err := verifyMountedFromMapper(context.Background(), r, allowedMountPoint, "/dev/mapper/protected_stateful_partition")
+		assert.ErrorIs(t, err, ErrDeviceNotAllowed)
+		assert.Empty(t, r.Calls())
+	})
+}
