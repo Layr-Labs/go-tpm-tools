@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"syscall"
 	"time"
 
@@ -32,8 +33,8 @@ type Poller struct {
 
 	// Injection points for tests. Production code uses the defaults set
 	// by NewPoller (GrowOnce + statfs-based sizeSnapshot).
-	growFunc     func(ctx context.Context) error
-	sizeSnapshot func(ctx context.Context) (sizeSnapshot, error)
+	growFn     func(ctx context.Context) error
+	snapshotFn func(ctx context.Context) (sizeSnapshot, error)
 }
 
 // NewPoller returns a production-configured Poller. interval <= 0 means
@@ -43,10 +44,10 @@ func NewPoller(logger logging.Logger, interval time.Duration) *Poller {
 		interval = DefaultPollInterval
 	}
 	return &Poller{
-		interval:     interval,
-		logger:       logger,
-		growFunc:     func(ctx context.Context) error { return GrowOnce(ctx, logger) },
-		sizeSnapshot: defaultSizeSnapshot,
+		interval:   interval,
+		logger:     logger,
+		growFn:     func(ctx context.Context) error { return GrowOnce(ctx, logger) },
+		snapshotFn: defaultSizeSnapshot,
 	}
 }
 
@@ -73,15 +74,18 @@ func (p *Poller) Run(ctx context.Context) error {
 func (p *Poller) tick(ctx context.Context) {
 	defer func() {
 		if r := recover(); r != nil {
-			p.logger.Error("poller tick panicked; recovered", "panic", fmt.Sprintf("%v", r))
+			p.logger.Error("poller tick panicked; recovered",
+				"panic", fmt.Sprintf("%v", r),
+				"stack", string(debug.Stack()),
+			)
 		}
 	}()
 
-	if err := p.growFunc(ctx); err != nil {
+	if err := p.growFn(ctx); err != nil {
 		p.logger.Warn("grow tick failed", "error", err)
 	}
 
-	snap, err := p.sizeSnapshot(ctx)
+	snap, err := p.snapshotFn(ctx)
 	if err != nil {
 		p.logger.Warn("size snapshot failed", "error", err)
 		return
