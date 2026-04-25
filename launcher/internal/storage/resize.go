@@ -199,6 +199,12 @@ func verifyMountedFromMapper(ctx context.Context, r commandRunner, mountPoint, m
 // or abort (not applicable today — both callers treat errors as non-fatal).
 // This is the runtime variant: it assumes the FS is mounted, and calls
 // verifyMountedFromMapper before issuing resize2fs.
+//
+// Concurrency: callers must serialize invocations. Two concurrent runs
+// would issue overlapping `cryptsetup resize` / `resize2fs` commands on
+// the same mapper, which is unspecified. Today the boot-time caller runs
+// exactly once before the poller starts, and the poller is a single
+// goroutine, so no in-process mutex is needed.
 func growOnce(ctx context.Context, r commandRunner, logger logging.Logger) error {
 	pdSize, err := pdSizeBytes(ctx, r, allowedBackingDevice)
 	if err != nil {
@@ -236,6 +242,10 @@ func growOnce(ctx context.Context, r commandRunner, logger logging.Logger) error
 	return nil
 }
 
+// rescanFn is the rescan hook used by GrowOnce. A var so tests can swap
+// it out; production always uses kernelRescanPD.
+var rescanFn = kernelRescanPD
+
 // GrowOnce is the package-visible entry point for runtime online grow.
 //
 // It triggers a kernel rescan of the backing PD (best-effort: a rescan
@@ -243,7 +253,7 @@ func growOnce(ctx context.Context, r commandRunner, logger logging.Logger) error
 // sizes and no-op if the kernel hasn't picked up the new capacity). Then
 // it delegates to growOnce with the default runner.
 func GrowOnce(ctx context.Context, logger logging.Logger) error {
-	if err := kernelRescanPD(allowedBackingDevice); err != nil {
+	if err := rescanFn(allowedBackingDevice); err != nil {
 		logger.Warn("kernel rescan failed (continuing)", "error", err)
 	}
 	return growOnce(ctx, defaultRunner, logger)

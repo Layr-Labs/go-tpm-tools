@@ -338,3 +338,33 @@ func TestGrowOnce(t *testing.T) {
 		assert.Contains(t, err.Error(), "kaboom")
 	})
 }
+
+func TestGrowOnceExported_SwallowsRescanError(t *testing.T) {
+	// Not t.Parallel(): this test mutates the package-level rescanFn.
+	original := rescanFn
+	t.Cleanup(func() { rescanFn = original })
+
+	rescanCalled := false
+	rescanFn = func(device string) error {
+		rescanCalled = true
+		assert.Equal(t, allowedBackingDevice, device)
+		return errors.New("simulated rescan failure")
+	}
+
+	// GrowOnce uses defaultRunner (real os/exec). To keep this test from
+	// spawning subprocesses, swap defaultRunner too — it'll be restored.
+	originalRunner := defaultRunner
+	t.Cleanup(func() { defaultRunner = originalRunner })
+
+	r := newFakeRunner()
+	// Script a "sizes equal" no-op so growOnce returns nil without any
+	// resize commands.
+	r.Expect("blockdev", []string{"--getsize64", allowedBackingDevice}, []byte("100\n"), nil)
+	r.Expect("blockdev", []string{"--getsize64", allowedMapper}, []byte("100\n"), nil)
+	defaultRunner = r
+
+	err := GrowOnce(context.Background(), testLogger(t))
+	require.NoError(t, err, "rescan failure must be swallowed")
+	require.True(t, rescanCalled, "rescan hook must be invoked")
+	assert.Len(t, r.Calls(), 2, "only size reads; no resize subprocess")
+}
