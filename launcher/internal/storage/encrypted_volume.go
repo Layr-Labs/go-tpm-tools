@@ -163,8 +163,16 @@ func luksFormat(device string, key string) error {
 }
 
 // luksOpen opens a LUKS device with the given name.
+//
+// --disable-keyring stores the volume key inside dm-crypt's kernel state
+// only, not in the user keyring. This is required so that later
+// `cryptsetup resize` calls (issued from GrowOnce / GrowOnceBoot) can
+// grow the mapper without re-authenticating via the passphrase — the
+// launcher does not keep the mnemonic-derived key in memory after open.
+// On cos-tdx (cryptsetup >= 2.6) the keyring is the default and `resize`
+// refuses to operate without a passphrase when it's active.
 func luksOpen(device, name string, key string) error {
-	cmd := exec.Command("cryptsetup", "luksOpen", device, name, "-")
+	cmd := exec.Command("cryptsetup", "luksOpen", "--disable-keyring", device, name, "-")
 	cmd.Stdin = strings.NewReader(key)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
