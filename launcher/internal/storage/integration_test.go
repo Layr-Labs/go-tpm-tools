@@ -62,7 +62,9 @@ func TestIntegrationLoopbackGrow(t *testing.T) {
 	formatOut, err := formatCmd.CombinedOutput()
 	require.NoErrorf(t, err, "luksFormat: %s", formatOut)
 
-	openCmd := exec.Command("cryptsetup", "luksOpen", loopDev, testMapperName, "-")
+	// --disable-keyring mirrors the production luksOpen flags, so `cryptsetup
+	// resize` below does not demand passphrase re-authentication.
+	openCmd := exec.Command("cryptsetup", "luksOpen", "--disable-keyring", loopDev, testMapperName, "-")
 	openCmd.Stdin = strings.NewReader(passphrase)
 	openOut, err := openCmd.CombinedOutput()
 	require.NoErrorf(t, err, "luksOpen: %s", openOut)
