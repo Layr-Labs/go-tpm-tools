@@ -1,7 +1,7 @@
 # Design Document: Persistent Storage for Confidential Space Workloads
 
-**Status**: Merged (PR #16)
-**Date**: 2026-03-13
+**Status**: Merged (PR #16); runtime auto-grow added in PR #26
+**Date**: 2026-03-13 (runtime auto-grow section added 2026-04-27)
 
 ---
 
@@ -87,7 +87,36 @@ Start workload container
 
 **Rationale**: Both `MountPoint` and `ContainerMountPoint` are set to the same value. The workload container always sees the same `USER_PERSISTENT_DATA_PATH` and the same bind mount destination. Application code does not need to know which backend is in use, and host-side debugging is simplified because the paths match.
 
-### 3.6 No Integrity Check on Encrypted Volume
+### 3.6 Online PD Auto-Grow
+
+**Decision**: Grow the secondary PD online from inside the launcher, via a background poller that runs for the lifetime of the workload container. No VM restart, no unmount, no passphrase re-entry.
+
+**Rationale**: Operators resize the underlying GCE persistent disk via `gcloud compute disks resize`. For the workload to actually see the new capacity, three layers must grow in order: kernel-visible block device -> LUKS mapper -> ext4 filesystem. Doing this online (rather than at boot) means operators can expand storage under a running workload with zero downtime. The poller lives inside the launcher process because its lifetime is already tied to the container: when the workload exits, the poller exits; no systemd unit to manage.
+
+**Flow per tick** (see `launcher/internal/storage/resize.go`, orchestrated by `GrowOnce`):
+1. `kernelRescanPD` -- best-effort write to `/sys/block/<dev>/device/rescan`. On SCSI this nudges the kernel to re-read capacity; on NVMe this sysfs node does not exist and the write errors. Errors are intentionally swallowed -- see "Driver-agnostic rescan" below.
+2. `blockdev --getsize64` on the backing PD and on `/dev/mapper/userdata`. If PD > mapper, proceed.
+3. `cryptsetup resize userdata` grows the dm-crypt mapper to match the PD. This does not require the passphrase -- it only manipulates the kernel's active device-mapper entry.
+4. `resize2fs /dev/mapper/userdata` grows ext4 online. The mount stays up throughout.
+
+**Driver-agnostic rescan**: The code never parses or assumes a particular device node naming scheme. It operates on the stable GCE symlink `/dev/disk/by-id/google-persistent_storage_1`, resolves it with `filepath.EvalSymlinks` + `filepath.Base`, and joins the result onto `/sys/block/<name>/device/rescan`. Whether that path exists is driver-specific:
+
+| Driver | Device node | `/sys/block/<name>/device/rescan` | Capacity-change notification |
+|---|---|---|---|
+| SCSI (e.g. N1, N2) | `/dev/sdb` | exists, writable | hypervisor capacity-change interrupt |
+| NVMe (e.g. C3, C3D) | `/dev/nvme0nN` | absent (NVMe has `rescan_controller` at the controller level, not per-namespace) | NVMe Asynchronous Event Notification |
+
+On both drivers, the kernel **auto-detects** the capacity change on its own -- on SCSI via the hypervisor-issued capacity-change interrupt, on NVMe via the AEN. By the time `gcloud compute disks resize` returns, `blockdev --getsize64` already reports the new size. The explicit `kernelRescanPD` write is therefore defense-in-depth for environments where auto-detection might lag or be disabled; on NVMe it returns ENOENT and the caller (`GrowOnce` / `GrowOnceBoot`) logs-and-continues. This "rescan is best-effort, not a correctness requirement" contract is the invariant the tests `TestGrowOnce{,Boot}Exported_SwallowsRescanError` lock in.
+
+**`--disable-keyring` on luksOpen**: `cryptsetup resize <name>` does not talk to the LUKS header -- it only adjusts the kernel dm entry -- so in principle no passphrase should be needed. In practice, on cryptsetup >= 2.6 (default on cos-tdx-113) the volume key is stored in the user keyring after `luksOpen`, and `cryptsetup resize` refuses to operate without re-authentication when that keyring entry is present. The fix is to pass `--disable-keyring` at open time: the volume key stays inside dm-crypt's kernel state only, not the user keyring, and `resize` works without the passphrase. This matters because the launcher does not keep the mnemonic-derived key in memory after the volume is opened, by design. See the `luksOpen` doc comment in `encrypted_volume.go` for the full contract.
+
+**Cadence**: `DefaultPollInterval = 60s`. Chosen to make operator resize experience feel near-real-time (worst case: ~1 min after `gcloud disks resize` completes before the mapper + fs catch up) while keeping the subprocess overhead negligible.
+
+**Safety**: Each tick runs inside a `recover()`-guarded function so a panic in one iteration cannot kill the loop. Every command path is allowlisted against `secondaryDevicePath` / `luksMapperName` / `MountPoint` -- the package refuses to operate on any other device, mapper, or mount point, which keeps the surface area small even though the launcher runs as root.
+
+---
+
+### 3.7 No Integrity Check on Encrypted Volume
 
 **Decision**: The LUKS-encrypted volume uses encryption only (`cryptsetup luksFormat` with default cipher) and does not enforce integrity verification.
 
@@ -101,7 +130,27 @@ Start workload container
 
 ## 4. Component Details
 
-### 4.1 Encrypted Volume (`launcher/internal/storage/encrypted_volume.go`)
+### 4.1 Runtime Grow (`launcher/internal/storage/poller.go`, `resize.go`)
+
+**`Poller`**: Single-goroutine ticker loop. Started by the launcher after `SetupSecondaryEncryptedVolume` succeeds; runs until the workload container exits (launcher process lifetime). Per-tick panic recovery ensures a single bad call cannot silently kill the loop.
+
+**`GrowOnce(ctx, logger)`**: The orchestrator called each tick. Sequence: `kernelRescanPD` (best-effort) -> size-check PD vs mapper -> `cryptsetup resize userdata` if grow is needed -> `resize2fs /dev/mapper/userdata`. Each step is idempotent; if the sizes are already aligned (no grow pending), the whole call is a no-op aside from the structured size log.
+
+**`GrowOnceBoot(ctx, logger)`**: One-shot variant run synchronously at launcher boot, before the workload starts. Ensures any PD grow that occurred while the VM was stopped is applied before workload code sees the filesystem.
+
+**Allowlist constants** (single source of truth in `encrypted_volume.go`, aliased in `resize.go`):
+- `allowedBackingDevice = secondaryDevicePath`
+- `allowedMapper = mapperPath`
+- `allowedMountPoint = MountPoint`
+- `luksMapperName = "userdata"`
+
+Every primitive (`pdSizeBytes`, `mapperSizeBytes`, `kernelRescanPD`, `luksResize`, `resizeExt4`) gates its input against these constants and returns `ErrDeviceNotAllowed` on mismatch. Any new caller MUST use the constants; hard-coding paths is rejected at review.
+
+**Structured logging**: Each tick emits `disk sizes` with `pd_size_bytes`, `mapper_size_bytes`, `fs_size_bytes`, `fs_available_bytes`. This is the operator-facing signal for "is the grow being applied?" -- no separate metrics pipeline.
+
+---
+
+### 4.2 Encrypted Volume (`launcher/internal/storage/encrypted_volume.go`)
 
 **Constants**:
 - `MountPoint = "/mnt/disks/userdata"` -- Host-side mount path
@@ -128,7 +177,7 @@ Start workload container
 - `mkfsExt4(device)` -- `mkfs.ext4 <device>`
 - `mount(source, target)` -- `mount <source> <target>`
 
-### 4.2 Container Runner Integration (`launcher/container_runner.go`)
+### 4.3 Container Runner Integration (`launcher/container_runner.go`)
 
 **In `NewRunner()`**:
 - Appends `USER_PERSISTENT_DATA_PATH=/mnt/disks/userdata` to the workload environment variables.
@@ -173,7 +222,9 @@ The workload can read and write files under this path. Data persists across cont
 | File | Description |
 |---|---|
 | `launcher/internal/storage/encrypted_volume.go` | Device detection, LUKS lifecycle, mount point management |
-| `launcher/container_runner.go` | Mnemonic provider wiring, volume setup call, container spec update with bind mount |
+| `launcher/internal/storage/resize.go` | Online grow primitives: kernel rescan, `cryptsetup resize`, `resize2fs`; allowlist guards |
+| `launcher/internal/storage/poller.go` | Background ticker driving `GrowOnce` over the workload lifetime |
+| `launcher/container_runner.go` | Mnemonic provider wiring, volume setup call, container spec update with bind mount, poller start |
 
 ---
 

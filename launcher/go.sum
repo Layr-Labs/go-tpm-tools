@@ -103,10 +103,6 @@ github.com/Layr-Labs/eigenx-contracts v0.0.0-20260223155637-6137f1b215df h1:hh+h
 github.com/Layr-Labs/eigenx-contracts v0.0.0-20260223155637-6137f1b215df/go.mod h1:fcLQZBQ4RpTXv3Kz4cO/raRxKrfWUC+r8hSB94pSKFc=
 github.com/Layr-Labs/eigenx-kms v0.0.0-20260225212422-401bde321d28 h1:3n7gwhBNW8qbcOVYY8CQbTcKz5oYQYaqlWCBO7KoJsw=
 github.com/Layr-Labs/eigenx-kms v0.0.0-20260225212422-401bde321d28/go.mod h1:OOeSWTVBaxglt8klp16avIyBKA4xAqx6HzJE5N+8KqA=
-github.com/Layr-Labs/go-tpm-tools v0.4.8-0.20260224231618-3df231bf0b04 h1:WkIktuciPE+MSfOhpApBsGD6dTRaMjTSc0qphVpDKBM=
-github.com/Layr-Labs/go-tpm-tools v0.4.8-0.20260224231618-3df231bf0b04/go.mod h1:kVgW9SfWsPuaI61h9Q7TN6aqeS2rnU2FIc+3vIDSKnE=
-github.com/Layr-Labs/go-tpm-tools/sdk/attest v0.0.0-20260224231618-3df231bf0b04 h1:q/gW+vcs6MBCJs2YpDbcb8lzP1B5uauStWnwF+dMZy4=
-github.com/Layr-Labs/go-tpm-tools/sdk/attest v0.0.0-20260224231618-3df231bf0b04/go.mod h1:rKilwaZKgl4AIKqtaFNTRdE0ys6ujXvTY2oZWp/iE/0=
 github.com/Masterminds/goutils v1.1.0/go.mod h1:8cTjp+g8YejhMuvIA5y2vz3BpJxksy863GQaJW2MFNU=
 github.com/Masterminds/semver v1.4.2/go.mod h1:MB6lktGJrhw8PrUyiEoblNEGEQ+RzHPF078ddwwvV3Y=
 github.com/Masterminds/semver v1.5.0/go.mod h1:MB6lktGJrhw8PrUyiEoblNEGEQ+RzHPF078ddwwvV3Y=
@@ -1708,6 +1704,8 @@ gopkg.in/alecthomas/kingpin.v2 v2.2.6/go.mod h1:FMv+mEhP44yOT+4EoQTLFTRgOQ1FBLks
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
+gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c h1:Hei/4ADfdWqJk1ZMxUNpqntNwaWcugrBjAiHlqqRiVk=
+gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c/go.mod h1:JHkPIbrfpd72SG/EVd6muEfDQjcINNoR0C8j2r3qZ4Q=
 gopkg.in/cheggaaa/pb.v1 v1.0.25/go.mod h1:V/YB90LKu/1FcN3WVnfiiE5oMCibMjukxqG/qStrOgw=
 gopkg.in/cheggaaa/pb.v1 v1.0.28/go.mod h1:V/YB90LKu/1FcN3WVnfiiE5oMCibMjukxqG/qStrOgw=
 gopkg.in/errgo.v2 v2.1.0/go.mod h1:hNsd1EY+bozCKY1Ytp96fpM3vjJbqLJn88ws8XvfDNI=
