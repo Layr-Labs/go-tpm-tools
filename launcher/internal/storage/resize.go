@@ -259,12 +259,15 @@ func GrowOnce(ctx context.Context, logger logging.Logger) error {
 	return growOnce(ctx, defaultRunner, logger)
 }
 
-// growOnceBoot is the boot-time variant of growOnce. The filesystem is NOT
-// yet mounted — the secondary PD was just opened via luksOpen and mkfs may
-// or may not have just run. resize2fs on an unmounted ext4 grows the FS to
-// match the mapper; on a freshly-formatted FS it's a cheap no-op. We skip
-// the findmnt-based mount sanity check because the mount will be made
-// right after this returns.
+// growOnceBoot is the boot-time variant of growOnce. It runs AFTER the
+// filesystem is mounted — SetupSecondaryEncryptedVolume has already
+// opened the LUKS device, (on first boot) mkfs'd it, created the mount
+// point, and mounted /dev/mapper/userdata at MountPoint before invoking
+// this function. The post-mount ordering is deliberate: resize2fs
+// refuses to grow an unmounted ext4 without a prior `e2fsck -f` (ext4
+// safety feature), whereas growing a mounted fs is online-safe and
+// avoids that requirement. We skip the findmnt-based mount sanity
+// check because the mount just succeeded in the same function scope.
 //
 // Concurrency: serialized by construction (called once per SetupSecondary
 // EncryptedVolume invocation, before the poller starts).

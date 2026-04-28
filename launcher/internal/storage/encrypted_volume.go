@@ -115,13 +115,6 @@ func SetupSecondaryEncryptedVolume(ctx context.Context, logger logging.Logger, m
 		logger.Info("SetupSecondaryEncryptedVolume: luksOpen succeeded", "mapper", mapperPath)
 	}
 
-	// Best-effort online grow on boot: if the PD was enlarged while the VM
-	// was off, bring the LUKS mapper and ext4 up to size before mount.
-	// Failure here is non-fatal; the runtime poller will retry.
-	if err := GrowOnceBoot(ctx, logger); err != nil {
-		logger.Error("SetupSecondaryEncryptedVolume: boot-time grow failed, continuing; poller will retry", "error", err)
-	}
-
 	if err := os.MkdirAll(MountPoint, 0755); err != nil {
 		logger.Error("SetupSecondaryEncryptedVolume: MkdirAll failed", "mount_point", MountPoint, "error", err)
 		return fmt.Errorf("failed to create mount point %s: %w", MountPoint, err)
@@ -131,6 +124,15 @@ func SetupSecondaryEncryptedVolume(ctx context.Context, logger logging.Logger, m
 	if err := mount(mapperPath, MountPoint); err != nil {
 		logger.Error("SetupSecondaryEncryptedVolume: mount failed", "source", mapperPath, "target", MountPoint, "error", err)
 		return fmt.Errorf("failed to mount %s at %s: %w", mapperPath, MountPoint, err)
+	}
+
+	// Best-effort online grow on boot: if the PD was enlarged while the VM
+	// was off, bring the LUKS mapper and ext4 up to size AFTER mount.
+	// resize2fs refuses to grow an unmounted ext4 without a prior `e2fsck -f`
+	// (safety feature); growing a mounted fs is online-safe and skips that
+	// requirement. Failure here is non-fatal; the runtime poller will retry.
+	if err := GrowOnceBoot(ctx, logger); err != nil {
+		logger.Error("SetupSecondaryEncryptedVolume: boot-time grow failed, continuing; poller will retry", "error", err)
 	}
 
 	logger.Info("SetupSecondaryEncryptedVolume: encrypted volume ready", "mount_point", MountPoint)
