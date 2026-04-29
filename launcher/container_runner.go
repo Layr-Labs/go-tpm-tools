@@ -665,10 +665,21 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 	}
 
 	r.logger.Info("Setting up encrypted volume")
-	if err := storage.SetupSecondaryEncryptedVolume(r.logger, mnemonicProvider); err != nil {
+	if err := storage.SetupSecondaryEncryptedVolume(ctx, r.logger, mnemonicProvider); err != nil {
 		return fmt.Errorf("failed to set up encrypted volume: %v", err)
 	}
 	r.logger.Info("Encrypted volume setup complete")
+
+	// Start the background disk-grow poller. Runs for the lifetime of the
+	// runner's context and stops cleanly on cancellation. Errors from the
+	// poller are logged, not propagated — a transient grow failure must not
+	// take down the app container.
+	poller := storage.NewPoller(r.logger, storage.DefaultPollInterval)
+	go func() {
+		if err := poller.Run(ctx); err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+			r.logger.Warn("disk-grow poller exited with error", "error", err)
+		}
+	}()
 
 	// Add the user-data bind mount now that the encrypted volume is ready.
 	// NOTE: This updates the container spec after CEL measurement (measureCELEvents).

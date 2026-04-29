@@ -3,6 +3,7 @@ package storage
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -13,8 +14,8 @@ import (
 )
 
 const (
-	luksName   = "userdata"
-	mapperPath = "/dev/mapper/userdata"
+	luksName   = luksMapperName
+	mapperPath = "/dev/mapper/" + luksMapperName
 
 	// MountPoint is where the encrypted volume is mounted on the host.
 	MountPoint = "/mnt/disks/userdata"
@@ -45,7 +46,7 @@ type MnemonicProvider func() (string, error)
 // the existing LUKS header and only opens it.
 // If no secondary device is found, it falls back to a directory on the boot disk,
 // and the mnemonicProvider is not called.
-func SetupSecondaryEncryptedVolume(logger logging.Logger, mnemonicProvider MnemonicProvider) error {
+func SetupSecondaryEncryptedVolume(ctx context.Context, logger logging.Logger, mnemonicProvider MnemonicProvider) error {
 	logger.Info("SetupSecondaryEncryptedVolume: starting", "mount_point", MountPoint)
 
 	devicePath := findSecondaryDevice()
@@ -125,6 +126,15 @@ func SetupSecondaryEncryptedVolume(logger logging.Logger, mnemonicProvider Mnemo
 		return fmt.Errorf("failed to mount %s at %s: %w", mapperPath, MountPoint, err)
 	}
 
+	// Best-effort online grow on boot: if the PD was enlarged while the VM
+	// was off, bring the LUKS mapper and ext4 up to size AFTER mount.
+	// resize2fs refuses to grow an unmounted ext4 without a prior `e2fsck -f`
+	// (safety feature); growing a mounted fs is online-safe and skips that
+	// requirement. Failure here is non-fatal; the runtime poller will retry.
+	if err := GrowOnceBoot(ctx, logger); err != nil {
+		logger.Error("SetupSecondaryEncryptedVolume: boot-time grow failed, continuing; poller will retry", "error", err)
+	}
+
 	logger.Info("SetupSecondaryEncryptedVolume: encrypted volume ready", "mount_point", MountPoint)
 	return nil
 }
@@ -155,8 +165,16 @@ func luksFormat(device string, key string) error {
 }
 
 // luksOpen opens a LUKS device with the given name.
+//
+// --disable-keyring stores the volume key inside dm-crypt's kernel state
+// only, not in the user keyring. This is required so that later
+// `cryptsetup resize` calls (issued from GrowOnce / GrowOnceBoot) can
+// grow the mapper without re-authenticating via the passphrase — the
+// launcher does not keep the mnemonic-derived key in memory after open.
+// On cos-tdx (cryptsetup >= 2.6) the keyring is the default and `resize`
+// refuses to operate without a passphrase when it's active.
 func luksOpen(device, name string, key string) error {
-	cmd := exec.Command("cryptsetup", "luksOpen", device, name, "-")
+	cmd := exec.Command("cryptsetup", "luksOpen", "--disable-keyring", device, name, "-")
 	cmd.Stdin = strings.NewReader(key)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

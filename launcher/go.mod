@@ -23,6 +23,9 @@ require (
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.0
 	github.com/opencontainers/runtime-spec v1.2.0
+	github.com/stretchr/testify v1.11.1
+	github.com/tyler-smith/go-bip39 v1.1.0
+	go.uber.org/goleak v1.3.0
 	golang.org/x/crypto v0.43.0
 	golang.org/x/oauth2 v0.33.0
 	google.golang.org/api v0.256.0
@@ -121,6 +124,7 @@ require (
 	github.com/mr-tron/base58 v1.2.0 // indirect
 	github.com/opencontainers/selinux v1.11.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
@@ -128,7 +132,6 @@ require (
 	github.com/supranational/blst v0.3.14 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
-	github.com/tyler-smith/go-bip39 v1.1.0 // indirect
 	go.mongodb.org/mongo-driver v1.12.2 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
@@ -148,9 +151,11 @@ require (
 	golang.org/x/time v0.14.0 // indirect
 	google.golang.org/genproto v0.0.0-20250922171735-9219d122eba9 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251111163417-95abcf5c77ba // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 replace (
-	github.com/Layr-Labs/go-tpm-tools v0.4.4 => ../
-	github.com/Layr-Labs/go-tpm-tools/verifier v0.4.4 => ../verifier
+	github.com/Layr-Labs/go-tpm-tools => ../
+	github.com/Layr-Labs/go-tpm-tools/sdk/attest => ../sdk/attest
+	github.com/Layr-Labs/go-tpm-tools/verifier => ../verifier
 )
