@@ -13,7 +13,8 @@
 #   sepolia-prod  → Sepolia Safe + Sepolia prod  ImageAllowlist (same Safe as sepolia-dev)
 #   mainnet-prod  → Mainnet Safe + Mainnet prod  ImageAllowlist
 #
-# A real release proposes to all three.
+# A full release that promotes to prod ends up running in all three environments
+# and needs all three proposals. A dev-only iteration only needs sepolia-dev.
 #
 # Manifest source (required):
 #   MANIFEST_JSON=<path>  — full build attestation manifest (the JSON written to
