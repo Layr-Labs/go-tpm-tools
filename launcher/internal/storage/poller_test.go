@@ -23,11 +23,11 @@ func TestPollerTicksAndCallsGrow(t *testing.T) {
 	p := &Poller{
 		interval: 10 * time.Millisecond,
 		logger:   testLogger(t),
-		growFn: func(ctx context.Context) error {
+		growFn: func(_ context.Context) error {
 			calls.Add(1)
 			return nil
 		},
-		snapshotFn: func(ctx context.Context) (sizeSnapshot, error) {
+		snapshotFn: func(_ context.Context) (sizeSnapshot, error) {
 			return sizeSnapshot{}, nil
 		},
 	}
@@ -45,11 +45,11 @@ func TestPollerContinuesAfterError(t *testing.T) {
 	p := &Poller{
 		interval: 5 * time.Millisecond,
 		logger:   testLogger(t),
-		growFn: func(ctx context.Context) error {
+		growFn: func(_ context.Context) error {
 			calls.Add(1)
 			return errors.New("boom")
 		},
-		snapshotFn: func(ctx context.Context) (sizeSnapshot, error) {
+		snapshotFn: func(_ context.Context) (sizeSnapshot, error) {
 			return sizeSnapshot{}, nil
 		},
 	}
@@ -66,8 +66,8 @@ func TestPollerStopsOnContextCancel(t *testing.T) {
 	p := &Poller{
 		interval: 10 * time.Millisecond,
 		logger:   testLogger(t),
-		growFn: func(ctx context.Context) error { return nil },
-		snapshotFn: func(ctx context.Context) (sizeSnapshot, error) {
+		growFn: func(_ context.Context) error { return nil },
+		snapshotFn: func(_ context.Context) (sizeSnapshot, error) {
 			return sizeSnapshot{}, nil
 		},
 	}
@@ -94,14 +94,14 @@ func TestPollerRecoversFromPanic(t *testing.T) {
 	p := &Poller{
 		interval: 5 * time.Millisecond,
 		logger:   testLogger(t),
-		growFn: func(ctx context.Context) error {
+		growFn: func(_ context.Context) error {
 			n := calls.Add(1)
 			if n == 1 {
 				panic("kaboom")
 			}
 			return nil
 		},
-		snapshotFn: func(ctx context.Context) (sizeSnapshot, error) {
+		snapshotFn: func(_ context.Context) (sizeSnapshot, error) {
 			return sizeSnapshot{}, nil
 		},
 	}
@@ -119,8 +119,8 @@ func TestPollerLogsSizesEachTick(t *testing.T) {
 	p := &Poller{
 		interval: 10 * time.Millisecond,
 		logger:   logger,
-		growFn: func(ctx context.Context) error { return nil },
-		snapshotFn: func(ctx context.Context) (sizeSnapshot, error) {
+		growFn: func(_ context.Context) error { return nil },
+		snapshotFn: func(_ context.Context) (sizeSnapshot, error) {
 			return sizeSnapshot{PDSize: 100, MapperSize: 100, FSSize: 100, FSAvail: 80}, nil
 		},
 	}

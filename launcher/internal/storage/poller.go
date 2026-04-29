@@ -33,8 +33,8 @@ type Poller struct {
 
 	// Injection points for tests. Production code uses the defaults set
 	// by NewPoller (GrowOnce + statfs-based sizeSnapshot).
-	growFn     func(ctx context.Context) error
-	snapshotFn func(ctx context.Context) (sizeSnapshot, error)
+	growFn     func(context.Context) error
+	snapshotFn func(context.Context) (sizeSnapshot, error)
 }
 
 // NewPoller returns a production-configured Poller. interval <= 0 means
