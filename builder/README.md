@@ -34,6 +34,7 @@ Source Code ──> Cloud Build ──> Launcher Container ──> CVM Builder �
 ### Release Flow
 
 ```
+(only if changed)
 Tag launcher-v*    ──> Build Launcher    ──┐
                        + provenance        │
                                            ├──> Deploy ──> candidate
@@ -42,11 +43,17 @@ Tag builder-v*     ──> Build Builder     ──┤                  │
                                            │                  │
 Tag pcr-capture-v* ──> Build PCR Capture ──┘                  │
                        + provenance                           │
+                                                              ↓
+                                           propose_pcrs.sh sepolia-dev  ──> Sepolia Safe (async)
+                                           propose_pcrs.sh sepolia-prod ──> Sepolia Safe (async)
+                                           propose_pcrs.sh mainnet-prod ──> Mainnet Safe (async)
                                                               │
                                            Promote to dev  ───┤──> copy to dev family (no approval)
                                                               │
                                            Promote to prod ───┘──> move to prod family (requires approval)
 ```
+
+Container builds are only needed when *those* components have changed. In practice the launcher changes most often and usually needs a fresh tag, while `builder` and `pcr-capture` are mostly stable and reused across releases.
 
 ### Image Lifecycle
 
@@ -78,16 +85,48 @@ Dev promotion **copies** the image (original stays in candidate). Prod promotion
    - `pcr_capture_version`: e.g., `v0.1.0`
 3. On success, images are created as **candidates** (project-private, `cs-image-{env}-candidate` family)
 
+### Proposing PCRs On-Chain
+
+After candidates are built and *before* promoting to dev or prod, the new image's PCRs must be added to the on-chain `ImageAllowlist` so that VMs running this image will pass attestation. This is done via a Safe multisig proposal — propose now so signers have time to approve while you're still verifying the image.
+
+There are three deployments to update on every release: a dev tier on Sepolia, a prod tier on Sepolia, and a prod tier on Mainnet. The Sepolia Safe is shared between the two Sepolia tiers; only the ImageAllowlist contract differs.
+
+Pipe the build manifest into `propose_pcrs.sh` via `MANIFEST_JSON=-`. The script extracts `.pcrs` and derives `IMAGE_VERSION` and `IMAGE_DESCRIPTION` from `.output.name`, so the on-chain version is guaranteed to match the manifest the PCRs came from:
+
+```bash
+IMAGE=cs-image-0-1-2-hardened
+MANIFEST=$(gsutil cat gs://$PROVENANCE_BUCKET/$IMAGE/attestation.json)
+
+for env in sepolia-dev sepolia-prod mainnet-prod; do
+  echo "$MANIFEST" \
+    | MANIFEST_JSON=- PROPOSER_PRIVATE_KEY=0x... \
+      ./scripts/propose_pcrs.sh "$env"
+done
+```
+
+`MANIFEST_JSON` is required and accepts a file path or `-` for stdin. The script bundles the three platform `addImages` calls (TDX, SEV-SNP, Shielded VM) into a single `MultiSendCallOnly` transaction, signs with the proposer key, and posts to the Safe Transaction Service. It prints a Safe app URL where the remaining signers approve and execute.
+
+| Environment | Safe | ImageAllowlist | Chain |
+|-------------|------|----------------|-------|
+| `sepolia-dev`  | `0xb094Ba76…3b0` | `0x6B6Ce40D…E86e` | Sepolia |
+| `sepolia-prod` | `0xb094Ba76…3b0` | `0x7c66A1e8…A2D0` | Sepolia |
+| `mainnet-prod` | `0x684cf897…e09` | `0xb4713c7C…4d72` | Mainnet |
+
+> **Prereqs:** `cast` (Foundry), `python3`, `jq`. The proposer key must belong to a Safe owner on the target chain.
+
 ### Promoting Images
 
-1. Go to **Actions** → **Promote Image** → **Run workflow**
-2. Enter the **original** image name (e.g., `cs-image-0-1-0-hardened`) and target tier (`dev` or `prod`)
-3. Promotion enforces a strict path: candidate → dev → prod
+1. **Confirm** the corresponding Safe proposal(s) from [Proposing PCRs On-Chain](#proposing-pcrs-on-chain) have been **executed**: at least `sepolia-dev` before promoting to dev, and both `sepolia-prod` and `mainnet-prod` before promoting to prod. Promoting before an allowlist is updated will leave VMs in that environment unable to attest.
+2. Go to **Actions** → **Promote Image** → **Run workflow**
+3. Enter the **original** image name (e.g., `cs-image-0-1-0-hardened`) and target tier (`dev` or `prod`)
+4. Promotion enforces a strict path: candidate → dev → prod
    - **Dev**: Creates a copy (`cs-image-0-1-0-hardened-dev`) in the dev family. Original stays in candidate.
    - **Prod**: Verifies the dev copy exists (proves it went through dev), then moves the original to the prod family. Dev copy persists.
-4. Promoting to **prod** requires `production` environment approval, makes the image public, and creates a git tag
+5. Promoting to **prod** requires `production` environment approval, makes the image public, and creates a git tag
 
 ### Building Components Separately
+
+Only required when the corresponding component's source has changed since the last release. Otherwise reuse the existing container versions in `deploy-builder.yml`.
 
 ```bash
 # Build launcher (creates tag, triggers Cloud Build)
@@ -99,6 +138,51 @@ git tag builder-v0.1.0 && git push origin builder-v0.1.0
 # Build PCR capture (creates tag, triggers Cloud Build)
 git tag pcr-capture-v0.1.0 && git push origin pcr-capture-v0.1.0
 ```
+
+## Local Development Iteration
+
+For testing image changes on a feature branch *without* going through the release flow. These scripts target a developer scratch project (`data-axiom-440223-j1` by default) and the **Sepolia** chain — they never touch production GCP projects, the prod image registry, or the mainnet Safe.
+
+### Build a test image — `scripts/run_cloudbuild.sh`
+
+```bash
+./scripts/run_cloudbuild.sh hardened   # or: debug | all
+```
+
+Submits `launcher/cloudbuild.yaml` to Cloud Build in `$BUILD_PROJECT` and produces an image named `eigen-compute-{type}-$USER-test-image-{timestamp}`. The timestamp suffix avoids collisions with the `finish-image-build` "already exists" check.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `BUILD_PROJECT` | `data-axiom-440223-j1` | Scratch GCP project |
+
+Use the resulting image directly with `gcloud compute instances create --image=...`, or feed it into `deploy_to_dev.sh` for an end-to-end Sepolia test.
+
+### End-to-end dev preview — `scripts/deploy_to_dev.sh`
+
+```bash
+IMAGE_NAME=eigen-compute-hardened-$USER-test-image-1700000000 \
+PROPOSER_PRIVATE_KEY=0x... \
+./scripts/deploy_to_dev.sh
+```
+
+Three phases against an existing hardened image in `$BUILD_PROJECT`:
+
+1. **PCR capture** — boots three VMs (TDX, SEV-SNP, Shielded) with the `pcr-capture` workload, polls GCS for each output, merges into `scripts/pcrs.json`.
+2. **Image promotion** — copies the image into `tee-compute-global` as `${IMAGE_NAME}-preview` in the `cs-image-hardened-dev` family, grants `roles/compute.imageUser` to the dev project's instance-creator SA.
+3. **Sepolia Safe proposal** — encodes `addImages` for all three platforms, packs into a `MultiSendCallOnly` transaction, signs, and posts to the Safe Transaction Service. Prints a Safe app URL for remaining signers.
+
+Hardened images only — debug images aren't supported. Prereqs: `gcloud`, `cast` (Foundry), `python3`, `jq`.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `IMAGE_NAME` | *(required)* | Source hardened image in `$BUILD_PROJECT` |
+| `PROPOSER_PRIVATE_KEY` | *(required)* | Safe owner key on Sepolia |
+| `BUILD_PROJECT` | `data-axiom-440223-j1` | Where the source image lives |
+| `GLOBAL_IMAGE_PROJECT` | `tee-compute-global` | Where the dev copy is published |
+| `DEV_PROJECT` | `tee-compute-sepolia-dev` | Dev environment that gets IAM access |
+| `IMAGE_VERSION` | `git rev-parse --short HEAD` | Embedded in the on-chain `Image.version` |
+
+> **Not a release path.** Test images created here are tagged `*-preview` and never get promoted to prod via `promote-image.yml`. To release for real, go through the [Release Flow](#release-flow).
 
 ## Quick Start (Manual)
 
