@@ -66,7 +66,7 @@ func TestPollerStopsOnContextCancel(t *testing.T) {
 	p := &Poller{
 		interval: 10 * time.Millisecond,
 		logger:   testLogger(t),
-		growFn: func(_ context.Context) error { return nil },
+		growFn:   func(_ context.Context) error { return nil },
 		snapshotFn: func(_ context.Context) (sizeSnapshot, error) {
 			return sizeSnapshot{}, nil
 		},
@@ -119,7 +119,7 @@ func TestPollerLogsSizesEachTick(t *testing.T) {
 	p := &Poller{
 		interval: 10 * time.Millisecond,
 		logger:   logger,
-		growFn: func(_ context.Context) error { return nil },
+		growFn:   func(_ context.Context) error { return nil },
 		snapshotFn: func(_ context.Context) (sizeSnapshot, error) {
 			return sizeSnapshot{PDSize: 100, MapperSize: 100, FSSize: 100, FSAvail: 80}, nil
 		},
