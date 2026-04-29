@@ -1,5 +1,6 @@
-// Package storage: online grow of the secondary LUKS-encrypted PD.
 package storage
+
+// This file implements online grow of the secondary LUKS-encrypted PD.
 
 import (
 	"context"

@@ -51,7 +51,7 @@ func (f *fakeRunner) Calls() []fakeCall {
 	return out
 }
 
-func (f *fakeRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+func (f *fakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
 	f.mu.Lock()
 	f.calls = append(f.calls, fakeCall{name: name, args: append([]string(nil), args...)})
 	for i, resp := range f.script {

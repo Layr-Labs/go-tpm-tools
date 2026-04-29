@@ -1,5 +1,6 @@
-// Package storage: command execution abstraction for testability.
 package storage
+
+// This file implements the command execution abstraction for testability.
 
 import (
 	"bytes"
