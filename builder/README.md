@@ -44,8 +44,9 @@ Tag builder-v*     ──> Build Builder     ──┤                  │
 Tag pcr-capture-v* ──> Build PCR Capture ──┘                  │
                        + provenance                           │
                                                               ↓
-                                           propose_pcrs.sh dev   ──> Sepolia Safe (async approval)
-                                           propose_pcrs.sh prod  ──> Mainnet Safe (async approval)
+                                           propose_pcrs.sh sepolia-dev  ──> Sepolia Safe (async)
+                                           propose_pcrs.sh sepolia-prod ──> Sepolia Safe (async)
+                                           propose_pcrs.sh mainnet-prod ──> Mainnet Safe (async)
                                                               │
                                            Promote to dev  ───┤──> copy to dev family (no approval)
                                                               │
@@ -88,32 +89,34 @@ Dev promotion **copies** the image (original stays in candidate). Prod promotion
 
 After candidates are built and *before* promoting to dev or prod, the new image's PCRs must be added to the on-chain `ImageAllowlist` so that VMs running this image will pass attestation. This is done via a Safe multisig proposal — propose now so signers have time to approve while you're still verifying the image.
 
-Pipe the build manifest straight into `propose_pcrs.sh` via `MANIFEST_JSON=-`. The script extracts `.pcrs` and derives `IMAGE_VERSION` and `IMAGE_DESCRIPTION` from `.output.name`, so the on-chain version is guaranteed to match the manifest the PCRs came from:
+There are three deployments to update on every release: a dev tier on Sepolia, a prod tier on Sepolia, and a prod tier on Mainnet. The Sepolia Safe is shared between the two Sepolia tiers; only the ImageAllowlist contract differs.
+
+Pipe the build manifest into `propose_pcrs.sh` via `MANIFEST_JSON=-`. The script extracts `.pcrs` and derives `IMAGE_VERSION` and `IMAGE_DESCRIPTION` from `.output.name`, so the on-chain version is guaranteed to match the manifest the PCRs came from:
 
 ```bash
 IMAGE=cs-image-0-1-2-hardened
+MANIFEST=$(gsutil cat gs://$PROVENANCE_BUCKET/$IMAGE/attestation.json)
 
-gsutil cat gs://$PROVENANCE_BUCKET/$IMAGE/attestation.json \
-  | MANIFEST_JSON=- PROPOSER_PRIVATE_KEY=0x... \
-    ./scripts/propose_pcrs.sh dev    # Sepolia
-
-gsutil cat gs://$PROVENANCE_BUCKET/$IMAGE/attestation.json \
-  | MANIFEST_JSON=- PROPOSER_PRIVATE_KEY=0x... \
-    ./scripts/propose_pcrs.sh prod   # Mainnet
+for env in sepolia-dev sepolia-prod mainnet-prod; do
+  echo "$MANIFEST" \
+    | MANIFEST_JSON=- PROPOSER_PRIVATE_KEY=0x... \
+      ./scripts/propose_pcrs.sh "$env"
+done
 ```
 
 `MANIFEST_JSON` is required and accepts a file path or `-` for stdin. The script bundles the three platform `addImages` calls (TDX, SEV-SNP, Shielded VM) into a single `MultiSendCallOnly` transaction, signs with the proposer key, and posts to the Safe Transaction Service. It prints a Safe app URL where the remaining signers approve and execute.
 
-| Network | Safe | ImageAllowlist | Chain |
-|---------|------|----------------|-------|
-| dev | `0xb094Ba76…3b0` | `0x6B6Ce40D…E86e` | Sepolia |
-| prod | `0x684cf897…e09` | `0xb4713c7C…4d72` | Mainnet |
+| Environment | Safe | ImageAllowlist | Chain |
+|-------------|------|----------------|-------|
+| `sepolia-dev`  | `0xb094Ba76…3b0` | `0x6B6Ce40D…E86e` | Sepolia |
+| `sepolia-prod` | `0xb094Ba76…3b0` | `0x7c66A1e8…A2D0` | Sepolia |
+| `mainnet-prod` | `0x684cf897…e09` | `0xb4713c7C…4d72` | Mainnet |
 
-> **Prereqs:** `cast` (Foundry), `python3`, `jq`. The proposer key must belong to a Safe owner on the target network.
+> **Prereqs:** `cast` (Foundry), `python3`, `jq`. The proposer key must belong to a Safe owner on the target chain.
 
 ### Promoting Images
 
-1. **Confirm** the corresponding Safe proposal from [Proposing PCRs On-Chain](#proposing-pcrs-on-chain) has been **executed** on the target network (dev → Sepolia, prod → Mainnet). Promoting before the allowlist is updated will leave VMs unable to attest.
+1. **Confirm** the corresponding Safe proposal(s) from [Proposing PCRs On-Chain](#proposing-pcrs-on-chain) have been **executed**: at least `sepolia-dev` before promoting to dev, and both `sepolia-prod` and `mainnet-prod` before promoting to prod. Promoting before an allowlist is updated will leave VMs in that environment unable to attest.
 2. Go to **Actions** → **Promote Image** → **Run workflow**
 3. Enter the **original** image name (e.g., `cs-image-0-1-0-hardened`) and target tier (`dev` or `prod`)
 4. Promotion enforces a strict path: candidate → dev → prod

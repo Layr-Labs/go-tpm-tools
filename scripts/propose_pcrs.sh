@@ -6,10 +6,14 @@
 #   - python3 and jq for JSON manipulation
 #
 # Usage:
-#   MANIFEST_JSON=<path> PROPOSER_PRIVATE_KEY=0x... ./scripts/propose_pcrs.sh <dev|prod>
+#   MANIFEST_JSON=<path> PROPOSER_PRIVATE_KEY=0x... ./scripts/propose_pcrs.sh <env>
 #
-# dev  → Sepolia Safe + Sepolia ImageAllowlist
-# prod → Mainnet Safe + Mainnet ImageAllowlist
+# Environments:
+#   sepolia-dev   → Sepolia Safe + Sepolia dev   ImageAllowlist
+#   sepolia-prod  → Sepolia Safe + Sepolia prod  ImageAllowlist (same Safe as sepolia-dev)
+#   mainnet-prod  → Mainnet Safe + Mainnet prod  ImageAllowlist
+#
+# A real release proposes to all three.
 #
 # Manifest source (required):
 #   MANIFEST_JSON=<path>  — full build attestation manifest (the JSON written to
@@ -32,8 +36,30 @@ set -euo pipefail
 
 fail() { echo "error: $*" >&2; exit 1; }
 
-NETWORK="${1:-}"
-[[ "$NETWORK" == "dev" || "$NETWORK" == "prod" ]] || fail "Usage: $0 <dev|prod>"
+ENVIRONMENT="${1:-}"
+case "$ENVIRONMENT" in
+  sepolia-dev)
+    SAFE_ADDRESS="${SAFE_ADDRESS:-0xb094Ba769b4976Dc37fC689A76675f31bc4923b0}"
+    IMAGE_ALLOWLIST_ADDRESS="${IMAGE_ALLOWLIST_ADDRESS:-0x6B6Ce40D81Ae3C261B217D001A07a5b268FFE86e}"
+    RPC_URL="${RPC_URL:-https://ethereum-sepolia-rpc.publicnode.com}"
+    SAFE_NETWORK="${SAFE_NETWORK:-sep}"
+    ;;
+  sepolia-prod)
+    SAFE_ADDRESS="${SAFE_ADDRESS:-0xb094Ba769b4976Dc37fC689A76675f31bc4923b0}"
+    IMAGE_ALLOWLIST_ADDRESS="${IMAGE_ALLOWLIST_ADDRESS:-0x7c66A1e862E11C4887270aBd649157ACe837A2D0}"
+    RPC_URL="${RPC_URL:-https://ethereum-sepolia-rpc.publicnode.com}"
+    SAFE_NETWORK="${SAFE_NETWORK:-sep}"
+    ;;
+  mainnet-prod)
+    SAFE_ADDRESS="${SAFE_ADDRESS:-0x684cf8978c2815716c85eAa237E311f5a44e9e09}"
+    IMAGE_ALLOWLIST_ADDRESS="${IMAGE_ALLOWLIST_ADDRESS:-0xb4713c7Cf195fAE4C9947a6Fe069740df6004d72}"
+    RPC_URL="${RPC_URL:-https://ethereum-rpc.publicnode.com}"
+    SAFE_NETWORK="${SAFE_NETWORK:-eth}"
+    ;;
+  *)
+    fail "Usage: $0 <sepolia-dev|sepolia-prod|mainnet-prod>"
+    ;;
+esac
 
 PROPOSER_PRIVATE_KEY="${PROPOSER_PRIVATE_KEY:-}"
 [[ -n "$PROPOSER_PRIVATE_KEY" ]] || fail "PROPOSER_PRIVATE_KEY is required"
@@ -41,18 +67,6 @@ PROPOSER_PRIVATE_KEY="${PROPOSER_PRIVATE_KEY:-}"
 command -v cast    >/dev/null || fail "cast (Foundry) not found"
 command -v python3 >/dev/null || fail "python3 not found"
 command -v jq      >/dev/null || fail "jq not found"
-
-if [[ "$NETWORK" == "dev" ]]; then
-  SAFE_ADDRESS="${SAFE_ADDRESS:-0xb094Ba769b4976Dc37fC689A76675f31bc4923b0}"
-  IMAGE_ALLOWLIST_ADDRESS="${IMAGE_ALLOWLIST_ADDRESS:-0x6B6Ce40D81Ae3C261B217D001A07a5b268FFE86e}"
-  RPC_URL="${RPC_URL:-https://ethereum-sepolia-rpc.publicnode.com}"
-  SAFE_NETWORK="${SAFE_NETWORK:-sep}"
-else
-  SAFE_ADDRESS="${SAFE_ADDRESS:-0x684cf8978c2815716c85eAa237E311f5a44e9e09}"
-  IMAGE_ALLOWLIST_ADDRESS="${IMAGE_ALLOWLIST_ADDRESS:-0xb4713c7Cf195fAE4C9947a6Fe069740df6004d72}"
-  RPC_URL="${RPC_URL:-https://ethereum-rpc.publicnode.com}"
-  SAFE_NETWORK="${SAFE_NETWORK:-eth}"
-fi
 
 PROPOSER_ADDRESS="${PROPOSER_ADDRESS:-$(cast wallet address --private-key "$PROPOSER_PRIVATE_KEY")}"
 MULTISEND_ADDRESS="${MULTISEND_ADDRESS:-0x40A2aCCbd92BCA938b02010E17A5b8929b49130D}"
@@ -109,7 +123,7 @@ SVM_PCR8=$(jq -r '.pcrs.gcp_shielded_vm.pcr8' <<<"$MANIFEST_DATA")
 SVM_PCR9=$(jq -r '.pcrs.gcp_shielded_vm.pcr9' <<<"$MANIFEST_DATA")
 
 echo "=== Propose PCRs to Safe ==="
-echo "  Network:    ${NETWORK} (${SAFE_NETWORK})"
+echo "  Environment: ${ENVIRONMENT} (chain=${SAFE_NETWORK})"
 echo "  Safe:       ${SAFE_ADDRESS}"
 echo "  Allowlist:  ${IMAGE_ALLOWLIST_ADDRESS}"
 echo "  Manifest:   ${MANIFEST_JSON}"
