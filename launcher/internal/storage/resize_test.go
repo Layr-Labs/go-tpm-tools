@@ -14,6 +14,43 @@ import (
 	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
 )
 
+func TestGrowNeeded(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		pdSize     uint64
+		mapperSize uint64
+		want       bool
+	}{
+		{"equal sizes (unrealistic for LUKS2 but safe)", 100, 100, false},
+		{"pd smaller (shrink not supported)", 50, 100, false},
+		{"pd exactly one LUKS header larger (steady state)",
+			20 * 1024 * 1024 * 1024,
+			20*1024*1024*1024 - luksHeaderBytes,
+			false},
+		{"pd just short of one LUKS header larger",
+			20 * 1024 * 1024 * 1024,
+			20*1024*1024*1024 - luksHeaderBytes + 1,
+			false},
+		{"pd one byte past LUKS header delta (actual grow)",
+			20*1024*1024*1024 + 1,
+			20*1024*1024*1024 - luksHeaderBytes,
+			true},
+		{"pd 10 GiB larger (obvious grow)",
+			20 * 1024 * 1024 * 1024,
+			10 * 1024 * 1024 * 1024,
+			true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.want, growNeeded(tc.pdSize, tc.mapperSize))
+		})
+	}
+}
+
 func TestCheckDevice(t *testing.T) {
 	t.Parallel()
 

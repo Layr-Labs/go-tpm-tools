@@ -139,6 +139,25 @@ const luksMapperName = "userdata"
 // resize + resize2fs on every tick forever.
 const luksHeaderBytes uint64 = 16 * 1024 * 1024
 
+// growNeeded reports whether the filesystem-level grow path should run for a
+// given (pdSize, mapperSize) pair. It returns false in the two no-op cases:
+//
+//   - pdSize < mapperSize: shrink, which this package does not support.
+//   - pdSize - mapperSize <= luksHeaderBytes: post-grow steady state. The
+//     LUKS2 header reserves luksHeaderBytes at the start of the PD, so after
+//     a successful online grow the mapper is always exactly that much smaller
+//     than the PD. Treating that delta as "needs grow" would re-issue
+//     cryptsetup resize + resize2fs on every poller tick forever.
+//
+// It returns true only when the PD has actually been enlarged beyond the
+// header tolerance and the mapper/filesystem need to be grown to match.
+func growNeeded(pdSize, mapperSize uint64) bool {
+	if pdSize < mapperSize {
+		return false
+	}
+	return pdSize-mapperSize > luksHeaderBytes
+}
+
 // luksResize runs `cryptsetup resize <name>`. Online-safe.
 //
 // Preconditions:
@@ -226,18 +245,8 @@ func growOnce(ctx context.Context, r commandRunner, logger logging.Logger) error
 		return fmt.Errorf("read mapper size: %w", err)
 	}
 
-	// The LUKS2 header occupies the first luksHeaderBytes of the PD, so the
-	// mapper's post-grow size is always pdSize - luksHeaderBytes. Anything
-	// within that tolerance is the steady state and must be a no-op; only a
-	// delta strictly greater indicates the PD was enlarged and we need to
-	// grow the mapper and filesystem.
-	if pdSize < mapperSize {
-		logger.Debug("grow: no-op, pd smaller than mapper (shrink not supported)",
-			"pd_size_bytes", pdSize, "mapper_size_bytes", mapperSize)
-		return nil
-	}
-	if pdSize-mapperSize <= luksHeaderBytes {
-		logger.Debug("grow: no-op, sizes within LUKS header tolerance",
+	if !growNeeded(pdSize, mapperSize) {
+		logger.Debug("grow: no-op",
 			"pd_size_bytes", pdSize, "mapper_size_bytes", mapperSize)
 		return nil
 	}
@@ -296,9 +305,7 @@ func growOnceBoot(ctx context.Context, r commandRunner, logger logging.Logger) e
 	if err != nil {
 		return fmt.Errorf("read mapper size: %w", err)
 	}
-	// Same LUKS-header tolerance as growOnce: a pd-minus-mapper delta up to
-	// luksHeaderBytes is the post-grow steady state, not a signal to resize.
-	if pdSize < mapperSize || pdSize-mapperSize <= luksHeaderBytes {
+	if !growNeeded(pdSize, mapperSize) {
 		logger.Debug("grow (boot): no-op",
 			"pd_size_bytes", pdSize, "mapper_size_bytes", mapperSize)
 		return nil
