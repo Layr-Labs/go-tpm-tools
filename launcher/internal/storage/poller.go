@@ -82,12 +82,12 @@ func (p *Poller) tick(ctx context.Context) {
 	}()
 
 	if err := p.growFn(ctx); err != nil {
-		p.logger.Warn("grow tick failed", "error", err)
+		p.logger.Debug("grow tick failed", "error", err)
 	}
 
 	snap, err := p.snapshotFn(ctx)
 	if err != nil {
-		p.logger.Warn("size snapshot failed", "error", err)
+		p.logger.Debug("size snapshot failed", "error", err)
 		return
 	}
 	p.logger.Info("disk sizes",

@@ -273,7 +273,10 @@ func TestGrowOnce(t *testing.T) {
 	t.Run("grows when pd larger", func(t *testing.T) {
 		t.Parallel()
 		r := newFakeRunner()
-		scriptSuccess(r, 200, 100)
+		// Delta must exceed luksHeaderBytes to trigger a resize; use +1 GiB.
+		const mapper = uint64(10 * 1024 * 1024 * 1024)
+		const pd = mapper + 1024*1024*1024
+		scriptSuccess(r, pd, mapper)
 
 		require.NoError(t, growOnce(context.Background(), r, testLogger(t)))
 		calls := r.Calls()
@@ -295,11 +298,65 @@ func TestGrowOnce(t *testing.T) {
 		assert.Len(t, r.Calls(), 2)
 	})
 
-	t.Run("mount-check failure aborts resize", func(t *testing.T) {
+	// cryptsetup's LUKS2 format reserves a 16 MiB header at the start of the
+	// backing device, so after a successful grow the mapper is always exactly
+	// 16 MiB smaller than the PD. Treating that delta as "grown" would make the
+	// poller re-issue cryptsetup/resize2fs on every tick forever. This is the
+	// steady-state sanity check.
+	t.Run("noop at LUKS header delta (post-grow steady state)", func(t *testing.T) {
 		t.Parallel()
 		r := newFakeRunner()
-		r.Expect("blockdev", []string{"--getsize64", allowedBackingDevice}, []byte("200\n"), nil)
-		r.Expect("blockdev", []string{"--getsize64", allowedMapper}, []byte("100\n"), nil)
+		const pd = uint64(20 * 1024 * 1024 * 1024)
+		const mapper = pd - luksHeaderBytes
+		r.Expect("blockdev", []string{"--getsize64", allowedBackingDevice},
+			[]byte(fmt.Sprintf("%d\n", pd)), nil)
+		r.Expect("blockdev", []string{"--getsize64", allowedMapper},
+			[]byte(fmt.Sprintf("%d\n", mapper)), nil)
+
+		require.NoError(t, growOnce(context.Background(), r, testLogger(t)))
+		assert.Len(t, r.Calls(), 2, "only the two size reads; no resize invoked")
+	})
+
+	// Boundary case: one byte short of the header delta should still be a no-op.
+	t.Run("noop one byte short of LUKS header delta", func(t *testing.T) {
+		t.Parallel()
+		r := newFakeRunner()
+		const pd = uint64(20 * 1024 * 1024 * 1024)
+		const mapper = pd - luksHeaderBytes + 1 // delta = luksHeaderBytes - 1
+		r.Expect("blockdev", []string{"--getsize64", allowedBackingDevice},
+			[]byte(fmt.Sprintf("%d\n", pd)), nil)
+		r.Expect("blockdev", []string{"--getsize64", allowedMapper},
+			[]byte(fmt.Sprintf("%d\n", mapper)), nil)
+
+		require.NoError(t, growOnce(context.Background(), r, testLogger(t)))
+		assert.Len(t, r.Calls(), 2, "no resize invoked within LUKS header tolerance")
+	})
+
+	// When the PD has actually been enlarged (delta > header), we do resize.
+	t.Run("grows when pd exceeds mapper by more than LUKS header", func(t *testing.T) {
+		t.Parallel()
+		r := newFakeRunner()
+		const mapper = uint64(10*1024*1024*1024) - luksHeaderBytes
+		const pd = uint64(20 * 1024 * 1024 * 1024)
+		scriptSuccess(r, pd, mapper)
+
+		require.NoError(t, growOnce(context.Background(), r, testLogger(t)))
+		calls := r.Calls()
+		require.Len(t, calls, 5)
+		assert.Equal(t, "cryptsetup", calls[3].name)
+		assert.Equal(t, "resize2fs", calls[4].name)
+	})
+
+	t.Run("mount-check failure aborts resize", func(t *testing.T) {
+		t.Parallel()
+		// Delta must exceed luksHeaderBytes so we reach the mount check.
+		const mapper = uint64(10 * 1024 * 1024 * 1024)
+		const pd = mapper + 1024*1024*1024
+		r := newFakeRunner()
+		r.Expect("blockdev", []string{"--getsize64", allowedBackingDevice},
+			[]byte(fmt.Sprintf("%d\n", pd)), nil)
+		r.Expect("blockdev", []string{"--getsize64", allowedMapper},
+			[]byte(fmt.Sprintf("%d\n", mapper)), nil)
 		r.Expect("findmnt", nil, []byte("/dev/sda1\n"), nil)
 
 		err := growOnce(context.Background(), r, testLogger(t))
@@ -313,9 +370,13 @@ func TestGrowOnce(t *testing.T) {
 
 	t.Run("cryptsetup error propagates", func(t *testing.T) {
 		t.Parallel()
+		const mapper = uint64(10 * 1024 * 1024 * 1024)
+		const pd = mapper + 1024*1024*1024
 		r := newFakeRunner()
-		r.Expect("blockdev", []string{"--getsize64", allowedBackingDevice}, []byte("200\n"), nil)
-		r.Expect("blockdev", []string{"--getsize64", allowedMapper}, []byte("100\n"), nil)
+		r.Expect("blockdev", []string{"--getsize64", allowedBackingDevice},
+			[]byte(fmt.Sprintf("%d\n", pd)), nil)
+		r.Expect("blockdev", []string{"--getsize64", allowedMapper},
+			[]byte(fmt.Sprintf("%d\n", mapper)), nil)
 		r.Expect("findmnt", nil, []byte(allowedMapper+"\n"), nil)
 		r.Expect("cryptsetup", nil, nil, errors.New("boom"))
 
@@ -326,9 +387,13 @@ func TestGrowOnce(t *testing.T) {
 
 	t.Run("resize2fs error propagates", func(t *testing.T) {
 		t.Parallel()
+		const mapper = uint64(10 * 1024 * 1024 * 1024)
+		const pd = mapper + 1024*1024*1024
 		r := newFakeRunner()
-		r.Expect("blockdev", []string{"--getsize64", allowedBackingDevice}, []byte("200\n"), nil)
-		r.Expect("blockdev", []string{"--getsize64", allowedMapper}, []byte("100\n"), nil)
+		r.Expect("blockdev", []string{"--getsize64", allowedBackingDevice},
+			[]byte(fmt.Sprintf("%d\n", pd)), nil)
+		r.Expect("blockdev", []string{"--getsize64", allowedMapper},
+			[]byte(fmt.Sprintf("%d\n", mapper)), nil)
 		r.Expect("findmnt", nil, []byte(allowedMapper+"\n"), nil)
 		r.Expect("cryptsetup", nil, nil, nil)
 		r.Expect("resize2fs", nil, nil, errors.New("kaboom"))
@@ -374,9 +439,14 @@ func TestGrowOnceBoot(t *testing.T) {
 
 	t.Run("grows without mount check", func(t *testing.T) {
 		t.Parallel()
+		// Delta must exceed luksHeaderBytes to trigger a resize.
+		const mapper = uint64(10 * 1024 * 1024 * 1024)
+		const pd = mapper + 1024*1024*1024
 		r := newFakeRunner()
-		r.Expect("blockdev", []string{"--getsize64", allowedBackingDevice}, []byte("200\n"), nil)
-		r.Expect("blockdev", []string{"--getsize64", allowedMapper}, []byte("100\n"), nil)
+		r.Expect("blockdev", []string{"--getsize64", allowedBackingDevice},
+			[]byte(fmt.Sprintf("%d\n", pd)), nil)
+		r.Expect("blockdev", []string{"--getsize64", allowedMapper},
+			[]byte(fmt.Sprintf("%d\n", mapper)), nil)
 		r.Expect("cryptsetup", []string{"resize", luksMapperName}, nil, nil)
 		r.Expect("resize2fs", []string{allowedMapper}, nil, nil)
 
@@ -408,9 +478,13 @@ func TestGrowOnceBoot(t *testing.T) {
 
 	t.Run("cryptsetup error propagates", func(t *testing.T) {
 		t.Parallel()
+		const mapper = uint64(10 * 1024 * 1024 * 1024)
+		const pd = mapper + 1024*1024*1024
 		r := newFakeRunner()
-		r.Expect("blockdev", []string{"--getsize64", allowedBackingDevice}, []byte("200\n"), nil)
-		r.Expect("blockdev", []string{"--getsize64", allowedMapper}, []byte("100\n"), nil)
+		r.Expect("blockdev", []string{"--getsize64", allowedBackingDevice},
+			[]byte(fmt.Sprintf("%d\n", pd)), nil)
+		r.Expect("blockdev", []string{"--getsize64", allowedMapper},
+			[]byte(fmt.Sprintf("%d\n", mapper)), nil)
 		r.Expect("cryptsetup", nil, nil, errors.New("boom-boot"))
 
 		err := growOnceBoot(context.Background(), r, testLogger(t))

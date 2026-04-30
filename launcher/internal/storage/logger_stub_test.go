@@ -17,6 +17,7 @@ type discardLogger struct{}
 var _ logging.Logger = (*discardLogger)(nil)
 
 func (discardLogger) Log(clogging.Severity, string, ...any) {}
+func (discardLogger) Debug(string, ...any)                  {}
 func (discardLogger) Info(string, ...any)                   {}
 func (discardLogger) Warn(string, ...any)                   {}
 func (discardLogger) Error(string, ...any)                  {}

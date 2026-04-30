@@ -25,6 +25,7 @@ const (
 type Logger interface {
 	Log(severity clogging.Severity, msg string, args ...any)
 
+	Debug(msg string, args ...any)
 	Info(msg string, args ...any)
 	Warn(msg string, args ...any)
 	Error(msg string, args ...any)
@@ -196,6 +197,11 @@ func (l *logger) Log(severity clogging.Severity, msg string, args ...any) {
 	l.writeLog(severity, msg, args...)
 }
 
+// Debug logs msg and args at 'Debug' severity.
+func (l *logger) Debug(msg string, args ...any) {
+	l.writeLog(clogging.Debug, msg, args...)
+}
+
 // Info logs msg and args at 'Info' severity.
 func (l *logger) Info(msg string, args ...any) {
 	l.writeLog(clogging.Info, msg, args...)
@@ -233,6 +239,11 @@ func (l *slogger) Log(severity clogging.Severity, msg string, args ...any) {
 		level = slog.LevelError
 	}
 	l.slg.Log(context.Background(), level, msg, args...)
+}
+
+// Debug logs msg and args at 'Debug' severity.
+func (l *slogger) Debug(msg string, args ...any) {
+	l.slg.Debug(msg, args...)
 }
 
 // Info logs msg and args at 'Info' severity.
