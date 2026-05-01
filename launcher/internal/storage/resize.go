@@ -129,6 +129,35 @@ func writeRescan(path string) error {
 // allowedMapper are now derived from this constant.
 const luksMapperName = "userdata"
 
+// luksHeaderBytes is the size of the LUKS2 header that cryptsetup reserves at
+// the start of the backing device. With the defaults we use (no --offset, no
+// custom --luks2-metadata-size), this is 16 MiB.
+//
+// After a successful online grow, the mapper is always exactly this much
+// smaller than the PD, so the poller must treat a pd-minus-mapper delta up to
+// this value as the steady state — otherwise it would re-issue cryptsetup
+// resize + resize2fs on every tick forever.
+const luksHeaderBytes uint64 = 16 * 1024 * 1024
+
+// growNeeded reports whether the filesystem-level grow path should run for a
+// given (pdSize, mapperSize) pair. It returns false in the two no-op cases:
+//
+//   - pdSize < mapperSize: shrink, which this package does not support.
+//   - pdSize - mapperSize <= luksHeaderBytes: post-grow steady state. The
+//     LUKS2 header reserves luksHeaderBytes at the start of the PD, so after
+//     a successful online grow the mapper is always exactly that much smaller
+//     than the PD. Treating that delta as "needs grow" would re-issue
+//     cryptsetup resize + resize2fs on every poller tick forever.
+//
+// It returns true only when the PD has actually been enlarged beyond the
+// header tolerance and the mapper/filesystem need to be grown to match.
+func growNeeded(pdSize, mapperSize uint64) bool {
+	if pdSize < mapperSize {
+		return false
+	}
+	return pdSize-mapperSize > luksHeaderBytes
+}
+
 // luksResize runs `cryptsetup resize <name>`. Online-safe.
 //
 // Preconditions:
@@ -216,13 +245,8 @@ func growOnce(ctx context.Context, r commandRunner, logger logging.Logger) error
 		return fmt.Errorf("read mapper size: %w", err)
 	}
 
-	switch {
-	case pdSize == mapperSize:
-		logger.Info("grow: no-op, sizes equal",
-			"pd_size_bytes", pdSize, "mapper_size_bytes", mapperSize)
-		return nil
-	case pdSize < mapperSize:
-		logger.Info("grow: no-op, pd smaller than mapper (shrink not supported)",
+	if !growNeeded(pdSize, mapperSize) {
+		logger.Debug("grow: no-op",
 			"pd_size_bytes", pdSize, "mapper_size_bytes", mapperSize)
 		return nil
 	}
@@ -255,7 +279,7 @@ var rescanFn = kernelRescanPD
 // it delegates to growOnce with the default runner.
 func GrowOnce(ctx context.Context, logger logging.Logger) error {
 	if err := rescanFn(allowedBackingDevice); err != nil {
-		logger.Warn("kernel rescan failed (continuing)", "error", err)
+		logger.Debug("kernel rescan failed (continuing)", "error", err)
 	}
 	return growOnce(ctx, defaultRunner, logger)
 }
@@ -281,8 +305,8 @@ func growOnceBoot(ctx context.Context, r commandRunner, logger logging.Logger) e
 	if err != nil {
 		return fmt.Errorf("read mapper size: %w", err)
 	}
-	if pdSize <= mapperSize {
-		logger.Info("grow (boot): no-op",
+	if !growNeeded(pdSize, mapperSize) {
+		logger.Debug("grow (boot): no-op",
 			"pd_size_bytes", pdSize, "mapper_size_bytes", mapperSize)
 		return nil
 	}
@@ -303,7 +327,7 @@ func growOnceBoot(ctx context.Context, r commandRunner, logger logging.Logger) e
 // the kernel rescan (best-effort).
 func GrowOnceBoot(ctx context.Context, logger logging.Logger) error {
 	if err := rescanFn(allowedBackingDevice); err != nil {
-		logger.Warn("kernel rescan failed at boot (continuing)", "error", err)
+		logger.Debug("kernel rescan failed at boot (continuing)", "error", err)
 	}
 	return growOnceBoot(ctx, defaultRunner, logger)
 }

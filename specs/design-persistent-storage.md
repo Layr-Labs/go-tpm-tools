@@ -95,9 +95,11 @@ Start workload container
 
 **Flow per tick** (see `launcher/internal/storage/resize.go`, orchestrated by `GrowOnce`):
 1. `kernelRescanPD` -- best-effort write to `/sys/block/<dev>/device/rescan`. On SCSI this nudges the kernel to re-read capacity; on NVMe this sysfs node does not exist and the write errors. Errors are intentionally swallowed -- see "Driver-agnostic rescan" below.
-2. `blockdev --getsize64` on the backing PD and on `/dev/mapper/userdata`. If PD > mapper, proceed.
+2. `blockdev --getsize64` on the backing PD and on `/dev/mapper/userdata`. Feed both sizes into `growNeeded` -- proceed only when `pdSize - mapperSize > luksHeaderBytes` (see "LUKS2 header tolerance" below). Otherwise the tick is a no-op.
 3. `cryptsetup resize userdata` grows the dm-crypt mapper to match the PD. This does not require the passphrase -- it only manipulates the kernel's active device-mapper entry.
 4. `resize2fs /dev/mapper/userdata` grows ext4 online. The mount stays up throughout.
+
+**LUKS2 header tolerance**: Strict `pdSize == mapperSize` equality is the wrong guard. The LUKS2 header reserves 16 MiB at the start of the backing device, so after a successful `cryptsetup resize` the mapper is permanently exactly 16 MiB smaller than the PD. A strict-equality guard reads that steady state as "grow needed" and re-runs `cryptsetup resize` + `resize2fs` on every tick, forever, with no real work to do. The `growNeeded(pdSize, mapperSize uint64) bool` helper encodes the correct contract: return true only when the PD exceeds the mapper by more than the header reservation (`luksHeaderBytes = 16 * 1024 * 1024`). Both `GrowOnce` (per tick) and `GrowOnceBoot` (boot-time one-shot) gate on this helper, so neither path spins on the header delta. Test coverage (`TestGrowNeeded`, `TestGrowOnce/noop_*`) locks in the boundary: equal sizes, shrink, exactly-at-header-delta, one byte short, and one byte over.
 
 **Driver-agnostic rescan**: The code never parses or assumes a particular device node naming scheme. It operates on the stable GCE symlink `/dev/disk/by-id/google-persistent_storage_1`, resolves it with `filepath.EvalSymlinks` + `filepath.Base`, and joins the result onto `/sys/block/<name>/device/rescan`. Whether that path exists is driver-specific:
 
@@ -134,9 +136,13 @@ On both drivers, the kernel **auto-detects** the capacity change on its own -- o
 
 **`Poller`**: Single-goroutine ticker loop. Started by the launcher after `SetupSecondaryEncryptedVolume` succeeds; runs until the workload container exits (launcher process lifetime). Per-tick panic recovery ensures a single bad call cannot silently kill the loop.
 
-**`GrowOnce(ctx, logger)`**: The orchestrator called each tick. Sequence: `kernelRescanPD` (best-effort) -> size-check PD vs mapper -> `cryptsetup resize userdata` if grow is needed -> `resize2fs /dev/mapper/userdata`. Each step is idempotent; if the sizes are already aligned (no grow pending), the whole call is a no-op aside from the structured size log.
+**`GrowOnce(ctx, logger)`**: The orchestrator called each tick. Sequence: `kernelRescanPD` (best-effort) -> size-check PD vs mapper -> `growNeeded` tolerance check -> `cryptsetup resize userdata` if grow is needed -> `resize2fs /dev/mapper/userdata`. Each step is idempotent; at the LUKS2-header steady state (`pdSize - mapperSize == luksHeaderBytes`) the whole call is a no-op aside from the structured size log.
 
-**`GrowOnceBoot(ctx, logger)`**: One-shot variant run synchronously at launcher boot, before the workload starts. Ensures any PD grow that occurred while the VM was stopped is applied before workload code sees the filesystem.
+**`GrowOnceBoot(ctx, logger)`**: One-shot variant run synchronously at launcher boot, before the workload starts. Same `growNeeded` tolerance as the per-tick path. Ensures any PD grow that occurred while the VM was stopped is applied before workload code sees the filesystem.
+
+**`growNeeded(pdSize, mapperSize uint64) bool`**: Single source of truth for "is a resize required?". Returns true iff `pdSize > mapperSize + luksHeaderBytes`. Shared by `GrowOnce` and `GrowOnceBoot` so both paths have identical tolerance semantics.
+
+**Log levels**: Steady-state per-tick messages (no-op skips, best-effort `kernelRescanPD` ENOENT on NVMe, poller tick failures) log at `Debug`. Only actual grow events (`pd is larger than mapper, resizing` / `resize complete`) and the structured `disk sizes` telemetry log at `Info`. This keeps an idle pre-grow VM silent at the default log level while preserving a clear operator signal when a real grow happens.
 
 **Allowlist constants** (single source of truth in `encrypted_volume.go`, aliased in `resize.go`):
 - `allowedBackingDevice = secondaryDevicePath`
