@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/Layr-Labs/go-tpm-tools/launcher/internal/logging"
 )
@@ -25,13 +26,89 @@ const (
 
 const secondaryDevicePath = "/dev/disk/by-id/google-persistent_storage_1"
 
-// findSecondaryDevice returns the device path if the secondary storage device
-// exists, or empty string if it doesn't.
-func findSecondaryDevice() string {
-	if _, err := os.Stat(secondaryDevicePath); err == nil {
+// secondaryDeviceProbeTimeout bounds how long findSecondaryDevice waits for
+// the device node to appear before giving up and falling back to the boot
+// disk. GCE PD attach is asynchronous: when the orchestrator provisions a VM
+// with an attached PD, the udev event that creates
+// /dev/disk/by-id/google-persistent_storage_1 can lag the launcher's startup
+// by several seconds. Without polling, the launcher's single os.Stat racing
+// against udev frequently misses the disk on fresh deploys, falls back to
+// the boot-disk path, and the user's data ends up on a non-persistent
+// stateful partition that's wiped on the next reboot.
+//
+// 30s is a balance between two failure modes: long enough to absorb the
+// observed 5–15s GCE attach latency, short enough that a deploy with NO
+// secondary disk attached doesn't add meaningful boot time on the
+// boot-disk fallback path. The orchestrator's readiness wait is 10 minutes
+// so this is well within budget.
+const secondaryDeviceProbeTimeout = 30 * time.Second
+
+// secondaryDeviceProbeInterval is how often findSecondaryDevice checks for
+// the device while waiting. Tighter than the timeout so a fast attach
+// (under a second) is observed promptly.
+const secondaryDeviceProbeInterval = 500 * time.Millisecond
+
+// findSecondaryDevice returns the device path if the secondary storage
+// device exists, or empty string if it doesn't appear within
+// secondaryDeviceProbeTimeout.
+//
+// Polling is necessary because GCE PD attach is asynchronous: the disk is
+// declared attached at the API level before the kernel's udev rules have
+// finished publishing the /dev/disk/by-id/* symlink. A single os.Stat
+// races against udev and frequently returns ENOENT on fresh deploys even
+// when a PD is attached. Falling back to the boot disk in that case
+// silently routes user data to a non-persistent partition.
+//
+// findSecondaryDevice is split into a thin wrapper around findSecondaryDeviceWith
+// so tests can inject a fake clock + stat function and exercise the poll
+// loop without touching the real filesystem or sleeping for 30s.
+func findSecondaryDevice(ctx context.Context, logger logging.Logger) string {
+	return findSecondaryDeviceWith(ctx, logger, os.Stat, time.NewTicker, secondaryDeviceProbeTimeout)
+}
+
+// statFunc abstracts os.Stat so unit tests can inject deterministic
+// "device appears after N polls" behavior.
+type statFunc func(string) (os.FileInfo, error)
+
+// tickerFunc abstracts time.NewTicker so unit tests can drive the poll
+// cadence with a synthetic clock.
+type tickerFunc func(time.Duration) *time.Ticker
+
+func findSecondaryDeviceWith(ctx context.Context, logger logging.Logger, stat statFunc, newTicker tickerFunc, timeout time.Duration) string {
+	// Fast path: the device is already present (no race; e.g. VM was
+	// rebooted with the PD already attached). Avoids the first
+	// secondaryDeviceProbeInterval of latency on the common case.
+	if _, err := stat(secondaryDevicePath); err == nil {
 		return secondaryDevicePath
 	}
-	return ""
+
+	logger.Info("findSecondaryDevice: device not yet present, polling",
+		"device", secondaryDevicePath,
+		"timeout", timeout.String(),
+		"interval", secondaryDeviceProbeInterval.String(),
+	)
+
+	deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	ticker := newTicker(secondaryDeviceProbeInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-deadlineCtx.Done():
+			logger.Info("findSecondaryDevice: device did not appear before timeout, falling back to boot disk",
+				"device", secondaryDevicePath,
+				"timeout", timeout.String(),
+			)
+			return ""
+		case <-ticker.C:
+			if _, err := stat(secondaryDevicePath); err == nil {
+				logger.Info("findSecondaryDevice: device appeared", "device", secondaryDevicePath)
+				return secondaryDevicePath
+			}
+		}
+	}
 }
 
 // MnemonicProvider is a function that fetches the BIP39 mnemonic from KMS.
@@ -44,12 +121,13 @@ type MnemonicProvider func() (string, error)
 // derives an encryption key, and sets up an encrypted LUKS volume.
 // On first boot it formats and opens the device; on subsequent boots it detects
 // the existing LUKS header and only opens it.
-// If no secondary device is found, it falls back to a directory on the boot disk,
-// and the mnemonicProvider is not called.
+// If no secondary device is found within secondaryDeviceProbeTimeout, it
+// falls back to a directory on the boot disk, and the mnemonicProvider is
+// not called.
 func SetupSecondaryEncryptedVolume(ctx context.Context, logger logging.Logger, mnemonicProvider MnemonicProvider) error {
 	logger.Info("SetupSecondaryEncryptedVolume: starting", "mount_point", MountPoint)
 
-	devicePath := findSecondaryDevice()
+	devicePath := findSecondaryDevice(ctx, logger)
 	if devicePath == "" {
 		logger.Info("SetupSecondaryEncryptedVolume: no secondary storage device found, using boot disk for persistent storage")
 		// No secondary device: create the mount point as a plain directory on the

@@ -176,7 +176,17 @@ Every primitive (`pdSizeBytes`, `mapperSizeBytes`, `kernelRescanPD`, `luksResize
 | Device found, LUKS header exists | Call provider -> derive key -> `luksOpen` -> `mount` |
 
 **LUKS helpers** (all unexported):
-- `findSecondaryDevice()` -- `os.Stat` on the expected device path
+- `findSecondaryDevice(ctx, logger)` -- Polls `os.Stat` on the expected
+  device path for up to `secondaryDeviceProbeTimeout` (30s) before
+  falling back. The poll exists because GCE PD attach is asynchronous:
+  the disk is reported attached at the API level before the kernel's
+  udev rules have finished publishing the `/dev/disk/by-id/*` symlink.
+  A single `os.Stat` races against udev and frequently misses the disk
+  on fresh deploys, silently falling back to the boot disk and routing
+  user data to a non-persistent stateful partition. Polling tolerates
+  the observed 5–15s attach latency without measurably slowing down
+  legitimate "no secondary disk" deploys (the no-PD case still falls
+  through after 30s of polling).
 - `isLuksDevice(device)` -- Runs `cryptsetup isLuks`; non-zero exit = not LUKS
 - `luksFormat(device, key)` -- `cryptsetup luksFormat --pbkdf pbkdf2 <device> -` with key on stdin
 - `luksOpen(device, name, key)` -- `cryptsetup luksOpen <device> <name> -` with key on stdin

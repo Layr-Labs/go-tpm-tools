@@ -14,3 +14,6 @@ main
 go.work
 go.work.sum
 scripts/pcrs.json
+
+# Local agent worktrees
+.claude/
