@@ -43,9 +43,23 @@ const secondaryDevicePath = "/dev/disk/by-id/google-persistent_storage_1"
 // so this is well within budget.
 const secondaryDeviceProbeTimeout = 30 * time.Second
 
+// LateAttachDeviceTimeout bounds how long the AwaitLateAttach path waits for
+// the device. It matches the orchestrator's prewarm-detach attach budget:
+// when await-late-attach metadata is set, the orchestrator waits for the
+// launcher to emit ECLOUD_AWAITING_USERDATA on serial, then issues AttachPD.
+// That round trip plus GCE's PD attach latency can take several minutes, so
+// we wait long here. If the device never appears within this budget, it's
+// a real failure — the orchestrator either crashed mid-upgrade or never
+// sent AttachPD. There is deliberately NO boot-disk fallback here: the
+// operator opted in to a contract where the PD WILL arrive, so a missing
+// device after this timeout must surface as an error rather than be
+// papered over with a non-persistent partition.
+const LateAttachDeviceTimeout = 5 * time.Minute
+
 // secondaryDeviceProbeInterval is how often findSecondaryDevice checks for
 // the device while waiting. Tighter than the timeout so a fast attach
-// (under a second) is observed promptly.
+// (under a second) is observed promptly. Shared between the synchronous
+// and late-attach paths since both want low-latency detection.
 const secondaryDeviceProbeInterval = 500 * time.Millisecond
 
 // findSecondaryDevice returns the device path if the secondary storage
@@ -116,14 +130,19 @@ func findSecondaryDeviceWith(ctx context.Context, logger logging.Logger, stat st
 // is needed — avoiding unnecessary KMS calls when no disk is attached.
 type MnemonicProvider func() (string, error)
 
-// SetupSecondaryEncryptedVolume sets up persistent storage for user data.
-// If a secondary storage device exists, it fetches the mnemonic via mnemonicProvider,
-// derives an encryption key, and sets up an encrypted LUKS volume.
-// On first boot it formats and opens the device; on subsequent boots it detects
-// the existing LUKS header and only opens it.
-// If no secondary device is found within secondaryDeviceProbeTimeout, it
-// falls back to a directory on the boot disk, and the mnemonicProvider is
-// not called.
+// SetupSecondaryEncryptedVolume sets up persistent storage for user data
+// SYNCHRONOUSLY at boot. It polls briefly for the secondary device (see
+// secondaryDeviceProbeTimeout) to absorb the GCE attach race; if the
+// device never appears, it falls back to a directory on the boot disk
+// and does not call mnemonicProvider.
+//
+// Use this for the standard launch path where the orchestrator attaches
+// the PD at provision time. For the prewarm-detach upgrade path where
+// the orchestrator delays AttachPD until the new VM signals readiness,
+// use SetupSecondaryEncryptedVolumeLateAttach instead.
+//
+// On first boot with a secondary device, formats and opens the device;
+// on subsequent boots, detects the existing LUKS header and only opens it.
 func SetupSecondaryEncryptedVolume(ctx context.Context, logger logging.Logger, mnemonicProvider MnemonicProvider) error {
 	logger.Info("SetupSecondaryEncryptedVolume: starting", "mount_point", MountPoint)
 
@@ -140,13 +159,50 @@ func SetupSecondaryEncryptedVolume(ctx context.Context, logger logging.Logger, m
 		logger.Info("SetupSecondaryEncryptedVolume: mount point ready on boot disk (already encrypted)", "mount_point", MountPoint)
 		return nil
 	}
-	logger.Info("SetupSecondaryEncryptedVolume: secondary storage device found, setting up encrypted volume", "device", devicePath)
+
+	return setupLUKSOnDevice(ctx, logger, mnemonicProvider, devicePath)
+}
+
+// SetupSecondaryEncryptedVolumeLateAttach is the prewarm-detach variant of
+// SetupSecondaryEncryptedVolume. It expects the device NOT to exist at call
+// time (the orchestrator hasn't run AttachPD yet) and waits up to
+// LateAttachDeviceTimeout for it to appear. There is no boot-disk fallback:
+// in this mode, the launcher knows a PD is supposed to land, so a missing
+// device after the timeout is a real failure that should stop the workload.
+//
+// This call is SYNCHRONOUS. Callers (the launcher's container_runner)
+// must invoke it BEFORE starting the user container — emitting
+// ECLOUD_AWAITING_USERDATA on serial first so the orchestrator knows to
+// run AttachPD, then waiting for the device, doing LUKS+mount, and only
+// then starting the container. Running it after container start would
+// leave the bind mount source empty when the container reads it.
+func SetupSecondaryEncryptedVolumeLateAttach(ctx context.Context, logger logging.Logger, mnemonicProvider MnemonicProvider) error {
+	logger.Info("SetupSecondaryEncryptedVolumeLateAttach: starting", "mount_point", MountPoint, "timeout", LateAttachDeviceTimeout.String())
+
+	devicePath := findSecondaryDeviceWith(ctx, logger, os.Stat, time.NewTicker, LateAttachDeviceTimeout)
+	if devicePath == "" {
+		// No fallback: the orchestrator promised an attach and failed to
+		// deliver. Surface the failure so the launcher returns an error
+		// and the orchestrator's readiness wait reports the underlying
+		// problem rather than papering it over with a stateful-partition
+		// fallback.
+		return fmt.Errorf("late-attach: secondary device %s did not appear within %s", secondaryDevicePath, LateAttachDeviceTimeout)
+	}
+
+	return setupLUKSOnDevice(ctx, logger, mnemonicProvider, devicePath)
+}
+
+// setupLUKSOnDevice runs the LUKS-format-or-open + mount sequence shared by
+// both SetupSecondaryEncryptedVolume and SetupSecondaryEncryptedVolumeLateAttach.
+// The caller is responsible for verifying the device exists.
+func setupLUKSOnDevice(ctx context.Context, logger logging.Logger, mnemonicProvider MnemonicProvider, devicePath string) error {
+	logger.Info("setupLUKSOnDevice: secondary storage device found, setting up encrypted volume", "device", devicePath)
 
 	// Fetch mnemonic and derive encryption key only when a secondary device
 	// is present. This avoids calling the KMS unnecessarily and sidesteps the
 	// chicken-and-egg problem (KMS needs PCR allowlisting, which requires
 	// running a workload first).
-	logger.Info("SetupSecondaryEncryptedVolume: fetching mnemonic from KMS")
+	logger.Info("setupLUKSOnDevice: fetching mnemonic from KMS")
 	mnemonic, err := mnemonicProvider()
 	if err != nil {
 		return fmt.Errorf("failed to fetch mnemonic for disk encryption: %w", err)
@@ -161,46 +217,46 @@ func SetupSecondaryEncryptedVolume(ctx context.Context, logger logging.Logger, m
 
 	isLuks, err := isLuksDevice(devicePath)
 	if err != nil {
-		logger.Error("SetupSecondaryEncryptedVolume: failed to check LUKS status", "error", err)
+		logger.Error("setupLUKSOnDevice: failed to check LUKS status", "error", err)
 		return fmt.Errorf("failed to check LUKS status: %w", err)
 	}
 
 	if !isLuks {
-		logger.Info("SetupSecondaryEncryptedVolume: no LUKS header detected, formatting device", "device", devicePath)
+		logger.Info("setupLUKSOnDevice: no LUKS header detected, formatting device", "device", devicePath)
 		if err := luksFormat(devicePath, encryptionKey); err != nil {
-			logger.Error("SetupSecondaryEncryptedVolume: luksFormat failed", "error", err)
+			logger.Error("setupLUKSOnDevice: luksFormat failed", "error", err)
 			return fmt.Errorf("failed to format LUKS device: %w", err)
 		}
-		logger.Info("SetupSecondaryEncryptedVolume: luksFormat succeeded")
+		logger.Info("setupLUKSOnDevice: luksFormat succeeded")
 
 		if err := luksOpen(devicePath, luksName, encryptionKey); err != nil {
-			logger.Error("SetupSecondaryEncryptedVolume: luksOpen failed after format", "error", err)
+			logger.Error("setupLUKSOnDevice: luksOpen failed after format", "error", err)
 			return fmt.Errorf("failed to open LUKS device: %w", err)
 		}
-		logger.Info("SetupSecondaryEncryptedVolume: luksOpen succeeded", "mapper", mapperPath)
+		logger.Info("setupLUKSOnDevice: luksOpen succeeded", "mapper", mapperPath)
 
 		if err := mkfsExt4(mapperPath); err != nil {
-			logger.Error("SetupSecondaryEncryptedVolume: mkfs.ext4 failed", "error", err)
+			logger.Error("setupLUKSOnDevice: mkfs.ext4 failed", "error", err)
 			return fmt.Errorf("failed to create ext4 filesystem: %w", err)
 		}
-		logger.Info("SetupSecondaryEncryptedVolume: mkfs.ext4 succeeded")
+		logger.Info("setupLUKSOnDevice: mkfs.ext4 succeeded")
 	} else {
-		logger.Info("SetupSecondaryEncryptedVolume: LUKS header detected, reusing existing volume", "device", devicePath)
+		logger.Info("setupLUKSOnDevice: LUKS header detected, reusing existing volume", "device", devicePath)
 		if err := luksOpen(devicePath, luksName, encryptionKey); err != nil {
-			logger.Error("SetupSecondaryEncryptedVolume: luksOpen failed", "error", err)
+			logger.Error("setupLUKSOnDevice: luksOpen failed", "error", err)
 			return fmt.Errorf("failed to open LUKS device: %w", err)
 		}
-		logger.Info("SetupSecondaryEncryptedVolume: luksOpen succeeded", "mapper", mapperPath)
+		logger.Info("setupLUKSOnDevice: luksOpen succeeded", "mapper", mapperPath)
 	}
 
 	if err := os.MkdirAll(MountPoint, 0755); err != nil {
-		logger.Error("SetupSecondaryEncryptedVolume: MkdirAll failed", "mount_point", MountPoint, "error", err)
+		logger.Error("setupLUKSOnDevice: MkdirAll failed", "mount_point", MountPoint, "error", err)
 		return fmt.Errorf("failed to create mount point %s: %w", MountPoint, err)
 	}
-	logger.Info("SetupSecondaryEncryptedVolume: mount point directory ready", "mount_point", MountPoint)
+	logger.Info("setupLUKSOnDevice: mount point directory ready", "mount_point", MountPoint)
 
 	if err := mount(mapperPath, MountPoint); err != nil {
-		logger.Error("SetupSecondaryEncryptedVolume: mount failed", "source", mapperPath, "target", MountPoint, "error", err)
+		logger.Error("setupLUKSOnDevice: mount failed", "source", mapperPath, "target", MountPoint, "error", err)
 		return fmt.Errorf("failed to mount %s at %s: %w", mapperPath, MountPoint, err)
 	}
 
@@ -210,11 +266,50 @@ func SetupSecondaryEncryptedVolume(ctx context.Context, logger logging.Logger, m
 	// (safety feature); growing a mounted fs is online-safe and skips that
 	// requirement. Failure here is non-fatal; the runtime poller will retry.
 	if err := GrowOnceBoot(ctx, logger); err != nil {
-		logger.Error("SetupSecondaryEncryptedVolume: boot-time grow failed, continuing; poller will retry", "error", err)
+		logger.Error("setupLUKSOnDevice: boot-time grow failed, continuing; poller will retry", "error", err)
 	}
 
-	logger.Info("SetupSecondaryEncryptedVolume: encrypted volume ready", "mount_point", MountPoint)
+	logger.Info("setupLUKSOnDevice: encrypted volume ready", "mount_point", MountPoint)
 	return nil
+}
+
+// CleanupEncryptedVolume tears down the LUKS volume + mount that
+// SetupSecondaryEncryptedVolume / SetupSecondaryEncryptedVolumeLateAttach
+// brought up, in the order required for safe PD detach: sync, umount,
+// cryptsetup close. Each step is best-effort and idempotent — failures
+// are logged but don't abort the sequence, since the orchestrator's
+// post-detach cleanup is the backstop for any leftover mapper state.
+//
+// Intended for the prewarm-detach drain path: after the user container
+// exits (or on launcher shutdown), the launcher calls this so the PD
+// can be detached cleanly. The user-container script can't do this work
+// itself because the script's container lacks CAP_SYS_ADMIN, which umount
+// and cryptsetup require.
+func CleanupEncryptedVolume(ctx context.Context, logger logging.Logger) {
+	// sync before umount to flush any pending writes from the user
+	// container's late-buffered I/O. Best-effort: if sync fails the
+	// kernel will still flush before umount, so this is belt-and-braces.
+	if out, err := exec.CommandContext(ctx, "sync").CombinedOutput(); err != nil {
+		logger.Warn("CleanupEncryptedVolume: sync failed", "error", err, "output", string(out))
+	}
+
+	// umount the bind-source first. If nothing is mounted, this returns
+	// a non-zero "not mounted" exit which we treat as success — there's
+	// no portable way in a Go child process to read /proc/self/mountinfo
+	// safely on cos-tdx without inheriting unrelated mounts.
+	if out, err := exec.CommandContext(ctx, "umount", MountPoint).CombinedOutput(); err != nil {
+		logger.Warn("CleanupEncryptedVolume: umount returned non-zero (treating as already-unmounted)", "mount_point", MountPoint, "error", err, "output", string(out))
+	} else {
+		logger.Info("CleanupEncryptedVolume: umount succeeded", "mount_point", MountPoint)
+	}
+
+	// cryptsetup close releases the dm-crypt mapping. Same idempotency
+	// note as above: if the mapper isn't open this returns non-zero.
+	if out, err := exec.CommandContext(ctx, "cryptsetup", "close", luksName).CombinedOutput(); err != nil {
+		logger.Warn("CleanupEncryptedVolume: cryptsetup close returned non-zero (treating as already-closed)", "name", luksName, "error", err, "output", string(out))
+	} else {
+		logger.Info("CleanupEncryptedVolume: cryptsetup close succeeded", "name", luksName)
+	}
 }
 
 // isLuksDevice checks whether the device has a LUKS header.

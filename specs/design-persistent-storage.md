@@ -40,7 +40,7 @@ SetupSecondaryEncryptedVolume(logger, mnemonicProvider)
   |     |     +-- cryptsetup luksOpen
   |     |
   |     |-- mkdir /mnt/disks/userdata
-  |     +-- mount /dev/mapper/userdata -> /mnt/disks/userdata
+  |     +-- mount /dev/mapper/app_userdata -> /mnt/disks/userdata
   |
   v
 Update container spec with bind mount
@@ -95,9 +95,9 @@ Start workload container
 
 **Flow per tick** (see `launcher/internal/storage/resize.go`, orchestrated by `GrowOnce`):
 1. `kernelRescanPD` -- best-effort write to `/sys/block/<dev>/device/rescan`. On SCSI this nudges the kernel to re-read capacity; on NVMe this sysfs node does not exist and the write errors. Errors are intentionally swallowed -- see "Driver-agnostic rescan" below.
-2. `blockdev --getsize64` on the backing PD and on `/dev/mapper/userdata`. Feed both sizes into `growNeeded` -- proceed only when `pdSize - mapperSize > luksHeaderBytes` (see "LUKS2 header tolerance" below). Otherwise the tick is a no-op.
-3. `cryptsetup resize userdata` grows the dm-crypt mapper to match the PD. This does not require the passphrase -- it only manipulates the kernel's active device-mapper entry.
-4. `resize2fs /dev/mapper/userdata` grows ext4 online. The mount stays up throughout.
+2. `blockdev --getsize64` on the backing PD and on `/dev/mapper/app_userdata`. Feed both sizes into `growNeeded` -- proceed only when `pdSize - mapperSize > luksHeaderBytes` (see "LUKS2 header tolerance" below). Otherwise the tick is a no-op.
+3. `cryptsetup resize app_userdata` grows the dm-crypt mapper to match the PD. This does not require the passphrase -- it only manipulates the kernel's active device-mapper entry.
+4. `resize2fs /dev/mapper/app_userdata` grows ext4 online. The mount stays up throughout.
 
 **LUKS2 header tolerance**: Strict `pdSize == mapperSize` equality is the wrong guard. The LUKS2 header reserves 16 MiB at the start of the backing device, so after a successful `cryptsetup resize` the mapper is permanently exactly 16 MiB smaller than the PD. A strict-equality guard reads that steady state as "grow needed" and re-runs `cryptsetup resize` + `resize2fs` on every tick, forever, with no real work to do. The `growNeeded(pdSize, mapperSize uint64) bool` helper encodes the correct contract: return true only when the PD exceeds the mapper by more than the header reservation (`luksHeaderBytes = 16 * 1024 * 1024`). Both `GrowOnce` (per tick) and `GrowOnceBoot` (boot-time one-shot) gate on this helper, so neither path spins on the header delta. Test coverage (`TestGrowNeeded`, `TestGrowOnce/noop_*`) locks in the boundary: equal sizes, shrink, exactly-at-header-delta, one byte short, and one byte over.
 
@@ -136,7 +136,7 @@ On both drivers, the kernel **auto-detects** the capacity change on its own -- o
 
 **`Poller`**: Single-goroutine ticker loop. Started by the launcher after `SetupSecondaryEncryptedVolume` succeeds; runs until the workload container exits (launcher process lifetime). Per-tick panic recovery ensures a single bad call cannot silently kill the loop.
 
-**`GrowOnce(ctx, logger)`**: The orchestrator called each tick. Sequence: `kernelRescanPD` (best-effort) -> size-check PD vs mapper -> `growNeeded` tolerance check -> `cryptsetup resize userdata` if grow is needed -> `resize2fs /dev/mapper/userdata`. Each step is idempotent; at the LUKS2-header steady state (`pdSize - mapperSize == luksHeaderBytes`) the whole call is a no-op aside from the structured size log.
+**`GrowOnce(ctx, logger)`**: The orchestrator called each tick. Sequence: `kernelRescanPD` (best-effort) -> size-check PD vs mapper -> `growNeeded` tolerance check -> `cryptsetup resize app_userdata` if grow is needed -> `resize2fs /dev/mapper/app_userdata`. Each step is idempotent; at the LUKS2-header steady state (`pdSize - mapperSize == luksHeaderBytes`) the whole call is a no-op aside from the structured size log.
 
 **`GrowOnceBoot(ctx, logger)`**: One-shot variant run synchronously at launcher boot, before the workload starts. Same `growNeeded` tolerance as the per-tick path. Ensures any PD grow that occurred while the VM was stopped is applied before workload code sees the filesystem.
 
@@ -148,7 +148,7 @@ On both drivers, the kernel **auto-detects** the capacity change on its own -- o
 - `allowedBackingDevice = secondaryDevicePath`
 - `allowedMapper = mapperPath`
 - `allowedMountPoint = MountPoint`
-- `luksMapperName = "userdata"`
+- `luksMapperName = "app_userdata"` (renamed from `userdata` to avoid colliding with cos-tdx's boot-disk integrity-fs mapper of the same name)
 
 Every primitive (`pdSizeBytes`, `mapperSizeBytes`, `kernelRescanPD`, `luksResize`, `resizeExt4`) gates its input against these constants and returns `ErrDeviceNotAllowed` on mismatch. Any new caller MUST use the constants; hard-coding paths is rejected at review.
 
@@ -162,8 +162,9 @@ Every primitive (`pdSizeBytes`, `mapperSizeBytes`, `kernelRescanPD`, `luksResize
 - `MountPoint = "/mnt/disks/userdata"` -- Host-side mount path
 - `ContainerMountPoint = "/mnt/disks/userdata"` -- Container-side bind mount destination
 - `secondaryDevicePath = "/dev/disk/by-id/google-persistent_storage_1"` -- Expected device path
-- `luksName = "userdata"` -- dm-crypt mapper name
-- `mapperPath = "/dev/mapper/userdata"` -- Opened LUKS device path
+- `luksName = "app_userdata"` -- dm-crypt mapper name (the `app_` prefix avoids a collision with cos-tdx's boot-disk integrity-fs mapper named `userdata`)
+- `mapperPath = "/dev/mapper/app_userdata"` -- Opened LUKS device path
+- `LateAttachDeviceTimeout = 5 * time.Minute` -- Max wait for the device on the prewarm-detach late-attach path
 
 **`MnemonicProvider func() (string, error)`**: Type alias for the callback that provides the mnemonic. Only called when a secondary device is detected.
 
@@ -174,6 +175,23 @@ Every primitive (`pdSizeBytes`, `mapperSizeBytes`, `kernelRescanPD`, `luksResize
 | No secondary device | `os.MkdirAll(MountPoint)` on boot disk. Provider **not** called. |
 | Device found, no LUKS header | Call provider -> derive key -> `luksFormat` -> `luksOpen` -> `mkfs.ext4` -> `mount` |
 | Device found, LUKS header exists | Call provider -> derive key -> `luksOpen` -> `mount` |
+
+**`SetupSecondaryEncryptedVolumeLateAttach(logger, mnemonicProvider) error`**:
+Synchronous variant for the prewarm-detach upgrade path. Same LUKS-format-or-open
++ mount logic as the default path, but waits up to `LateAttachDeviceTimeout`
+(5 min) for the device — there is **no boot-disk fallback**. A missing device
+after the timeout returns an error so the orchestrator's readiness wait
+surfaces the underlying problem rather than papering over it with a
+non-persistent partition. Callers (the launcher's `Run()`) MUST emit
+`ECLOUD_AWAITING_USERDATA` on serial before calling this so the orchestrator
+knows to issue `AttachPD`, and MUST run it BEFORE container start so the
+bind-mount source is populated when the container reads it.
+
+**`CleanupEncryptedVolume(ctx, logger)`**: Tears down the LUKS volume + mount
+in detach-safe order: `sync` → `umount /mnt/disks/userdata` → `cryptsetup close
+app_userdata`. Each step is best-effort and idempotent; failures log a warning
+but don't abort the sequence (the orchestrator's post-detach cleanup is the
+backstop). Used by the late-attach path's drain handler.
 
 **LUKS helpers** (all unexported):
 - `findSecondaryDevice(ctx, logger)` -- Polls `os.Stat` on the expected
@@ -187,11 +205,17 @@ Every primitive (`pdSizeBytes`, `mapperSizeBytes`, `kernelRescanPD`, `luksResize
   the observed 5–15s attach latency without measurably slowing down
   legitimate "no secondary disk" deploys (the no-PD case still falls
   through after 30s of polling).
+- `findSecondaryDeviceWith(ctx, logger, stat, newTicker, timeout)` --
+  Test-injectable form, also used by the late-attach path with the
+  longer `LateAttachDeviceTimeout`.
 - `isLuksDevice(device)` -- Runs `cryptsetup isLuks`; non-zero exit = not LUKS
 - `luksFormat(device, key)` -- `cryptsetup luksFormat --pbkdf pbkdf2 <device> -` with key on stdin
 - `luksOpen(device, name, key)` -- `cryptsetup luksOpen <device> <name> -` with key on stdin
 - `mkfsExt4(device)` -- `mkfs.ext4 <device>`
 - `mount(source, target)` -- `mount <source> <target>`
+- `setupLUKSOnDevice(ctx, logger, mnemonicProvider, devicePath)` --
+  Shared format-or-open + mkfs (first boot) + mount + boot-time grow
+  sequence, called once the caller has confirmed a device path.
 
 ### 4.3 Container Runner Integration (`launcher/container_runner.go`)
 
@@ -200,12 +224,56 @@ Every primitive (`pdSizeBytes`, `mapperSizeBytes`, `kernelRescanPD`, `luksResize
 
 **In `Run()`** (after TEE server starts, before container task creation):
 1. Defines a `mnemonicProvider` closure that wraps the external key source.
-2. Calls `storage.SetupSecondaryEncryptedVolume(logger, mnemonicProvider)`.
-3. Updates the container spec via `container.Update()` to add a read-write bind mount:
+2. Branches on `r.launchSpec.AwaitLateAttach`:
+   - **Default path (`AwaitLateAttach = false`)**: Calls
+     `storage.SetupSecondaryEncryptedVolume(logger, mnemonicProvider)`
+     synchronously. The LUKS volume is mounted before the user
+     container ever starts.
+   - **Late-attach path (`AwaitLateAttach = true`)**: Emits
+     `ECLOUD_AWAITING_USERDATA` to the serial console, then calls
+     `storage.SetupSecondaryEncryptedVolumeLateAttach` synchronously
+     (waits up to 5 min for the orchestrator's `AttachPD`). Defers
+     `storage.CleanupEncryptedVolume` + emits `ECLOUD_DETACHED` on
+     `Run()` exit so the orchestrator can detach cleanly.
+3. Starts the disk-grow poller goroutine.
+4. Updates the container spec via `container.Update()` to add a read-write bind mount:
    - Source: `/mnt/disks/userdata` (host)
    - Destination: `/mnt/disks/userdata` (container)
 
 **`appendUserDataMount(mounts)`**: Helper that appends the bind mount spec (`rbind`, `rw`) to an existing mount list.
+
+#### Why the launcher emits `ECLOUD_AWAITING_USERDATA`
+
+The launcher normally sets up the LUKS volume BEFORE starting the user
+container. But the prewarm-detach upgrade strategy in
+`Layr-Labs/ecloud-platform`'s orchestrator deliberately delays
+`AttachPD` until the new VM signals readiness on the serial console.
+With the synchronous setup, this inverts: the launcher would time out
+waiting for a device the orchestrator won't attach until something on
+the VM signals back.
+
+The `tee-await-late-attach=true` metadata flag breaks the cycle. When
+set, the launcher emits the `ECLOUD_AWAITING_USERDATA` marker itself,
+waits for the device, completes LUKS+mount, and only then starts the
+user container. This keeps a single LUKS implementation (launcher-side)
+and means the user container's bind-mount source is populated from the
+moment it starts — no in-container coordination, no mount-namespace
+propagation tricks. The user container script does not need
+`CAP_SYS_ADMIN` and does not need to wait for or validate the mount.
+
+There is no boot-disk fallback in the late-attach path: the operator
+explicitly opted in to a contract where the PD WILL arrive, so a
+missing device after 5 min is a real failure that surfaces via the
+launcher returning an error rather than being papered over with a
+non-persistent partition.
+
+On `Run()` exit (drain or workload completion), the late-attach path
+runs `storage.CleanupEncryptedVolume` (sync → umount → cryptsetup close)
+and emits `ECLOUD_DETACHED` so the orchestrator can proceed to detach
+the PD safely. Only the late-attach path emits this marker: the
+synchronous path's PD stays attached for the VM lifetime and is
+detached implicitly when the VM is destroyed, so the marker would be
+spurious there.
 
 ---
 

@@ -189,3 +189,16 @@ func TestSecondaryDeviceProbeConstantsAreSane(t *testing.T) {
 	assert.Less(t, secondaryDeviceProbeInterval, secondaryDeviceProbeTimeout,
 		"interval must be smaller than timeout or polling never fires")
 }
+
+// TestLateAttachDeviceTimeoutIsSane locks in the contract that the
+// late-attach budget exceeds the synchronous-path budget. The
+// orchestrator's prewarm-detach round trip + GCE attach can take
+// several minutes and must fit inside this window; if anyone ever
+// shortens it below the synchronous timeout, the asymmetry that
+// motivates the separate path collapses.
+func TestLateAttachDeviceTimeoutIsSane(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, 5*time.Minute, LateAttachDeviceTimeout)
+	assert.Greater(t, LateAttachDeviceTimeout, secondaryDeviceProbeTimeout,
+		"late-attach budget must exceed the synchronous-path budget")
+}

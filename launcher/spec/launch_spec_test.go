@@ -455,3 +455,63 @@ func TestLaunchSpecUnmarshalJSONWithBadSelfVerification(t *testing.T) {
 		t.Errorf("got %v error, but expected error about self-verification not being a boolean", err)
 	}
 }
+
+func TestLaunchSpecUnmarshalJSONWithAwaitLateAttach(t *testing.T) {
+	var testCases = []struct {
+		testName string
+		mdsJSON  string
+		want     bool
+	}{
+		{
+			"AwaitLateAttachTrue",
+			`{
+				"tee-image-reference":"docker.io/library/hello-world:latest",
+				"tee-await-late-attach":"true"
+			}`,
+			true,
+		},
+		{
+			"AwaitLateAttachFalse",
+			`{
+				"tee-image-reference":"docker.io/library/hello-world:latest",
+				"tee-await-late-attach":"false"
+			}`,
+			false,
+		},
+		{
+			"AwaitLateAttachNotSpecified",
+			`{
+				"tee-image-reference":"docker.io/library/hello-world:latest"
+			}`,
+			false,
+		},
+	}
+
+	for _, testcase := range testCases {
+		t.Run(testcase.testName, func(t *testing.T) {
+			spec := &LaunchSpec{}
+			if err := spec.UnmarshalJSON([]byte(testcase.mdsJSON)); err != nil {
+				t.Fatal(err)
+			}
+			if spec.AwaitLateAttach != testcase.want {
+				t.Errorf("AwaitLateAttach got %v, want %v", spec.AwaitLateAttach, testcase.want)
+			}
+		})
+	}
+}
+
+func TestLaunchSpecUnmarshalJSONWithBadAwaitLateAttach(t *testing.T) {
+	mdsJSON := `{
+		"tee-image-reference":"docker.io/library/hello-world:latest",
+		"tee-await-late-attach":"notabool"
+	}`
+
+	spec := &LaunchSpec{}
+	err := spec.UnmarshalJSON([]byte(mdsJSON))
+	if err == nil {
+		t.Fatal("expected error for invalid tee-await-late-attach value")
+	}
+	if match, _ := regexp.MatchString("tee-await-late-attach.*not a boolean", err.Error()); !match {
+		t.Errorf("got %v error, but expected error about tee-await-late-attach not being a boolean", err)
+	}
+}
