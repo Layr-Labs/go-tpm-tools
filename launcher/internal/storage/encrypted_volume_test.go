@@ -158,6 +158,26 @@ func TestFindSecondaryDevice_ContextCancelExitsLoop(t *testing.T) {
 	}
 }
 
+func TestFindSecondaryDevice_AlreadyCancelledCtxShortCircuits(t *testing.T) {
+	t.Parallel()
+	// Regression guard: an already-cancelled parent ctx must NOT take
+	// the fast path. Without the entry guard, a stat that happens to
+	// return success (device present at the moment of the call) would
+	// cause findSecondaryDeviceWith to return the device path even
+	// though the caller has signalled cancel — making the cancel
+	// contract inconsistent between the fast and slow paths. The
+	// device-always-present stat below would trigger that bug; the
+	// entry guard short-circuits to "" so the cancel is honored.
+	stat := func(string) (os.FileInfo, error) {
+		return fakeFileInfo{}, nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	got := findSecondaryDeviceWith(ctx, testLogger(t), stat, time.NewTicker, 30*time.Second)
+	assert.Equal(t, "", got, "cancelled ctx must short-circuit the fast path")
+}
+
 func TestFindSecondaryDevice_ParentContextDeadlinePropagates(t *testing.T) {
 	t.Parallel()
 	// Regression guard: the inner timeout context is derived from the

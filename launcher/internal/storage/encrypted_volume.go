@@ -89,6 +89,15 @@ type statFunc func(string) (os.FileInfo, error)
 type tickerFunc func(time.Duration) *time.Ticker
 
 func findSecondaryDeviceWith(ctx context.Context, logger logging.Logger, stat statFunc, newTicker tickerFunc, timeout time.Duration) string {
+	// Honor an already-cancelled parent ctx before doing any work. The
+	// fast-path stat below would otherwise "succeed" (return a device
+	// path) even when the caller has signalled cancel, because the
+	// stat doesn't consult ctx — only the slow path's select does. This
+	// keeps the cancel contract uniform across both paths.
+	if ctx.Err() != nil {
+		return ""
+	}
+
 	// Fast path: the device is already present (no race; e.g. VM was
 	// rebooted with the PD already attached). Avoids the first
 	// secondaryDeviceProbeInterval of latency on the common case.
