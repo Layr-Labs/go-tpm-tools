@@ -664,21 +664,72 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 		return mnemonic, nil
 	}
 
-	r.logger.Info("Setting up encrypted volume")
-	if err := storage.SetupSecondaryEncryptedVolume(ctx, r.logger, mnemonicProvider); err != nil {
-		return fmt.Errorf("failed to set up encrypted volume: %v", err)
+	if r.launchSpec.AwaitLateAttach {
+		// Prewarm-detach upgrade path: the orchestrator delays AttachPD
+		// until the new VM signals readiness on the serial console. We
+		// run the launcher itself as the readiness signaler — emit
+		// ECLOUD_AWAITING_USERDATA on serial, wait for the device, and
+		// finish the LUKS+mount sequence BEFORE starting the user
+		// container. The container's bind-mount source is then a
+		// populated filesystem from the moment it starts, so no
+		// in-container coordination is required.
+		//
+		// Doing this work AFTER container start (in a background
+		// goroutine) does not work: a host-side mount on the bind
+		// source after container start does not propagate into the
+		// container's mount namespace by default (Linux MS_PRIVATE),
+		// so the user app would still see an empty mount.
+		fmt.Fprintln(r.serialConsole, "ECLOUD_AWAITING_USERDATA")
+		r.logger.Info("AwaitLateAttach=true: emitted ECLOUD_AWAITING_USERDATA; waiting for orchestrator's AttachPD before starting the user container")
+		if err := storage.SetupSecondaryEncryptedVolumeLateAttach(ctx, r.logger, mnemonicProvider); err != nil {
+			return fmt.Errorf("failed to set up encrypted volume on late-attach path: %v", err)
+		}
+		// On exit (drain or workload completion), tear down the volume
+		// in the order safe for PD detach and emit ECLOUD_DETACHED so
+		// the orchestrator can proceed to detach. Only the late-attach
+		// path emits ECLOUD_DETACHED: the synchronous path's PD stays
+		// attached for the VM lifetime and is detached implicitly when
+		// the VM is destroyed, so the marker would be spurious there.
+		defer func() {
+			storage.CleanupEncryptedVolume(ctx, r.logger)
+			fmt.Fprintln(r.serialConsole, "ECLOUD_DETACHED")
+			r.logger.Info("AwaitLateAttach=true: emitted ECLOUD_DETACHED")
+		}()
+		r.logger.Info("Encrypted volume setup complete (late-attach path)")
+	} else {
+		r.logger.Info("Setting up encrypted volume")
+		if err := storage.SetupSecondaryEncryptedVolume(ctx, r.logger, mnemonicProvider); err != nil {
+			return fmt.Errorf("failed to set up encrypted volume: %v", err)
+		}
+		r.logger.Info("Encrypted volume setup complete")
 	}
-	r.logger.Info("Encrypted volume setup complete")
 
 	// Start the background disk-grow poller. Runs for the lifetime of the
 	// runner's context and stops cleanly on cancellation. Errors from the
 	// poller are logged, not propagated — a transient grow failure must not
 	// take down the app container.
+	//
+	// The poller runs under a dedicated child context so we can stop it
+	// independently of the launcher's main ctx. On AwaitLateAttach, this
+	// matters: storage.CleanupEncryptedVolume runs cryptsetup close on
+	// the same mapper the poller's GrowOnce can call cryptsetup resize
+	// on. Letting the poller live until the parent ctx is cancelled
+	// (which happens AFTER CleanupEncryptedVolume in the LIFO defer
+	// stack) opens a window where a final tick races the unmount/close.
+	// Stopping the poller and waiting for its goroutine to exit BEFORE
+	// the cleanup defer fires closes that window.
+	pollerCtx, stopPoller := context.WithCancel(ctx)
+	pollerDone := make(chan struct{})
 	poller := storage.NewPoller(r.logger, storage.DefaultPollInterval)
 	go func() {
-		if err := poller.Run(ctx); err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+		defer close(pollerDone)
+		if err := poller.Run(pollerCtx); err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 			r.logger.Warn("disk-grow poller exited with error", "error", err)
 		}
+	}()
+	defer func() {
+		stopPoller()
+		<-pollerDone
 	}()
 
 	// Add the user-data bind mount now that the encrypted volume is ready.

@@ -184,12 +184,12 @@ func TestLuksResize(t *testing.T) {
 	t.Run("invokes cryptsetup resize", func(t *testing.T) {
 		t.Parallel()
 		r := newFakeRunner()
-		r.Expect("cryptsetup", []string{"resize", "userdata"}, nil, nil)
-		require.NoError(t, luksResize(context.Background(), r, "userdata"))
+		r.Expect("cryptsetup", []string{"resize", luksMapperName}, nil, nil)
+		require.NoError(t, luksResize(context.Background(), r, luksMapperName))
 		calls := r.Calls()
 		require.Len(t, calls, 1)
 		assert.Equal(t, "cryptsetup", calls[0].name)
-		assert.Equal(t, []string{"resize", "userdata"}, calls[0].args)
+		assert.Equal(t, []string{"resize", luksMapperName}, calls[0].args)
 	})
 
 	t.Run("rejects wrong mapper name", func(t *testing.T) {
@@ -204,7 +204,7 @@ func TestLuksResize(t *testing.T) {
 		t.Parallel()
 		r := newFakeRunner()
 		r.Expect("cryptsetup", nil, nil, errors.New("device not active"))
-		err := luksResize(context.Background(), r, "userdata")
+		err := luksResize(context.Background(), r, luksMapperName)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "device not active")
 	})

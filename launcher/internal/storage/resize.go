@@ -127,7 +127,15 @@ func writeRescan(path string) error {
 // It is deliberately distinct from allowedMapper (which is the /dev/mapper path):
 // cryptsetup takes the short name, file operations take the path. mapperPath and
 // allowedMapper are now derived from this constant.
-const luksMapperName = "userdata"
+//
+// Renamed from "userdata" to "app_userdata" to avoid colliding with cos-tdx's
+// /dev/mapper/userdata, which the base image's setup-integrity-fs.sh creates
+// for the boot-disk stateful partition before the launcher binary runs.
+// `cryptsetup luksOpen <device> userdata` would fail with "Device with name
+// userdata already in use". The mapper name is purely runtime — not stored in
+// the LUKS2 header — so any pre-existing PDs re-open transparently as
+// `cryptsetup luksOpen <device> app_userdata` without re-formatting.
+const luksMapperName = "app_userdata"
 
 // luksHeaderBytes is the size of the LUKS2 header that cryptsetup reserves at
 // the start of the backing device. With the defaults we use (no --offset, no
@@ -287,8 +295,8 @@ func GrowOnce(ctx context.Context, logger logging.Logger) error {
 // growOnceBoot is the boot-time variant of growOnce. It runs AFTER the
 // filesystem is mounted — SetupSecondaryEncryptedVolume has already
 // opened the LUKS device, (on first boot) mkfs'd it, created the mount
-// point, and mounted /dev/mapper/userdata at MountPoint before invoking
-// this function. The post-mount ordering is deliberate: resize2fs
+// point, and mounted /dev/mapper/<luksMapperName> at MountPoint before
+// invoking this function. The post-mount ordering is deliberate: resize2fs
 // refuses to grow an unmounted ext4 without a prior `e2fsck -f` (ext4
 // safety feature), whereas growing a mounted fs is online-safe and
 // avoids that requirement. We skip the findmnt-based mount sanity

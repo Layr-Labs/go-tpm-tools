@@ -97,6 +97,24 @@ const (
 	kmsServerURLKey            = "tee-kms-server-url"
 	kmsSigningPublicKeyKey     = "tee-kms-signing-public-key"
 	kmsUserAPIURLKey           = "tee-kms-user-api-url"
+
+	// awaitLateAttachKey, when "true", tells the launcher to use the
+	// late-attach path for secondary-storage setup: emit
+	// ECLOUD_AWAITING_USERDATA on serial, wait up to 5 minutes for the
+	// orchestrator's AttachPD, complete LUKS+mount, AND ONLY THEN start
+	// the user container. On user-container exit (or shutdown), the
+	// launcher unmounts and emits ECLOUD_DETACHED.
+	//
+	// Consumed by the prewarm-detach upgrade strategy in the
+	// ecloud-platform orchestrator
+	// (pkg/services/upgradeOrchestrator/prewarm_detach.go): the
+	// orchestrator delays AttachPD until it sees ECLOUD_AWAITING_USERDATA
+	// on the new VM's serial console, then attaches the PD that was
+	// detached from the old VM. Without this opt-in, the synchronous
+	// path's 30s probe times out (the orchestrator hasn't attached yet)
+	// and the launcher falls back to the boot-disk stateful partition,
+	// shadowing the late-attached PD on /mnt/disks/userdata.
+	awaitLateAttachKey = "tee-await-late-attach"
 )
 
 const (
@@ -149,6 +167,14 @@ type LaunchSpec struct {
 	KMSServerURL        string // URL of the KMS server (e.g. "https://kms.eigenx.io")
 	KMSSigningPublicKey string // Base64-encoded public key PEM for verifying KMS response signatures
 	KMSUserAPIURL       string // User API URL for v3 attestation upload (optional)
+
+	// AwaitLateAttach selects the prewarm-detach late-attach storage path.
+	// When true, the launcher emits ECLOUD_AWAITING_USERDATA on serial,
+	// waits up to 5 minutes for the orchestrator's AttachPD, completes
+	// LUKS+mount, and only then starts the user container. On exit it
+	// unmounts and emits ECLOUD_DETACHED. See awaitLateAttachKey for
+	// upstream rationale.
+	AwaitLateAttach bool
 }
 
 // UnmarshalJSON unmarshals an instance attributes list in JSON format from the metadata
@@ -171,6 +197,13 @@ func (s *LaunchSpec) UnmarshalJSON(b []byte) error {
 		var err error
 		if s.SelfVerificationEnabled, err = strconv.ParseBool(val); err != nil {
 			return fmt.Errorf("invalid value for %v (not a boolean): %w", selfVerificationKey, err)
+		}
+	}
+
+	if val, ok := unmarshaledMap[awaitLateAttachKey]; ok && val != "" {
+		var err error
+		if s.AwaitLateAttach, err = strconv.ParseBool(val); err != nil {
+			return fmt.Errorf("invalid value for %v (not a boolean): %w", awaitLateAttachKey, err)
 		}
 	}
 
