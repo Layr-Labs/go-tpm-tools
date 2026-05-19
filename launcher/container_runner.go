@@ -708,11 +708,28 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 	// runner's context and stops cleanly on cancellation. Errors from the
 	// poller are logged, not propagated — a transient grow failure must not
 	// take down the app container.
+	//
+	// The poller runs under a dedicated child context so we can stop it
+	// independently of the launcher's main ctx. On AwaitLateAttach, this
+	// matters: storage.CleanupEncryptedVolume runs cryptsetup close on
+	// the same mapper the poller's GrowOnce can call cryptsetup resize
+	// on. Letting the poller live until the parent ctx is cancelled
+	// (which happens AFTER CleanupEncryptedVolume in the LIFO defer
+	// stack) opens a window where a final tick races the unmount/close.
+	// Stopping the poller and waiting for its goroutine to exit BEFORE
+	// the cleanup defer fires closes that window.
+	pollerCtx, stopPoller := context.WithCancel(ctx)
+	pollerDone := make(chan struct{})
 	poller := storage.NewPoller(r.logger, storage.DefaultPollInterval)
 	go func() {
-		if err := poller.Run(ctx); err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+		defer close(pollerDone)
+		if err := poller.Run(pollerCtx); err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 			r.logger.Warn("disk-grow poller exited with error", "error", err)
 		}
+	}()
+	defer func() {
+		stopPoller()
+		<-pollerDone
 	}()
 
 	// Add the user-data bind mount now that the encrypted volume is ready.
