@@ -218,7 +218,7 @@ gcloud compute instances create cs-builder \
   --image-family=confidential-space \
   --image-project=confidential-space-images \
   --scopes=cloud-platform \
-  --metadata=^~^tee-image-reference=$BUILDER_IMAGE~tee-restart-policy=Never~tee-container-log-redirect=true~tee-env-PROJECT_ID=$PROJECT_ID~tee-env-PROJECT_NUMBER=$PROJECT_NUMBER~tee-env-LAUNCHER_ARTIFACT=docker://us-central1/$PROJECT_ID/cs-build/launcher/v1.0.0~tee-env-BASE_IMAGE=cos-tdx-113-18244-521-56~tee-env-BASE_IMAGE_PROJECT=confidential-vm-images~tee-env-OUTPUT_IMAGE_NAME=my-cs-image~tee-env-OUTPUT_IMAGE_FAMILY=custom-cs-images~tee-env-IMAGE_ENV=hardened~tee-env-STAGING_BUCKET=$STAGING_BUCKET~tee-env-PROVENANCE_BUCKET=$PROVENANCE_BUCKET
+  --metadata=^~^tee-image-reference=$BUILDER_IMAGE~tee-restart-policy=Never~tee-container-log-redirect=true~tee-env-PROJECT_ID=$PROJECT_ID~tee-env-PROJECT_NUMBER=$PROJECT_NUMBER~tee-env-LAUNCHER_ARTIFACT=docker://us-central1/$PROJECT_ID/cs-build/launcher/v1.0.0~tee-env-BASE_IMAGE=cos-125-19216-395-7~tee-env-BASE_IMAGE_PROJECT=confidential-vm-images~tee-env-OUTPUT_IMAGE_NAME=my-cs-image~tee-env-OUTPUT_IMAGE_FAMILY=custom-cs-images~tee-env-IMAGE_ENV=hardened~tee-env-STAGING_BUCKET=$STAGING_BUCKET~tee-env-PROVENANCE_BUCKET=$PROVENANCE_BUCKET
 ```
 
 Output: GCE image + attestation in `gs://$PROVENANCE_BUCKET/$OUTPUT_IMAGE_NAME/attestation.json`
@@ -295,7 +295,7 @@ gsutil cat gs://$PROVENANCE_BUCKET/$IMAGE_NAME/attestation.json > attestation.js
     "gcr.io/cos-cloud/cos-customizer": "sha256:6753dd798f05aad530d913b2df62ec..."
   },
   "base_image": {
-    "name": "cos-tdx-113-18244-521-56",
+    "name": "cos-125-19216-395-7",
     "project": "confidential-vm-images"
   },
   "output": {

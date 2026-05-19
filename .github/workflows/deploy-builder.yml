@@ -32,7 +32,13 @@ env:
   REGION: us-central1
   ZONE: us-central1-c
   AR_REPO_BUILDER: cs-build
-  BASE_IMAGE: cos-tdx-113-18244-582-80
+  # Pinned to a concrete cos-125-lts image rather than a family lookup so
+  # builder runs are reproducible against a specific PCR baseline. Bump
+  # this in lockstep with eigenx-kms's on-chain ImageAllowlist after
+  # measuring the new image's PCRs and registering them. Note: the
+  # cos-tdx-* family was retired after M113; cos-125-lts is the unified
+  # image family that supports both TDX and SEV-SNP confidential compute.
+  BASE_IMAGE: cos-125-19216-395-7
   BASE_IMAGE_PROJECT: confidential-vm-images
   MACHINE_TYPE: c3-standard-4
 
