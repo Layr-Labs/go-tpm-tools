@@ -9,7 +9,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/go-configfs-tsm v0.3.3
 	github.com/google/go-sev-guest v0.14.1
-	github.com/google/go-tdx-guest v0.3.2-0.20241009005452-097ee70d0843
+	github.com/google/go-tdx-guest v0.3.2-0.20250814004405-ffb0869e6f4d
 	github.com/google/go-tpm v0.9.6
 	github.com/google/logger v1.1.1
 	google.golang.org/protobuf v1.36.7
@@ -23,7 +23,7 @@ require (
 
 require (
 	github.com/google/certificate-transparency-go v1.1.2 // indirect
-	github.com/google/go-eventlog v0.0.2-0.20241003021507-01bb555f7cba
+	github.com/google/go-eventlog v0.0.2-0.20241213203620-f921bdc3aeb0
 	github.com/google/go-tspi v0.3.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/stretchr/testify v1.10.0 // indirect
