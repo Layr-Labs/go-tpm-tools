@@ -1,4 +1,9 @@
 substitutions:
+  # cos-tdx-* family was retired after M113. From M121+, cos-NNN-lts is
+  # the unified family that supports both TDX and SEV-SNP. _BASE_IMAGE
+  # is pinned to a concrete image (rather than relying on the
+  # describe-from-family lookup below) so builder runs are reproducible
+  # against a specific PCR baseline.
   '_BASE_IMAGE': 'cos-125-19216-395-7'
   '_BASE_IMAGE_FAMILY': 'cos-125-lts'
   '_BASE_IMAGE_PROJECT': 'confidential-vm-images'
